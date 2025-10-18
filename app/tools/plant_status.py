@@ -19,20 +19,6 @@ class NextAction(BaseModel):
     value: Optional[int] = Field(None, description="Action value (ml for water, minutes for light)")
 
 
-class PlantStatusInput(BaseModel):
-    """Input schema for plant status"""
-    sensor_reading: int = Field(..., description="Current moisture sensor reading")
-    water_24h: float = Field(..., description="Water dispensed in last 24 hours (ml)")
-    light_today: float = Field(..., description="Light exposure today (minutes)")
-    plant_state: Literal["healthy", "stressed", "concerning", "critical", "unknown"] = Field(
-        ..., description="Assessment of plant health"
-    )
-    next_action_sequence: List[NextAction] = Field(
-        ..., description="Planned sequence of actions"
-    )
-    reasoning: str = Field(..., description="Brief explanation of status and plan")
-
-
 class PlantStatusResponse(BaseModel):
     """Response from writing plant status"""
     proceed: bool = Field(..., description="Whether to proceed with other tool calls")
@@ -51,7 +37,7 @@ def setup_plant_status_tools(mcp: FastMCP):
         plant_state: Literal["healthy", "stressed", "concerning", "critical", "unknown"] = Field(
             ..., description="Assessment of plant health"
         ),
-        next_action_sequence: List[Dict[str, Any]] = Field(
+        next_action_sequence: List[NextAction] = Field(
             ..., description="Planned sequence of actions (order, action, value)"
         ),
         reasoning: str = Field(..., description="Brief explanation of status and plan")
@@ -70,7 +56,7 @@ def setup_plant_status_tools(mcp: FastMCP):
                 timestamp=current_cycle_status["timestamp"]
             )
 
-        # Create status record
+        # Create status record - convert NextAction objects to dicts for storage
         timestamp = datetime.now().isoformat()
         status = {
             "timestamp": timestamp,
@@ -78,7 +64,7 @@ def setup_plant_status_tools(mcp: FastMCP):
             "water_24h": water_24h,
             "light_today": light_today,
             "plant_state": plant_state,
-            "next_action_sequence": next_action_sequence,
+            "next_action_sequence": [action.model_dump() for action in next_action_sequence],
             "reasoning": reasoning
         }
 
