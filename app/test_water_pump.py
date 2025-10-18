@@ -35,7 +35,7 @@ async def setup_pump_state(tmp_path):
 
     # Use temp directory for state file (don't touch production state!)
     original_state_file = wp_module.STATE_FILE
-    wp_module.STATE_FILE = tmp_path / "water_pump_state.json"
+    wp_module.STATE_FILE = tmp_path / "water_pump_history.jsonl"
 
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
@@ -229,7 +229,7 @@ async def test_gatekeeper_enforcement(setup_pump_state):
 
 @pytest.mark.asyncio
 async def test_state_file_creation(setup_pump_state):
-    """Test that state file is created on first save"""
+    """Test that state file is created on first append (JSONL format)"""
     mcp = setup_pump_state
     dispense_tool = mcp._tool_manager._tools["dispense"]
 
@@ -242,12 +242,13 @@ async def test_state_file_creation(setup_pump_state):
     # State file should now exist
     assert wp_module.STATE_FILE.exists()
 
-    # Verify contents
+    # Verify contents (JSONL format - each line is a JSON object)
     with open(wp_module.STATE_FILE, "r") as f:
-        data = json.load(f)
-        assert "water_history" in data
-        assert len(data["water_history"]) == 1
-        assert data["water_history"][0]["ml"] == 50
+        lines = f.readlines()
+        assert len(lines) == 1
+        event = json.loads(lines[0])
+        assert event["ml"] == 50
+        assert "timestamp" in event
 
 
 @pytest.mark.asyncio
@@ -280,18 +281,20 @@ async def test_state_persistence_across_restarts(setup_pump_state):
 
 @pytest.mark.asyncio
 async def test_state_loading_on_first_tool_call(setup_pump_state):
-    """Test that state is lazily loaded on first tool invocation"""
+    """Test that state is lazily loaded on first tool invocation (JSONL format)"""
     mcp = setup_pump_state
 
-    # Manually create a state file with recent timestamps
+    # Manually create a JSONL state file with recent timestamps
     wp_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
     test_history = [
         {"timestamp": (now - timedelta(hours=2)).isoformat(), "ml": 30},
         {"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 45},
     ]
+    # Write as JSONL (one JSON object per line)
     with open(wp_module.STATE_FILE, "w") as f:
-        json.dump({"water_history": test_history}, f)
+        for event in test_history:
+            f.write(json.dumps(event) + '\n')
 
     # Verify state is not loaded yet
     assert not wp_module._state_loaded
@@ -310,17 +313,19 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
 
 @pytest.mark.asyncio
 async def test_state_loads_only_once(setup_pump_state):
-    """Test that state is loaded only once, not on every tool call"""
+    """Test that state is loaded only once, not on every tool call (JSONL format)"""
     mcp = setup_pump_state
     dispense_tool = mcp._tool_manager._tools["dispense"]
     usage_tool = mcp._tool_manager._tools["get_usage_24h"]
 
-    # Manually create a state file with recent timestamp
+    # Manually create a JSONL state file with recent timestamp
     wp_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
     test_history = [{"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 30}]
+    # Write as JSONL (one JSON object per line)
     with open(wp_module.STATE_FILE, "w") as f:
-        json.dump({"water_history": test_history}, f)
+        for event in test_history:
+            f.write(json.dumps(event) + '\n')
 
     # First tool call should load state
     await usage_tool.run(arguments={})

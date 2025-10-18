@@ -45,8 +45,10 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     ms_module.sensor_history.clear()
     ms_module.mock_sensor_value = 2000
 
-    # Reset water pump history
+    # Reset water pump history and state
     wp_module.water_history.clear()
+    wp_module._state_loaded = False
+    wp_module.STATE_FILE.unlink(missing_ok=True)
 
     # Reset light state
     light_module.light_state["status"] = "off"

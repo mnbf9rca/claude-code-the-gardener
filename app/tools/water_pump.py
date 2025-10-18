@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field, field_validator
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
 import json
-import os
 from pathlib import Path
 from collections import deque
 
@@ -17,10 +16,11 @@ MAX_ML_PER_24H = 500  # Maximum water allowed in 24 hours
 MIN_ML_PER_DISPENSE = 10  # Minimum amount per dispense
 MAX_ML_PER_DISPENSE = 100  # Maximum amount per dispense
 
-# State persistence
-STATE_FILE = Path(__file__).parent.parent / "data" / "water_pump_state.json"
+# State persistence (JSONL format for append-only writes)
+STATE_FILE = Path(__file__).parent.parent / "data" / "water_pump_history.jsonl"
 
-# Storage for water dispensing history (using deque for efficient pruning)
+# Storage for water dispensing history (using deque for efficient in-memory operations)
+# This only holds recent events in memory; disk file keeps full history forever
 water_history = deque()  # Deque of {timestamp, ml} dictionaries
 
 # State loading flag
@@ -41,61 +41,82 @@ class WaterUsageResponse(BaseModel):
     events: int = Field(..., description="Number of watering events in last 24h")
 
 
-# State Persistence Functions
+# State Persistence Functions (JSONL - append-only)
 def initialize_state_file():
     """
-    Ensure state file exists with safe defaults.
-    Missing file = assume no watering history.
+    Ensure state file exists.
+    JSONL files can start empty - each line is a separate JSON event.
     """
     if not STATE_FILE.exists():
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        default_state = {
-            "water_history": []
-        }
-        with open(STATE_FILE, 'w') as f:
-            json.dump(default_state, f, indent=2)
-        print("Initialized water pump state file with empty history")
+        STATE_FILE.touch()  # Create empty file
+        print("Initialized water pump history file (JSONL)")
 
 
-def save_state():
-    """Save water history to disk using atomic write for data integrity"""
+def append_event_to_disk(event: Dict[str, Any]):
+    """
+    Append a single event to the JSONL file (append-only, never deletes history).
+    Each line is a complete JSON object representing one watering event.
+    """
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write to temporary file first, then atomic rename to prevent corruption
-        import tempfile
-        fd, temp_path = tempfile.mkstemp(dir=STATE_FILE.parent, suffix='.tmp')
-        try:
-            with os.fdopen(fd, 'w') as f:
-                # Convert deque to list for JSON serialization
-                json.dump({"water_history": list(water_history)}, f, indent=2)
-            # Atomic rename on POSIX systems
-            os.replace(temp_path, STATE_FILE)
-        except Exception:
-            # Clean up temp file if something went wrong
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-            raise
+        # Append new event as a single line of JSON
+        with open(STATE_FILE, 'a') as f:
+            f.write(json.dumps(event) + '\n')
     except Exception as e:
-        print(f"Warning: Failed to save water pump state: {e}")
+        print(f"Warning: Failed to append event to history: {e}")
 
 
 def load_state():
     """
-    Load persisted water history from disk.
-    Always returns a valid history deque (initializes file if missing).
+    Load recent water history from JSONL file into memory.
+    Only loads events from last 24 hours to keep memory bounded.
+    Full history remains in file forever for long-term analysis.
+
+    Performance: Reads entire file and filters by timestamp. For a 6-month
+    experiment with ~40k lines, expect <2 seconds to read. Since restarts
+    are infrequent, this is acceptable. If optimization needed, could use
+    file-read-backwards (https://pypi.org/project/file-read-backwards/) to
+    read only the most recent lines.
     """
     global water_history
     try:
         initialize_state_file()
+
+        if not STATE_FILE.exists() or STATE_FILE.stat().st_size == 0:
+            water_history = deque()
+            print("No existing water history found")
+            return
+
+        # Calculate cutoff time (24 hours ago)
+        cutoff_time = datetime.now() - timedelta(hours=24)
+
+        # Read JSONL file and load only recent events
+        # Note: Reads full file then filters. Fast enough for infrequent restarts.
+        recent_events = deque()
         with open(STATE_FILE, 'r') as f:
-            data = json.load(f)
-            history_list = data.get("water_history", [])
-            # Convert list to deque for efficient operations
-            water_history = deque(history_list)
-            print(f"Loaded {len(water_history)} water dispensing events from disk")
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    event = json.loads(line)
+                    event_time = datetime.fromisoformat(event["timestamp"])
+
+                    # Only load events from last 24h into memory
+                    if event_time >= cutoff_time:
+                        recent_events.append(event)
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    print(f"Warning: Skipping malformed line in history: {e}")
+                    continue
+
+        water_history = recent_events
+        print(f"Loaded {len(water_history)} recent water events from disk (last 24h)")
+
     except Exception as e:
-        print(f"Error: Failed to load water pump state: {e}")
+        print(f"Error: Failed to load water pump history: {e}")
         # Return safe defaults if loading fails
         water_history = deque()
 
@@ -187,13 +208,14 @@ def setup_water_pump_tools(mcp: FastMCP):
 
         # Record the dispensing event
         timestamp = datetime.now().isoformat()
-        water_history.append({
+        event = {
             "timestamp": timestamp,
             "ml": actual_ml
-        })
+        }
+        water_history.append(event)
 
-        # Persist state to disk
-        save_state()
+        # Append event to disk (keeps full history forever)
+        append_event_to_disk(event)
 
         return WaterDispenseResponse(
             dispensed=actual_ml,
