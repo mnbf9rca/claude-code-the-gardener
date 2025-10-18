@@ -37,10 +37,11 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
-    # Reset light history (new history tracking feature)
+    # Reset light history (uses JsonlHistory utility)
     light_module.light_history.clear()
+    light_module.light_history._loaded = False
 
-    # Reset state loaded flag (new history tracking feature)
+    # Reset state loaded flag
     light_module._state_loaded = False
 
     # Reset reconciliation flag
@@ -57,9 +58,9 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
 
     # Use temp directory for state and history files
     original_state_file = light_module.STATE_FILE
-    original_history_file = light_module.HISTORY_FILE
+    original_history_file = light_module.light_history.file_path
     light_module.STATE_FILE = tmp_path / "light_state.json"
-    light_module.HISTORY_FILE = tmp_path / "light_history.jsonl"
+    light_module.light_history.file_path = tmp_path / "light_history.jsonl"
 
     # Reset HTTP client
     light_module.http_client = None
@@ -100,7 +101,7 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
 
     # Restore original file paths
     light_module.STATE_FILE = original_state_file
-    light_module.HISTORY_FILE = original_history_file
+    light_module.light_history.file_path = original_history_file
 
 
 # =============================================================================

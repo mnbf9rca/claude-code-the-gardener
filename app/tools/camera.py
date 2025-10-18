@@ -6,7 +6,6 @@ Works on both Mac and Raspberry Pi.
 import os
 import logging
 import atexit
-import json
 import threading
 from pathlib import Path
 from datetime import datetime
@@ -14,6 +13,7 @@ from typing import Optional, Tuple, Dict, List, Any
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
+from utils.jsonl_history import JsonlHistory
 from dotenv import load_dotenv
 
 # Required imports - no conditional loading
@@ -39,19 +39,19 @@ camera: Optional[cv2.VideoCapture] = None
 camera_available: bool = False
 camera_error: Optional[str] = None
 
-# State persistence
-USAGE_FILE = Path(__file__).parent.parent / "data" / "camera_usage.jsonl"
+# State persistence - audit log for camera usage (write-only)
+usage_history = JsonlHistory(
+    file_path=Path(__file__).parent.parent / "data" / "camera_usage.jsonl",
+    max_memory_entries=100  # Small cache since we don't query it
+)
 
 
 def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
     """
     Append a tool usage event to the JSONL usage file.
-    Uses append-only pattern (JSONL) - does not load full history into memory.
+    Uses append-only pattern via JsonlHistory utility.
     """
     try:
-        # Ensure data directory exists
-        USAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
         # Create event with tool name and timestamp
         event = {
             "tool": tool_name,
@@ -59,11 +59,10 @@ def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
             **event_data
         }
 
-        # Append to JSONL file (one JSON object per line)
-        with open(USAGE_FILE, 'a') as f:
-            f.write(json.dumps(event) + '\n')
+        # Append to history (handles both memory and disk)
+        usage_history.append(event)
 
-        logging.debug(f"Logged {tool_name} usage to {USAGE_FILE}")
+        logging.debug(f"Logged {tool_name} usage to {usage_history.file_path}")
 
     except Exception as e:
         # Don't fail the tool call if logging fails

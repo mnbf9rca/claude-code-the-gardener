@@ -67,9 +67,10 @@ async def setup_integration_state(ha_availability):
 
     # Clear persisted state and history files
     light_module.STATE_FILE.unlink(missing_ok=True)
-    light_module.HISTORY_FILE.unlink(missing_ok=True)
+    light_module.light_history.file_path.unlink(missing_ok=True)
     light_module._state_loaded = False
     light_module.light_history.clear()
+    light_module.light_history._loaded = False
 
     # Reset HTTP client
     if light_module.http_client:

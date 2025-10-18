@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
+from utils.jsonl_history import JsonlHistory
 import httpx
 import os
 import json
@@ -33,7 +34,7 @@ http_client: Optional[httpx.AsyncClient] = None
 
 # State persistence - separate files for state vs history
 STATE_FILE = Path(__file__).parent.parent / "data" / "light_state.json"
-HISTORY_FILE = Path(__file__).parent.parent / "data" / "light_history.jsonl"
+# Note: HISTORY_FILE removed - path is now encapsulated in light_history instance
 
 # Background task for scheduled turn-off
 scheduled_task: Optional[asyncio.Task] = None
@@ -83,8 +84,11 @@ light_state = {
     "scheduled_off": None,  # ISO timestamp when light will turn off
 }
 
-# Storage for light activation history
-light_history = []  # List of event dictionaries
+# Storage for light activation history (JSONL format for append-only writes)
+light_history = JsonlHistory(
+    file_path=Path(__file__).parent.parent / "data" / "light_history.jsonl",
+    max_memory_entries=1000
+)
 
 # State loading flag
 _state_loaded = False
@@ -110,15 +114,7 @@ def initialize_state_file():
         print("Initialized light state file with safe defaults (off)")
 
 
-def initialize_history_file():
-    """
-    Ensure history file exists.
-    JSONL files can start empty - each line is a separate JSON event.
-    """
-    if not HISTORY_FILE.exists():
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        HISTORY_FILE.touch()  # Create empty file
-        print("Initialized light history file (JSONL)")
+# Note: initialize_history_file() removed - handled by JsonlHistory auto_create
 
 
 def save_state():
@@ -144,19 +140,7 @@ def save_state():
         print(f"Warning: Failed to save light state: {e}")
 
 
-def append_event_to_history(event: Dict[str, Any]):
-    """
-    Append a single event to the JSONL history file (append-only, never deletes).
-    Each line is a complete JSON object representing one light event.
-    """
-    try:
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-        # Append new event as a single line of JSON
-        with open(HISTORY_FILE, 'a') as f:
-            f.write(json.dumps(event) + '\n')
-    except Exception as e:
-        print(f"Warning: Failed to append event to light history: {e}")
+# Note: append_event_to_history() removed - use light_history.append() instead
 
 
 def load_state() -> Dict[str, Any]:
@@ -186,41 +170,7 @@ def load_state() -> Dict[str, Any]:
         }
 
 
-def load_history():
-    """
-    Load recent light events from JSONL history file into memory.
-    Loads all events for now (light events are infrequent compared to water pump).
-    """
-    global light_history
-    try:
-        initialize_history_file()
-
-        if not HISTORY_FILE.exists() or HISTORY_FILE.stat().st_size == 0:
-            light_history[:] = []
-            print("No existing light history found")
-            return
-
-        # Read JSONL file - each line is one event
-        events = []
-        with open(HISTORY_FILE, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                try:
-                    event = json.loads(line)
-                    events.append(event)
-                except (json.JSONDecodeError, KeyError, ValueError) as e:
-                    print(f"Warning: Skipping malformed line in history: {e}")
-                    continue
-
-        light_history[:] = events
-        print(f"Loaded {len(light_history)} light events from disk")
-
-    except Exception as e:
-        print(f"Error: Failed to load light history: {e}")
-        light_history[:] = []
+# Note: load_history() removed - use light_history.ensure_loaded() instead
 
 
 def clear_scheduled_state():
@@ -246,7 +196,7 @@ def ensure_state_loaded():
         _state_loaded = True
         persisted = load_state()
         light_state.update(persisted)
-        load_history()  # Load history from JSONL file
+        light_history.ensure_loaded()  # Load history from JSONL file using utility
 
 
 def record_event(event_type: str, details: Dict[str, Any]):
@@ -267,8 +217,7 @@ def record_event(event_type: str, details: Dict[str, Any]):
         "event_type": event_type,
         **details
     }
-    light_history.append(event)  # Keep in memory for get_light_history tool
-    append_event_to_history(event)  # Persist to disk (JSONL append)
+    light_history.append(event)  # Handles both memory and disk (JSONL append)
     print(f"Light event recorded: {event_type}")
 
 
