@@ -51,6 +51,88 @@ os.environ["CAMERA_SAVE_PATH"] = "./test_photos"  # Directory for test captures
 from server import mcp
 from shared_state import reset_cycle, current_cycle_status
 
+def extract_tool_result(result):
+    """Extract data from MCP tool result (handles different formats)"""
+    from mcp.types import TextContent
+
+    if hasattr(result, 'structured_content') and result.structured_content:
+        return result.structured_content
+
+    # Try to parse from content
+    for content_item in result.content:
+        if isinstance(content_item, TextContent):
+            return json.loads(content_item.text)
+
+    return None
+
+
+async def check_status():
+    """Check camera status and display results"""
+    if not (status_tool := mcp._tool_manager._tools.get("get_camera_status")):
+        return
+
+    print("\n1. Checking camera status...")
+    result = await status_tool.run(arguments={})
+    status = extract_tool_result(result)
+
+    print(json.dumps(status, indent=2))
+
+    if not status.get("camera_available"):
+        print("\n⚠️  Camera not detected.")
+        if error := status.get("error"):
+            print(f"   Error: {error}")
+        print("   Try different CAMERA_DEVICE_INDEX (0, 1, 2...)")
+        print("   On Mac: Built-in camera is usually 0")
+        print("   On RPi: USB camera usually at /dev/video0 (index 0)")
+
+
+async def check_capture():
+    """Test photo capture and display results"""
+    if not (capture_tool := mcp._tool_manager._tools.get("capture")):
+        return
+
+    print("\n2. Testing photo capture...")
+    try:
+        result = await capture_tool.run(arguments={})
+        photo = extract_tool_result(result)
+
+        print(f"   Success: {photo['success']}")
+
+        if photo['success']:
+            print(f"   URL/Path: {photo['url']}")
+            print(f"\n✅ Camera capture successful!")
+            print(f"   Photo saved to: {photo['url']}")
+
+            if Path(photo['url']).exists():
+                file_size = Path(photo['url']).stat().st_size / 1024
+                print(f"   File size: {file_size:.1f} KB")
+        else:
+            print(f"\n⚠️  Capture failed: {photo.get('error', 'Unknown error')}")
+
+    except Exception as e:
+        print(f"\n❌ Capture failed: {e}")
+
+
+async def check_recent_photos():
+    """Test recent photos retrieval and display results"""
+    if not (recent_tool := mcp._tool_manager._tools.get("get_recent_photos")):
+        return
+
+    print("\n3. Testing recent photos retrieval...")
+    result = await recent_tool.run(arguments={"limit": 5})
+    photos_data = extract_tool_result(result)
+
+    # Handle wrapped result format
+    if isinstance(photos_data, dict) and "result" in photos_data:
+        photos = photos_data["result"]
+    else:
+        photos = photos_data if isinstance(photos_data, list) else []
+
+    print(f"   Found {len(photos)} recent photos")
+    for i, photo in enumerate(photos, 1):
+        print(f"   {i}. Time: {photo['timestamp'][:19]}")
+
+
 async def check_camera_hardware():
     """
     Diagnostic check for camera hardware and configuration.
@@ -66,94 +148,10 @@ async def check_camera_hardware():
     reset_cycle()
     current_cycle_status["written"] = True
 
-    # Get camera status tool
-    status_tool = mcp._tool_manager._tools.get("get_camera_status")
-    if status_tool:
-        print("\n1. Checking camera status...")
-        result = await status_tool.run(arguments={})
-
-        # Extract status from result
-        if hasattr(result, 'structured_content') and result.structured_content:
-            status = result.structured_content
-        else:
-            # Try to parse from content
-            from mcp.types import TextContent
-            for content_item in result.content:
-                if isinstance(content_item, TextContent):
-                    status = json.loads(content_item.text)
-                    break
-
-        print(json.dumps(status, indent=2))
-
-        if not status.get("camera_available"):
-            print("\n⚠️  Camera not detected.")
-            if status.get("error"):
-                print(f"   Error: {status['error']}")
-            print("   Try different CAMERA_DEVICE_INDEX (0, 1, 2...)")
-            print("   On Mac: Built-in camera is usually 0")
-            print("   On RPi: USB camera usually at /dev/video0 (index 0)")
-
-    # Test capture
-    capture_tool = mcp._tool_manager._tools.get("capture")
-    if capture_tool:
-        print("\n2. Testing photo capture...")
-        try:
-            result = await capture_tool.run(arguments={})
-
-            # Extract photo data from result
-            if hasattr(result, 'structured_content') and result.structured_content:
-                photo = result.structured_content
-            else:
-                # Try to parse from content
-                from mcp.types import TextContent
-                for content_item in result.content:
-                    if isinstance(content_item, TextContent):
-                        photo = json.loads(content_item.text)
-                        break
-
-            print(f"   Success: {photo['success']}")
-
-            if photo['success']:
-                print(f"   URL/Path: {photo['url']}")
-                print(f"\n✅ Camera capture successful!")
-                print(f"   Photo saved to: {photo['url']}")
-
-                # Check if file exists
-                if Path(photo['url']).exists():
-                    file_size = Path(photo['url']).stat().st_size / 1024
-                    print(f"   File size: {file_size:.1f} KB")
-            else:
-                print(f"\n⚠️  Capture failed: {photo.get('error', 'Unknown error')}")
-
-        except Exception as e:
-            print(f"\n❌ Capture failed: {e}")
-
-    # Test recent photos
-    recent_tool = mcp._tool_manager._tools.get("get_recent_photos")
-    if recent_tool:
-        print("\n3. Testing recent photos retrieval...")
-        result = await recent_tool.run(arguments={"limit": 5})
-
-        # Extract photos list from result
-        if hasattr(result, 'structured_content') and result.structured_content:
-            photos_data = result.structured_content
-        else:
-            # Try to parse from content
-            from mcp.types import TextContent
-            for content_item in result.content:
-                if isinstance(content_item, TextContent):
-                    photos_data = json.loads(content_item.text)
-                    break
-
-        # Handle wrapped result format
-        if isinstance(photos_data, dict) and "result" in photos_data:
-            photos = photos_data["result"]
-        else:
-            photos = photos_data if isinstance(photos_data, list) else []
-
-        print(f"   Found {len(photos)} recent photos")
-        for i, photo in enumerate(photos, 1):
-            print(f"   {i}. Time: {photo['timestamp'][:19]}")
+    # Run diagnostic checks
+    await check_status()
+    await check_capture()
+    await check_recent_photos()
 
     print("\n" + "=" * 60)
     print("DIAGNOSTIC CHECK COMPLETE")

@@ -187,6 +187,43 @@ async def test_background_task_handles_past_scheduled_time(setup_scheduling_test
     assert light_module.light_state["scheduled_off"] is None
 
 
+@pytest.mark.asyncio
+async def test_background_task_cancellation_during_sleep(setup_scheduling_test_state):
+    """Test that background task can be cancelled during sleep phase and cleanup properly"""
+    # Set scheduled time in the real future (not using freezegun so task actually sleeps)
+    light_module.light_state["status"] = "on"
+    light_module.light_state["last_on"] = datetime.now().isoformat()
+    # Schedule for 30 seconds in the future to ensure task will be sleeping
+    scheduled_time = datetime.now() + timedelta(seconds=30)
+    light_module.light_state["scheduled_off"] = scheduled_time.isoformat()
+
+    # Create background task
+    task = asyncio.create_task(light_module.execute_scheduled_turn_off())
+
+    # Let task start and begin sleeping
+    await asyncio.sleep(0.2)
+
+    # Verify task is running (not done) - should be in the sleep phase
+    assert not task.done()
+
+    # Cancel the task during sleep
+    task.cancel()
+
+    # Wait for cancellation to process
+    try:
+        await asyncio.wait_for(task, timeout=0.5)
+    except asyncio.CancelledError:
+        pass  # Expected
+
+    # Verify task was cancelled
+    assert task.cancelled()
+
+    # Verify system state is still consistent (light should remain on since cancel happened mid-sleep)
+    assert light_module.light_state["status"] == "on"
+    # Scheduled off should still be set since cancellation interrupted the process
+    assert light_module.light_state["scheduled_off"] == scheduled_time.isoformat()
+
+
 # =============================================================================
 # State Persistence Tests
 # =============================================================================

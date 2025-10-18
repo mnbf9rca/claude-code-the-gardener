@@ -156,14 +156,61 @@ class TestCameraWithoutDevice:
     async def test_capture_with_invalid_device_index(
         self, camera_config, test_photos_dir, reset_camera_module, allow_camera_capture, monkeypatch
     ):
-        """Test behavior with invalid camera device index.
+        """Test behavior with invalid camera device index (out of range).
 
         Note: Fixture parameters are used by pytest's dependency injection.
         """
-        # Set invalid device index
+        # Set invalid device index (out of range)
         monkeypatch.setenv("CAMERA_DEVICE_INDEX", "999")
 
         # Force reload of configuration
+        import importlib
+        importlib.reload(camera_module)
+
+        mcp = FastMCP("test")
+        setup_camera_tools(mcp)
+        capture_tool = mcp._tool_manager._tools["capture"]
+
+        # Try to capture
+        tool_result = await capture_tool.run(arguments={})
+        result = extract_json_from_result(tool_result)
+
+        # Should return error
+        assert result["success"] is False
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_capture_with_non_integer_device_index(
+        self, test_photos_dir, reset_camera_module, allow_camera_capture, monkeypatch
+    ):
+        """Test behavior with non-integer device index values.
+
+        Note: Fixture parameters are used by pytest's dependency injection.
+        """
+        # Test with non-integer string value
+        monkeypatch.setenv("CAMERA_ENABLED", "true")
+        monkeypatch.setenv("CAMERA_DEVICE_INDEX", "not_a_number")
+        monkeypatch.setenv("CAMERA_SAVE_PATH", str(test_photos_dir))
+
+        # Attempting to reload configuration with invalid integer should raise ValueError
+        import importlib
+        with pytest.raises(ValueError):
+            importlib.reload(camera_module)
+
+    @pytest.mark.asyncio
+    async def test_capture_with_negative_device_index(
+        self, test_photos_dir, reset_camera_module, allow_camera_capture, monkeypatch
+    ):
+        """Test behavior with negative device index.
+
+        Note: Fixture parameters are used by pytest's dependency injection.
+        """
+        # Set negative device index
+        monkeypatch.setenv("CAMERA_ENABLED", "true")
+        monkeypatch.setenv("CAMERA_DEVICE_INDEX", "-1")
+        monkeypatch.setenv("CAMERA_SAVE_PATH", str(test_photos_dir))
+
+        # Force reload of configuration (negative should be allowed by int() but fail on camera init)
         import importlib
         importlib.reload(camera_module)
 

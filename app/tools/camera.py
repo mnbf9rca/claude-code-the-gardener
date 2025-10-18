@@ -79,19 +79,33 @@ def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
 
 
 def load_photo_history_from_disk() -> List[Dict[str, str]]:
-    """Load existing photos from the save directory to reconstruct history."""
+    """
+    Load existing photos from the save directory to reconstruct history.
+    Optimized for large directories by limiting files processed.
+    """
+    import heapq
+
     history = []
     save_path = CAMERA_CONFIG["save_path"]
+    max_photos = 100  # Match PHOTO_HISTORY_LIMIT
 
     if save_path.exists() and save_path.is_dir():
         # Find all jpg files matching our naming pattern
-        photo_files = list(save_path.glob("plant_*.jpg"))
+        photo_files = save_path.glob("plant_*.jpg")
 
-        # Sort by modification time (or could parse timestamp from filename)
-        photo_files.sort(key=lambda p: p.stat().st_mtime)
+        # Use heapq.nlargest to efficiently get the N most recent files
+        # without sorting all files (O(n log k) vs O(n log n))
+        recent_files = heapq.nlargest(
+            max_photos,
+            photo_files,
+            key=lambda p: p.stat().st_mtime
+        )
 
-        # Take the most recent 100 to match our history limit
-        for photo_path in photo_files[-100:]:
+        # Sort the selected files by modification time (oldest to newest)
+        recent_files.sort(key=lambda p: p.stat().st_mtime)
+
+        # Process files to extract timestamps
+        for photo_path in recent_files:
             # Extract timestamp from filename if possible
             # Filename format: plant_YYYYMMDD_HHMMSS_mmm.jpg
             try:
