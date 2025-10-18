@@ -37,6 +37,12 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
+    # Reset light history (new history tracking feature)
+    light_module.light_history.clear()
+
+    # Reset state loaded flag (new history tracking feature)
+    light_module._state_loaded = False
+
     # Reset reconciliation flag
     light_module._reconciliation_done = False
 

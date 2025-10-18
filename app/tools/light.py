@@ -57,6 +57,12 @@ light_state = {
     "scheduled_off": None,  # ISO timestamp when light will turn off
 }
 
+# Storage for light activation history
+light_history = []  # List of event dictionaries
+
+# State loading flag
+_state_loaded = False
+
 
 # State Persistence Functions
 def initialize_state_file():
@@ -71,7 +77,8 @@ def initialize_state_file():
             "status": "off",
             "last_on": None,
             "last_off": None,
-            "scheduled_off": None
+            "scheduled_off": None,
+            "light_history": []
         }
         with open(STATE_FILE, 'w') as f:
             json.dump(default_state, f, indent=2)
@@ -79,27 +86,43 @@ def initialize_state_file():
 
 
 def save_state():
-    """Save light state to disk for crash recovery"""
+    """Save light state and history to disk for crash recovery"""
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        state_data = {
+            **light_state,
+            "light_history": light_history
+        }
         with open(STATE_FILE, 'w') as f:
-            json.dump(light_state, f, indent=2)
+            json.dump(state_data, f, indent=2)
     except Exception as e:
         print(f"Warning: Failed to save light state: {e}")
 
 
 def load_state() -> Dict[str, Any]:
     """
-    Load persisted light state from disk.
+    Load persisted light state and history from disk.
     Always returns a valid state dict (initializes file if missing).
     """
+    global light_history
     try:
         initialize_state_file()
         with open(STATE_FILE, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+            # Load history separately
+            light_history[:] = data.get("light_history", [])
+            print(f"Loaded {len(light_history)} light events from disk")
+            # Return state without history (caller updates light_state dict)
+            return {
+                "status": data.get("status", "off"),
+                "last_on": data.get("last_on"),
+                "last_off": data.get("last_off"),
+                "scheduled_off": data.get("scheduled_off")
+            }
     except Exception as e:
         print(f"Error: Failed to load light state: {e}")
         # Return safe defaults if loading fails
+        light_history[:] = []
         return {
             "status": "off",
             "last_on": None,
@@ -118,6 +141,42 @@ def clear_scheduled_state():
         save_state()
     except Exception as e:
         print(f"Warning: Failed to clear scheduled state: {e}")
+
+
+def ensure_state_loaded():
+    """
+    Ensure state has been loaded from disk on first tool invocation.
+    This is called by each tool before accessing light_history.
+    """
+    global _state_loaded
+
+    if not _state_loaded:
+        _state_loaded = True
+        persisted = load_state()
+        light_state.update(persisted)
+
+
+def record_event(event_type: str, details: Dict[str, Any]):
+    """
+    Record a light event to history with timestamp.
+    Events are persisted to disk immediately.
+
+    Event types:
+    - turn_on: Light turned on
+    - turn_off_manual: Light manually turned off
+    - turn_off_scheduled: Light automatically turned off at scheduled time
+    - recovery_turn_off: Light turned off during startup reconciliation (past due)
+    - recovery_reschedule: Task rescheduled during startup reconciliation
+    - recovery_clear: Schedule cleared during startup reconciliation (manual intervention detected)
+    """
+    event = {
+        "timestamp": datetime.now().isoformat(),
+        "event_type": event_type,
+        **details
+    }
+    light_history.append(event)
+    print(f"Light event recorded: {event_type}")
+    save_state()
 
 
 # Background Task Management
@@ -154,10 +213,18 @@ async def execute_scheduled_turn_off():
 
         if success:
             # Update state
+            now_iso = datetime.now().isoformat()
             light_state["status"] = "off"
-            light_state["last_off"] = datetime.now().isoformat()
+            light_state["last_off"] = now_iso
+
+            # Record event before clearing scheduled state
+            record_event("turn_off_scheduled", {
+                "scheduled_time": light_state["scheduled_off"],
+                "actual_time": now_iso
+            })
+
             clear_scheduled_state()
-            print(f"Light turned off successfully at scheduled time")
+            print("Light turned off successfully at scheduled time")
         else:
             print("Warning: Failed to turn off light via Home Assistant")
 
@@ -227,18 +294,30 @@ async def reconcile_state_on_startup():
                 # Case 1: Scheduled time has passed - turn off immediately
                 print(f"Scheduled off time {light_state['scheduled_off']} has passed. Enforcing schedule.")
 
+                recovery_details = {
+                    "scheduled_time": light_state["scheduled_off"],
+                    "recovery_time": now.isoformat(),
+                    "overdue_minutes": int((now - scheduled_time).total_seconds() / 60)
+                }
+
                 if actual_state == "on":
                     print("Light is still on, turning off now...")
                     success = await call_ha_service("turn_off", LIGHT_ENTITY_ID)
                     if success:
                         light_state["status"] = "off"
                         light_state["last_off"] = now.isoformat()
+                        recovery_details["action"] = "turned_off"
                         print("Light turned off successfully")
                     else:
+                        recovery_details["action"] = "turn_off_failed"
                         print("Warning: Failed to turn off light")
                 else:
                     print("Light is already off, updating state")
                     light_state["status"] = "off"
+                    recovery_details["action"] = "already_off"
+
+                # Record recovery event
+                record_event("recovery_turn_off", recovery_details)
 
                 # Clear the scheduled time since it's been handled
                 clear_scheduled_state()
@@ -253,11 +332,26 @@ async def reconcile_state_on_startup():
                     light_state["status"] = "on"
                     # Reschedule the turn-off task
                     schedule_turn_off_task(light_state["scheduled_off"])
+
+                    # Record recovery event
+                    record_event("recovery_reschedule", {
+                        "scheduled_time": light_state["scheduled_off"],
+                        "remaining_minutes": int(remaining_seconds / 60),
+                        "ha_state": "on"
+                    })
                     print("Task rescheduled successfully")
                 else:
                     # Light is off but was supposed to be on - might have been manually turned off
                     print("Warning: Light is off but had a scheduled turn-off. Clearing schedule.")
                     light_state["status"] = "off"
+
+                    # Record detection of manual intervention
+                    record_event("recovery_clear", {
+                        "scheduled_time": light_state["scheduled_off"],
+                        "reason": "manual_turn_off_detected",
+                        "ha_state": "off"
+                    })
+
                     clear_scheduled_state()
 
         else:
@@ -392,6 +486,9 @@ def setup_light_tools(mcp: FastMCP):
         # Ensure startup reconciliation has been done
         await ensure_reconciliation_done()
 
+        # Ensure state has been loaded from disk
+        ensure_state_loaded()
+
         # Check if plant status has been written first
         if not current_cycle_status["written"]:
             raise ValueError("Must call write_status first before controlling light")
@@ -424,8 +521,11 @@ def setup_light_tools(mcp: FastMCP):
         light_state["last_on"] = now.isoformat()
         light_state["scheduled_off"] = off_time.isoformat()
 
-        # Persist state to disk for crash recovery
-        save_state()
+        # Record turn_on event
+        record_event("turn_on", {
+            "duration_minutes": minutes,
+            "scheduled_off": off_time.isoformat()
+        })
 
         # Schedule background task to turn off at specified time
         schedule_turn_off_task(off_time.isoformat())
@@ -445,6 +545,9 @@ def setup_light_tools(mcp: FastMCP):
         # Ensure startup reconciliation has been done
         await ensure_reconciliation_done()
 
+        # Ensure state has been loaded from disk
+        ensure_state_loaded()
+
         # Check if plant status has been written first
         if not current_cycle_status["written"]:
             raise ValueError("Must call write_status first before controlling light")
@@ -461,6 +564,13 @@ def setup_light_tools(mcp: FastMCP):
         now = datetime.now()
         light_state["status"] = "off"
         light_state["last_off"] = now.isoformat()
+
+        # Record manual turn off event
+        was_scheduled = light_state["scheduled_off"] is not None
+        record_event("turn_off_manual", {
+            "was_scheduled": was_scheduled,
+            "scheduled_off": light_state["scheduled_off"] if was_scheduled else None
+        })
 
         # Clear scheduled state (but keep state file)
         clear_scheduled_state()
