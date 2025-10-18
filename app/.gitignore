@@ -31,10 +31,12 @@ htmlcov/
 .env.local
 
 # Photos (runtime photos only, not test fixtures)
-photos/
+# Only ignore the photos directory at the root of app, not subdirectories
+/photos/
 /test_photos*/
-# Allow test fixtures
+# Explicitly allow test fixtures and their contents
 !test_fixtures/
+!test_fixtures/**
 
 # Logs
 *.log
