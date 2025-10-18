@@ -37,10 +37,6 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         """
         global mock_sensor_value
 
-        # Check if plant status has been written first
-        if not current_cycle_status["written"]:
-            raise ValueError("Must call write_status first before reading sensors")
-
         # Simulate natural moisture decline over time
         # and add some realistic noise
         mock_sensor_value = max(

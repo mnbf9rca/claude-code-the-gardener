@@ -38,6 +38,10 @@ htmlcov/
 !test_fixtures/
 !test_fixtures/**
 
+# Runtime State (persisted state files)
+data/light_state.json
+data/water_pump_state.json
+
 # Logs
 *.log
 

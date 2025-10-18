@@ -20,7 +20,7 @@ from pathlib import Path
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def setup_pump_state():
+async def setup_pump_state(tmp_path):
     """Reset water pump state before each test"""
     # Reset cycle state
     reset_cycle()
@@ -32,9 +32,9 @@ async def setup_pump_state():
     # Reset state loading flag
     wp_module._state_loaded = False
 
-    # Clean up state file if it exists
-    if wp_module.STATE_FILE.exists():
-        wp_module.STATE_FILE.unlink()
+    # Use temp directory for state file (don't touch production state!)
+    original_state_file = wp_module.STATE_FILE
+    wp_module.STATE_FILE = tmp_path / "water_pump_state.json"
 
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
@@ -46,9 +46,8 @@ async def setup_pump_state():
     wp_module.water_history.clear()
     wp_module._state_loaded = False
 
-    # Clean up state file
-    if wp_module.STATE_FILE.exists():
-        wp_module.STATE_FILE.unlink()
+    # Restore original state file path
+    wp_module.STATE_FILE = original_state_file
 
 
 @pytest.mark.asyncio
