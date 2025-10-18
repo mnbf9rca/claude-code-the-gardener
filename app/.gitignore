@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Photos (test and real)
+photos/
+test_photos*/
+*.jpg
+*.jpeg
+*.png
+
+# Logs
+*.log
+
+# MacOS
+.DS_Store
+
+# Project specific
+manual_debug.py
