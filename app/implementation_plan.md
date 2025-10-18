@@ -16,16 +16,18 @@
 - [x] Address all code review feedback
 - [x] Fix type consistency using Pydantic models
 
-## Phase 2: Action Tools (Second PR)
-1. **Implement action tools**
-   - `app/tools/water_pump.py` - Track daily usage in memory
-   - `app/tools/light.py` - Track on/off state and timing
-   - `app/tools/camera.py` - Return placeholder URL
-
-2. **Add simple validation**
-   - Enforce 500ml/24hr water limit
-   - Enforce light timing constraints
-   - Use Pydantic models
+## Phase 2: Action Tools (COMPLETED ✅)
+- [x] Implement action tools
+   - [x] `app/tools/water_pump.py` - Track daily usage in memory
+   - [x] `app/tools/light.py` - Track on/off state and timing
+   - [x] `app/tools/camera.py` - Return placeholder URL
+- [x] Add simple validation
+   - [x] Enforce 500ml/24hr water limit
+   - [x] Enforce light timing constraints
+   - [x] Use Pydantic models
+- [x] Create comprehensive test suite (25 new tests)
+- [x] Integration tests for all tools working together
+- [x] Time-based testing with freezegun
 
 ## Phase 3: Thinking & Logging (Third PR)
 1. **Implement state management tools**
