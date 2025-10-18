@@ -94,20 +94,3 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
             reading = sensor_history[i]
             sampled.append([reading["timestamp"], reading["value"]])
         return sampled
-
-    @mcp.tool()
-    async def simulate_watering(ml: int = Field(..., description="Amount of water added (ml)")):
-        """
-        MOCK TOOL: Simulate the effect of watering on the sensor.
-        This is for testing only and will be removed in production.
-        """
-        global mock_sensor_value
-
-        # Each 10ml increases sensor reading by ~50-80 points
-        increase = (ml // 10) * random.randint(50, 80)
-        mock_sensor_value = min(3500, mock_sensor_value + increase)  # Cap at very wet
-
-        return {
-            "message": f"Simulated watering {ml}ml",
-            "new_sensor_value": mock_sensor_value
-        }

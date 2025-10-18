@@ -163,15 +163,6 @@ def setup_water_pump_tools(mcp: FastMCP):
         # Persist state to disk
         save_state()
 
-        # Update moisture sensor mock value if available
-        try:
-            import tools.moisture_sensor as ms_module
-            # Each 10ml increases sensor reading by ~50-80 points
-            increase = (actual_ml // 10) * 65  # Average of 50-80
-            ms_module.mock_sensor_value = min(3500, ms_module.mock_sensor_value + increase)
-        except Exception:
-            pass  # Ignore if moisture sensor not available
-
         return WaterDispenseResponse(
             dispensed=actual_ml,
             remaining_24h=remaining - actual_ml,

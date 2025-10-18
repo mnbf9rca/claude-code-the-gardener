@@ -116,23 +116,6 @@ async def test_sensor_history_sampling():
 
 
 @pytest.mark.asyncio
-async def test_simulate_watering():
-    """Test the simulate_watering mock tool"""
-    initial_value = ms_module.mock_sensor_value
-
-    test_mcp = FastMCP("Test")
-    ms_module.setup_moisture_sensor_tools(test_mcp)
-    water_tool = test_mcp._tool_manager._tools["simulate_watering"]
-
-    # Simulate watering 50ml
-    result = await water_tool.run(arguments={"ml": 50})
-
-    # Sensor value should increase
-    assert ms_module.mock_sensor_value > initial_value
-    assert ms_module.mock_sensor_value <= 3500  # Should not exceed max
-
-
-@pytest.mark.asyncio
 async def test_sensor_value_boundaries():
     """Test that sensor values stay within realistic boundaries"""
     current_cycle_status["written"] = True
@@ -147,14 +130,6 @@ async def test_sensor_value_boundaries():
     # Read should not go below minimum
     await read_tool.run(arguments={})
     assert ms_module.mock_sensor_value >= 1500
-
-    # Set to high value and simulate watering
-    ms_module.mock_sensor_value = 3400
-    water_tool = test_mcp._tool_manager._tools["simulate_watering"]
-    await water_tool.run(arguments={"ml": 100})
-
-    # Should not exceed maximum
-    assert ms_module.mock_sensor_value <= 3500
 
 
 @pytest.mark.asyncio

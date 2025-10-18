@@ -123,7 +123,6 @@ async def test_server_initialization():
     # Moisture sensor tools
     assert "read_moisture" in tools
     assert "get_sensor_history" in tools
-    assert "simulate_watering" in tools
 
     # Water pump tools
     assert "dispense" in tools
@@ -303,7 +302,7 @@ async def test_sensor_history_sampling():
 
 @pytest.mark.asyncio
 async def test_water_pump_integration():
-    """Test water pump integration with gatekeeper and moisture sensor"""
+    """Test water pump integration with gatekeeper"""
     # Try to dispense water before writing status - should fail
     dispense_tool = mcp._tool_manager._tools["dispense"]
     with pytest.raises(ValueError, match="Must call write_status first"):
@@ -321,15 +320,12 @@ async def test_water_pump_integration():
     })
 
     # Now dispense water should work
-    initial_moisture = ms_module.mock_sensor_value
     tool_result = await dispense_tool.run(arguments={"ml": 50})
     result = json.loads(tool_result.content[0].text)
 
     assert result["dispensed"] == 50
     assert result["remaining_24h"] == 450
-    # Check moisture sensor was updated
-    assert ms_module.mock_sensor_value > initial_moisture
-    print("✓ Water pump integration works with gatekeeper and sensor update")
+    print("✓ Water pump integration works with gatekeeper")
 
 
 @pytest.mark.asyncio
