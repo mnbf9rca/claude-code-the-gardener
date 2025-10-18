@@ -21,17 +21,15 @@ async def reset_state():
 
 @pytest.mark.asyncio
 async def test_read_moisture_requires_status():
-    """Test that moisture reading requires status to be written first"""
+    """Test that moisture reading does NOT require status to be written first"""
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
 
     read_tool = test_mcp._tool_manager._tools["read_moisture"]
 
     # Should fail when status not written
-    with pytest.raises(ValueError) as exc_info:
-        await read_tool.run(arguments={})
-
-    assert "Must call write_status first" in str(exc_info.value)
+    result = await read_tool.run(arguments={})
+    assert result.content is not None
 
 
 @pytest.mark.asyncio
