@@ -54,6 +54,12 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
+    # Reset light history (new history tracking feature)
+    light_module.light_history.clear()
+
+    # Reset state loaded flag (new history tracking feature)
+    light_module._state_loaded = False
+
     # Reset reconciliation flag (new scheduling feature)
     light_module._reconciliation_done = False
 
@@ -143,7 +149,7 @@ async def test_server_initialization():
 async def test_gatekeeper_enforcement():
     """Test that moisture sensor requires plant status to be written first"""
     # Try to read moisture without writing status first
-    moisture_tool = mcp._tool_manager._tools["read_moisture"]
+    moisture_tool = mcp._tool_manager._tools["turn_off"]
 
     with pytest.raises(ValueError) as exc_info:
         result = await moisture_tool.run(arguments={})

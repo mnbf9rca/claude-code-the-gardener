@@ -103,13 +103,16 @@ def get_usage_last_24h() -> tuple[int, int]:
         return 0, 0
 
     cutoff_time = datetime.now() - timedelta(hours=24)
-    recent_events = [
-        event for event in water_history
-        if datetime.fromisoformat(event["timestamp"]) > cutoff_time
-    ]
-
-    total_ml = sum(event["ml"] for event in recent_events)
-    return total_ml, len(recent_events)
+    # Iterate from the end for efficiency, since new events are appended
+    total_ml = 0
+    count = 0
+    for event in reversed(water_history):
+        event_time = datetime.fromisoformat(event["timestamp"])
+        if event_time <= cutoff_time:
+            break
+        total_ml += event["ml"]
+        count += 1
+    return total_ml, count
 
 
 def setup_water_pump_tools(mcp: FastMCP):
@@ -152,13 +155,6 @@ def setup_water_pump_tools(mcp: FastMCP):
             "timestamp": timestamp,
             "ml": actual_ml
         })
-
-        # Clean up old history (keep 48 hours worth for safety)
-        cutoff_time = datetime.now() - timedelta(hours=48)
-        water_history[:] = [
-            event for event in water_history
-            if datetime.fromisoformat(event["timestamp"]) > cutoff_time
-        ]
 
         # Persist state to disk
         save_state()
