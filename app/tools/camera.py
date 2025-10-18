@@ -6,6 +6,7 @@ Works on both Mac and Raspberry Pi.
 import os
 import logging
 import atexit
+import json
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Any
@@ -36,6 +37,44 @@ CAMERA_CONFIG: Dict[str, Any] = {
 camera: Optional[cv2.VideoCapture] = None
 camera_available: bool = False
 camera_error: Optional[str] = None
+
+# State persistence
+STATE_FILE = Path(__file__).parent.parent / "data" / "camera_state.json"
+
+
+def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
+    """
+    Append a tool usage event to the history file.
+    Uses append-only pattern - does not load full history into memory.
+    """
+    try:
+        # Ensure data directory exists
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing data or create new structure
+        if STATE_FILE.exists():
+            with open(STATE_FILE, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {"tool_usage_history": []}
+
+        # Append new event with tool name and timestamp
+        event = {
+            "tool": tool_name,
+            "timestamp": datetime.now().isoformat(),
+            **event_data
+        }
+        data["tool_usage_history"].append(event)
+
+        # Save back to disk
+        with open(STATE_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        logging.debug(f"Logged {tool_name} usage to {STATE_FILE}")
+
+    except Exception as e:
+        # Don't fail the tool call if logging fails
+        logging.warning(f"Failed to log tool usage: {e}")
 
 
 def load_photo_history_from_disk() -> List[Dict[str, str]]:
@@ -240,6 +279,12 @@ def setup_camera_tools(mcp: FastMCP):
             if len(photo_history) > 100:
                 photo_history.pop(0)
 
+            # Log successful capture
+            log_tool_usage("capture", {
+                "success": True,
+                "photo_path": photo_path
+            })
+
             return CaptureResponse(
                 success=True,
                 url=photo_path,
@@ -247,6 +292,12 @@ def setup_camera_tools(mcp: FastMCP):
             )
         else:
             # Camera unavailable or capture failed
+            # Log failed capture
+            log_tool_usage("capture", {
+                "success": False,
+                "error": error_msg or "Camera unavailable"
+            })
+
             return CaptureResponse(
                 success=False,
                 error=error_msg or "Camera unavailable"
@@ -266,7 +317,15 @@ def setup_camera_tools(mcp: FastMCP):
         elif limit > 20:
             limit = 20
 
-        return photo_history[-limit:] if photo_history else []
+        result = photo_history[-limit:] if photo_history else []
+
+        # Log tool usage
+        log_tool_usage("get_recent_photos", {
+            "limit": limit,
+            "photos_returned": len(result)
+        })
+
+        return result
 
     @mcp.tool()
     async def get_camera_status() -> Dict[str, Any]:
@@ -280,7 +339,7 @@ def setup_camera_tools(mcp: FastMCP):
         if camera is None and not camera_available:
             camera_available, _, camera_error = initialize_camera()
 
-        return {
+        status = {
             "camera_enabled": CAMERA_CONFIG["enabled"],
             "camera_available": camera_available,
             "device_index": CAMERA_CONFIG["device_index"],
@@ -290,6 +349,14 @@ def setup_camera_tools(mcp: FastMCP):
             "photos_captured": len(photo_history),
             "error": camera_error if not camera_available else None
         }
+
+        # Log tool usage
+        log_tool_usage("get_camera_status", {
+            "camera_available": camera_available,
+            "photos_captured": len(photo_history)
+        })
+
+        return status
 
 
 # Register cleanup on module unload
