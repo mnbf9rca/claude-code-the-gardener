@@ -7,6 +7,7 @@ import os
 import logging
 import atexit
 import json
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Tuple, Dict, List, Any
@@ -179,9 +180,22 @@ def initialize_camera() -> Tuple[bool, Optional[cv2.VideoCapture], Optional[str]
         return False, None, error_msg
 
 
+def _read_camera_frame(camera, result_container: Dict[str, Any]):
+    """
+    Helper function to read camera frame in a separate thread.
+    Stores result in result_container dict.
+    """
+    try:
+        ret, frame = camera.read()
+        result_container['ret'] = ret
+        result_container['frame'] = frame
+    except Exception as e:
+        result_container['error'] = str(e)
+
+
 def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str]]:
     """
-    Capture a real photo using the USB camera.
+    Capture a real photo using the USB camera with timeout protection.
     Returns: (success, file_path, error_message)
     """
     global camera, camera_available, camera_error
@@ -202,8 +216,27 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str]]:
         for _ in range(3):
             camera.read()
 
-        # Capture frame
-        ret, frame = camera.read()
+        # Capture frame with timeout protection
+        timeout_seconds = CAMERA_CONFIG["capture_timeout"]
+        result_container: Dict[str, Any] = {}
+        read_thread = threading.Thread(target=_read_camera_frame, args=(camera, result_container))
+        read_thread.daemon = True
+        read_thread.start()
+        read_thread.join(timeout_seconds)
+
+        if read_thread.is_alive():
+            error_msg = f"Camera read timed out after {timeout_seconds} seconds"
+            logging.error(error_msg)
+            return False, None, error_msg
+
+        if 'error' in result_container:
+            error_msg = f"Camera read error: {result_container['error']}"
+            logging.error(error_msg)
+            return False, None, error_msg
+
+        ret = result_container.get('ret', False)
+        frame = result_container.get('frame', None)
+
         if not ret or frame is None:
             error_msg = "Failed to capture frame"
             logging.error(error_msg)
@@ -347,7 +380,7 @@ def setup_camera_tools(mcp: FastMCP):
             "resolution": f"{CAMERA_CONFIG['image_width']}x{CAMERA_CONFIG['image_height']}",
             "image_quality": CAMERA_CONFIG["image_quality"],
             "photos_captured": len(photo_history),
-            "error": camera_error if not camera_available else None
+            "error": None if camera_available else camera_error
         }
 
         # Log tool usage

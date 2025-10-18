@@ -99,6 +99,29 @@ async def test_dispense_validation(setup_pump_state):
 
 
 @pytest.mark.asyncio
+async def test_dispense_validation_non_integer_values(setup_pump_state):
+    """Test that non-integer and invalid ml values are rejected"""
+    mcp = setup_pump_state
+    dispense_tool = mcp._tool_manager._tools["dispense"]
+
+    # Test string value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await dispense_tool.run(arguments={"ml": "fifty"})
+
+    # Test float value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await dispense_tool.run(arguments={"ml": 25.5})
+
+    # Test None value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await dispense_tool.run(arguments={"ml": None})
+
+    # Test negative value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await dispense_tool.run(arguments={"ml": -20})
+
+
+@pytest.mark.asyncio
 async def test_24h_limit_enforcement(setup_pump_state):
     """Test that 500ml/24h limit is enforced"""
     mcp = setup_pump_state

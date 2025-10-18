@@ -135,6 +135,29 @@ async def test_turn_on_validation(setup_light_state):
 
 
 @pytest.mark.asyncio
+async def test_turn_on_validation_non_integer_values(setup_light_state):
+    """Test that non-integer and invalid duration values are rejected"""
+    mcp = setup_light_state
+    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+
+    # Test string value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await turn_on_tool.run(arguments={"minutes": "sixty"})
+
+    # Test float value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await turn_on_tool.run(arguments={"minutes": 45.5})
+
+    # Test None value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await turn_on_tool.run(arguments={"minutes": None})
+
+    # Test negative value
+    with pytest.raises(Exception):  # Pydantic validation error
+        await turn_on_tool.run(arguments={"minutes": -30})
+
+
+@pytest.mark.asyncio
 async def test_cannot_turn_on_when_already_on(setup_light_state):
     """Test that light cannot be turned on when already on"""
     mcp = setup_light_state

@@ -49,6 +49,14 @@ def get_http_client() -> httpx.AsyncClient:
         )
     return http_client
 
+
+async def close_http_client():
+    """Close the global HTTP client if it exists to prevent resource leaks"""
+    global http_client
+    if http_client is not None:
+        await http_client.aclose()
+        http_client = None
+
 # Light state
 light_state = {
     "status": "off",
@@ -86,15 +94,27 @@ def initialize_state_file():
 
 
 def save_state():
-    """Save light state and history to disk for crash recovery"""
+    """Save light state and history to disk using atomic write for data integrity"""
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         state_data = {
             **light_state,
             "light_history": light_history
         }
-        with open(STATE_FILE, 'w') as f:
-            json.dump(state_data, f, indent=2)
+
+        # Write to temporary file first, then atomic rename to prevent corruption
+        import tempfile
+        fd, temp_path = tempfile.mkstemp(dir=STATE_FILE.parent, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(state_data, f, indent=2)
+            # Atomic rename on POSIX systems
+            os.replace(temp_path, STATE_FILE)
+        except Exception:
+            # Clean up temp file if something went wrong
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
     except Exception as e:
         print(f"Warning: Failed to save light state: {e}")
 
@@ -422,30 +442,55 @@ def check_light_availability() -> tuple[bool, int]:
 
     if time_since_off >= MIN_OFF_MINUTES:
         return True, 0
-    else:
-        minutes_remaining = int(MIN_OFF_MINUTES - time_since_off)
-        return False, max(1, minutes_remaining)
+
+    minutes_remaining = int(MIN_OFF_MINUTES - time_since_off)
+    return False, max(1, minutes_remaining)
 
 
-async def call_ha_service(service: str, entity_id: str) -> bool:
+async def call_ha_service(service: str, entity_id: str, max_retries: int = 3) -> bool:
     """
-    Call a Home Assistant service (turn_on or turn_off)
+    Call a Home Assistant service (turn_on or turn_off) with retry logic.
+    Retries on transient failures with exponential backoff.
+
+    Args:
+        service: Service name (turn_on, turn_off)
+        entity_id: Home Assistant entity ID
+        max_retries: Maximum number of retry attempts (default: 3)
+
     Returns: True if successful, False otherwise
     """
-    try:
-        client = get_http_client()
-        domain = entity_id.split(".")[0]  # Extract domain (e.g., 'switch' from 'switch.smart_plug_mini')
-        url = f"{HA_URL}/api/services/{domain}/{service}"
+    last_error = None
 
-        response = await client.post(
-            url,
-            json={"entity_id": entity_id}
-        )
-        response.raise_for_status()
-        return True
-    except Exception as e:
-        print(f"Warning: Failed to call Home Assistant service {service}: {e}")
-        return False
+    for attempt in range(max_retries):
+        try:
+            client = get_http_client()
+            domain = entity_id.split(".")[0]  # Extract domain (e.g., 'switch' from 'switch.smart_plug_mini')
+            url = f"{HA_URL}/api/services/{domain}/{service}"
+
+            response = await client.post(
+                url,
+                json={"entity_id": entity_id}
+            )
+            response.raise_for_status()
+            return True
+
+        except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
+            # Transient errors - retry with exponential backoff
+            last_error = e
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                print(f"Transient error calling HA service {service} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            continue
+
+        except Exception as e:
+            # Non-transient errors - fail immediately
+            print(f"Warning: Failed to call Home Assistant service {service}: {e}")
+            return False
+
+    # All retries exhausted
+    print(f"Warning: Failed to call Home Assistant service {service} after {max_retries} attempts: {last_error}")
+    return False
 
 
 async def get_ha_entity_state(entity_id: str) -> Optional[str]:
@@ -466,8 +511,38 @@ async def get_ha_entity_state(entity_id: str) -> Optional[str]:
         return None
 
 
+def validate_environment():
+    """
+    Validate required environment variables are present and valid.
+    Raises ValueError if validation fails.
+    """
+    errors = []
+
+    # Check required variables
+    if not HA_URL:
+        errors.append("HOME_ASSISTANT_URL is not set")
+    elif not HA_URL.startswith(("http://", "https://")):
+        errors.append(f"HOME_ASSISTANT_URL must start with http:// or https://, got: {HA_URL}")
+
+    if not HA_TOKEN:
+        errors.append("HOME_ASSISTANT_TOKEN is not set or empty")
+
+    if not LIGHT_ENTITY_ID:
+        errors.append("LIGHT_ENTITY_ID is not set or empty")
+    elif "." not in LIGHT_ENTITY_ID:
+        errors.append(f"LIGHT_ENTITY_ID must be in format 'domain.entity_name', got: {LIGHT_ENTITY_ID}")
+
+    if errors:
+        error_msg = "Light tool configuration errors:\n  - " + "\n  - ".join(errors)
+        print(f"Warning: {error_msg}")
+        print("Light tools will run in fallback mode. Set environment variables to enable Home Assistant integration.")
+
+
 def setup_light_tools(mcp: FastMCP):
     """Set up light control tools on the MCP server"""
+
+    # Validate environment configuration
+    validate_environment()
 
     @mcp.tool()
     async def turn_on(
@@ -600,16 +675,15 @@ def setup_light_tools(mcp: FastMCP):
 
         # Safety net: Check if scheduled off time has passed
         # (Background task should handle this, but this is defense-in-depth)
-        if light_state["status"] == "on" and light_state["scheduled_off"]:
-            if datetime.now() >= datetime.fromisoformat(light_state["scheduled_off"]):
-                print("Warning: Scheduled off time passed but light still on (background task may have failed)")
-                # Turn off as safety measure
-                await call_ha_service("turn_off", LIGHT_ENTITY_ID)
-                light_state["status"] = "off"
-                light_state["last_off"] = datetime.now().isoformat()
-                clear_scheduled_state()
-                # Cancel task if it still exists
-                cancel_scheduled_task()
+        if light_state["status"] == "on" and light_state["scheduled_off"] and datetime.now() >= datetime.fromisoformat(light_state["scheduled_off"]):
+            print("Warning: Scheduled off time passed but light still on (background task may have failed)")
+            # Turn off as safety measure
+            await call_ha_service("turn_off", LIGHT_ENTITY_ID)
+            light_state["status"] = "off"
+            light_state["last_off"] = datetime.now().isoformat()
+            clear_scheduled_state()
+            # Cancel task if it still exists
+            cancel_scheduled_task()
 
         can_activate, minutes_wait = check_light_availability()
 

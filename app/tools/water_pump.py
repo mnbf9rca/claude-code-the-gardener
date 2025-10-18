@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field, field_validator
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
 import json
+import os
 from pathlib import Path
+from collections import deque
 
 # Constants
 MAX_ML_PER_24H = 500  # Maximum water allowed in 24 hours
@@ -18,8 +20,8 @@ MAX_ML_PER_DISPENSE = 100  # Maximum amount per dispense
 # State persistence
 STATE_FILE = Path(__file__).parent.parent / "data" / "water_pump_state.json"
 
-# Storage for water dispensing history
-water_history = []  # List of {timestamp, ml} dictionaries
+# Storage for water dispensing history (using deque for efficient pruning)
+water_history = deque()  # Deque of {timestamp, ml} dictionaries
 
 # State loading flag
 _state_loaded = False
@@ -56,11 +58,24 @@ def initialize_state_file():
 
 
 def save_state():
-    """Save water history to disk for persistence across restarts"""
+    """Save water history to disk using atomic write for data integrity"""
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(STATE_FILE, 'w') as f:
-            json.dump({"water_history": water_history}, f, indent=2)
+
+        # Write to temporary file first, then atomic rename to prevent corruption
+        import tempfile
+        fd, temp_path = tempfile.mkstemp(dir=STATE_FILE.parent, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                # Convert deque to list for JSON serialization
+                json.dump({"water_history": list(water_history)}, f, indent=2)
+            # Atomic rename on POSIX systems
+            os.replace(temp_path, STATE_FILE)
+        except Exception:
+            # Clean up temp file if something went wrong
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
     except Exception as e:
         print(f"Warning: Failed to save water pump state: {e}")
 
@@ -68,19 +83,21 @@ def save_state():
 def load_state():
     """
     Load persisted water history from disk.
-    Always returns a valid history list (initializes file if missing).
+    Always returns a valid history deque (initializes file if missing).
     """
     global water_history
     try:
         initialize_state_file()
         with open(STATE_FILE, 'r') as f:
             data = json.load(f)
-            water_history = data.get("water_history", [])
+            history_list = data.get("water_history", [])
+            # Convert list to deque for efficient operations
+            water_history = deque(history_list)
             print(f"Loaded {len(water_history)} water dispensing events from disk")
     except Exception as e:
         print(f"Error: Failed to load water pump state: {e}")
         # Return safe defaults if loading fails
-        water_history = []
+        water_history = deque()
 
 
 def ensure_state_loaded():
@@ -95,17 +112,36 @@ def ensure_state_loaded():
         load_state()
 
 
+def prune_water_history():
+    """
+    Remove events older than 24 hours from water_history deque.
+    This keeps memory usage bounded and improves query performance.
+    """
+    if not water_history:
+        return
+
+    cutoff_time = datetime.now() - timedelta(hours=24)
+    # Efficiently pop from left until within cutoff
+    while water_history and datetime.fromisoformat(water_history[0]["timestamp"]) < cutoff_time:
+        water_history.popleft()
+
+
 def get_usage_last_24h() -> tuple[int, int]:
-    """Calculate water usage in the last 24 hours
+    """
+    Calculate water usage in the last 24 hours.
+    Prunes old events for efficiency.
     Returns: (total_ml_used, number_of_events)
     """
     if not water_history:
         return 0, 0
 
+    # Prune old events before calculating
+    prune_water_history()
+
     cutoff_time = datetime.now() - timedelta(hours=24)
-    # Iterate from the end for efficiency, since new events are appended
     total_ml = 0
     count = 0
+    # All events in deque should now be within 24h, but double-check
     for event in reversed(water_history):
         event_time = datetime.fromisoformat(event["timestamp"])
         if event_time <= cutoff_time:
