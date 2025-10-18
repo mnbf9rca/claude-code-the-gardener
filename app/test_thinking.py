@@ -24,15 +24,16 @@ from pathlib import Path
 @pytest_asyncio.fixture(autouse=True)
 async def setup_thinking_state(tmp_path):
     """Reset thinking state before each test"""
-    # Clear thought history
-    thinking_module.thought_history.clear()
-
-    # Reset state loading flag
-    thinking_module._state_loaded = False
-
     # Use temp directory for state file (don't touch production state!)
-    original_state_file = thinking_module.STATE_FILE
-    thinking_module.STATE_FILE = tmp_path / "thinking.jsonl"
+    from utils.jsonl_history import JsonlHistory
+
+    original_history = thinking_module.thought_history
+
+    # Create new history instance with temp file
+    thinking_module.thought_history = JsonlHistory(
+        file_path=tmp_path / "thinking.jsonl",
+        max_memory_entries=1000
+    )
 
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
@@ -40,12 +41,8 @@ async def setup_thinking_state(tmp_path):
 
     yield mcp
 
-    # Cleanup
-    thinking_module.thought_history.clear()
-    thinking_module._state_loaded = False
-
-    # Restore original state file path
-    thinking_module.STATE_FILE = original_state_file
+    # Restore original history
+    thinking_module.thought_history = original_history
 
 
 @pytest.mark.asyncio
@@ -72,7 +69,9 @@ async def test_log_thought_basic(setup_thinking_state):
     assert len(thinking_module.thought_history) == 1
 
     # Verify stored thought
-    thought = thinking_module.thought_history[0]
+    thoughts = thinking_module.thought_history.get_all()
+    assert len(thoughts) == 1
+    thought = thoughts[0]
     assert thought["observation"] == "Moisture sensor reading dropped to 1200"
     assert thought["hypothesis"] == "Soil is drying out faster than expected"
     assert len(thought["candidate_actions"]) == 2
@@ -342,10 +341,10 @@ async def test_state_persistence(setup_thinking_state):
     })
 
     # Verify file was created
-    assert thinking_module.STATE_FILE.exists()
+    assert thinking_module.thought_history.file_path.exists()
 
     # Read the file
-    with open(thinking_module.STATE_FILE, 'r') as f:
+    with open(thinking_module.thought_history.file_path, 'r') as f:
         lines = f.readlines()
 
     assert len(lines) == 1
@@ -373,9 +372,10 @@ async def test_state_recovery(setup_thinking_state):
             "tags": []
         })
 
-    # Clear memory (simulating restart)
-    thinking_module.thought_history.clear()
-    thinking_module._state_loaded = False
+    # Clear memory (simulating restart) and create new instance
+    file_path = thinking_module.thought_history.file_path
+    from utils.jsonl_history import JsonlHistory
+    thinking_module.thought_history = JsonlHistory(file_path=file_path, max_memory_entries=1000)
 
     # Query should trigger state load
     tool_result = await get_recent_tool.run(arguments={"n": 5})
@@ -392,8 +392,8 @@ async def test_memory_pruning(setup_thinking_state):
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
 
     # Temporarily set a low max for testing
-    original_max = thinking_module.MAX_MEMORY_ENTRIES
-    thinking_module.MAX_MEMORY_ENTRIES = 5
+    original_max = thinking_module.thought_history.max_memory_entries
+    thinking_module.thought_history.max_memory_entries = 5
 
     # Log 10 thoughts
     for i in range(10):
@@ -409,10 +409,11 @@ async def test_memory_pruning(setup_thinking_state):
     # Memory should be pruned to 5
     assert len(thinking_module.thought_history) == 5
     # Should keep the most recent 5 (5-9)
-    assert thinking_module.thought_history[0]["observation"] == "Observation 5"
+    all_thoughts = thinking_module.thought_history.get_all()
+    assert all_thoughts[0]["observation"] == "Observation 5"
 
     # Restore original max
-    thinking_module.MAX_MEMORY_ENTRIES = original_max
+    thinking_module.thought_history.max_memory_entries = original_max
 
 
 @pytest.mark.asyncio

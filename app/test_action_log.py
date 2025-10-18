@@ -24,15 +24,16 @@ from pathlib import Path
 @pytest_asyncio.fixture(autouse=True)
 async def setup_action_log_state(tmp_path):
     """Reset action log state before each test"""
-    # Clear action history
-    action_log_module.action_history.clear()
-
-    # Reset state loading flag
-    action_log_module._state_loaded = False
-
     # Use temp directory for state file (don't touch production state!)
-    original_state_file = action_log_module.STATE_FILE
-    action_log_module.STATE_FILE = tmp_path / "action_log.jsonl"
+    from utils.jsonl_history import JsonlHistory
+
+    original_history = action_log_module.action_history
+
+    # Create new history instance with temp file
+    action_log_module.action_history = JsonlHistory(
+        file_path=tmp_path / "action_log.jsonl",
+        max_memory_entries=1000
+    )
 
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
@@ -40,12 +41,8 @@ async def setup_action_log_state(tmp_path):
 
     yield mcp
 
-    # Cleanup
-    action_log_module.action_history.clear()
-    action_log_module._state_loaded = False
-
-    # Restore original state file path
-    action_log_module.STATE_FILE = original_state_file
+    # Restore original history
+    action_log_module.action_history = original_history
 
 
 @pytest.mark.asyncio
@@ -68,7 +65,9 @@ async def test_log_action_water(setup_action_log_state):
     assert len(action_log_module.action_history) == 1
 
     # Verify stored action
-    action = action_log_module.action_history[0]
+    actions = action_log_module.action_history.get_all()
+    assert len(actions) == 1
+    action = actions[0]
     assert action["type"] == "water"
     assert action["details"]["ml"] == 40
 
@@ -91,7 +90,8 @@ async def test_log_action_light(setup_action_log_state):
     assert result["success"] is True
     assert len(action_log_module.action_history) == 1
 
-    action = action_log_module.action_history[0]
+    actions = action_log_module.action_history.get_all()
+    action = actions[0]
     assert action["type"] == "light"
     assert action["details"]["duration_minutes"] == 90
 
@@ -112,7 +112,8 @@ async def test_log_action_observe(setup_action_log_state):
     result = json.loads(tool_result.content[0].text)
 
     assert result["success"] is True
-    action = action_log_module.action_history[0]
+    actions = action_log_module.action_history.get_all()
+    action = actions[0]
     assert action["type"] == "observe"
     assert "drooping" in action["details"]["observation"]
 
@@ -134,7 +135,8 @@ async def test_log_action_alert(setup_action_log_state):
     result = json.loads(tool_result.content[0].text)
 
     assert result["success"] is True
-    action = action_log_module.action_history[0]
+    actions = action_log_module.action_history.get_all()
+    action = actions[0]
     assert action["type"] == "alert"
     assert action["details"]["severity"] == "warning"
 
@@ -319,10 +321,10 @@ async def test_state_persistence(setup_action_log_state):
     })
 
     # Verify file was created
-    assert action_log_module.STATE_FILE.exists()
+    assert action_log_module.action_history.file_path.exists()
 
     # Read the file
-    with open(action_log_module.STATE_FILE, 'r') as f:
+    with open(action_log_module.action_history.file_path, 'r') as f:
         lines = f.readlines()
 
     assert len(lines) == 1
@@ -345,9 +347,10 @@ async def test_state_recovery(setup_action_log_state):
             "details": {"note": f"Action {i}"}
         })
 
-    # Clear memory (simulating restart)
-    action_log_module.action_history.clear()
-    action_log_module._state_loaded = False
+    # Clear memory (simulating restart) and create new instance
+    file_path = action_log_module.action_history.file_path
+    from utils.jsonl_history import JsonlHistory
+    action_log_module.action_history = JsonlHistory(file_path=file_path, max_memory_entries=1000)
 
     # Query should trigger state load
     tool_result = await get_recent_tool.run(arguments={"n": 5})
@@ -364,8 +367,8 @@ async def test_memory_pruning(setup_action_log_state):
     log_action_tool = mcp._tool_manager._tools["log_action"]
 
     # Temporarily set a low max for testing
-    original_max = action_log_module.MAX_MEMORY_ENTRIES
-    action_log_module.MAX_MEMORY_ENTRIES = 5
+    original_max = action_log_module.action_history.max_memory_entries
+    action_log_module.action_history.max_memory_entries = 5
 
     # Log 10 actions
     for i in range(10):
@@ -377,10 +380,11 @@ async def test_memory_pruning(setup_action_log_state):
     # Memory should be pruned to 5
     assert len(action_log_module.action_history) == 5
     # Should keep the most recent 5 (5-9)
-    assert action_log_module.action_history[0]["details"]["note"] == "Action 5"
+    all_actions = action_log_module.action_history.get_all()
+    assert all_actions[0]["details"]["note"] == "Action 5"
 
     # Restore original max
-    action_log_module.MAX_MEMORY_ENTRIES = original_max
+    action_log_module.action_history.max_memory_entries = original_max
 
 
 @pytest.mark.asyncio
