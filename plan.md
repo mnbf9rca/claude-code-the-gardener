@@ -2,7 +2,7 @@
 
 Claude will be running on a vm. It will be triggered to run once every 10 minutes by a cron job. Its prompt will instruct it to keep the plant alive by making use of its tools to see the past plan, read the status of the environment, thinking about next steps, writing that plan to a "plan tool" (MCP), and then calling the services to make a change (or do nothing if not needed).
 
-Claude will have access to tehse tools as MCP servers over http:
+Claude will have access to these tools as MCP servers over http:
 
 - a "thinking" tool, which stores plan items - basically a key value store where the key is an index, and the value is a json object containing a "timestamp" and "thought" keys. This allows claude to maintain a log of its thoughts and actions over time.
 - a "plant status and next steps" tool, which claude must write to before making any tool calls. If it has not written to this tool, no other tool calls will be executed. This is to ensure that claude is always thinking about the plant status and next steps before taking any action.
@@ -35,7 +35,7 @@ The grow light will be connected to a Meross smart plug, which can be controlled
 
 ESP32 components:
 
-- M5 cores3se: https://docs.m5stack.com/en/core/M5CoreS3%20SE
+- M5 CoreS3 SE: https://docs.m5stack.com/en/core/M5CoreS3%20SE
 - relay: https://thepihut.com/products/2-channel-isolated-relay-breakout-5v
 - pump: https://thepihut.com/products/peristaltic-liquid-pump-with-silicone-tubing-5v-to-6v-dc-power
 - moisture sensor: https://thepihut.com/products/capacitive-soil-moisture-sensor

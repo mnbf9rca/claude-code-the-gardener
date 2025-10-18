@@ -85,14 +85,15 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         # Sample the history at intervals if we have too many points
         if len(sensor_history) <= entries_needed:
             return sensor_history[-entries_needed:]
-        else:
-            # Sample evenly from available history
-            step = len(sensor_history) // entries_needed
-            sampled = []
-            for i in range(0, len(sensor_history), step)[:entries_needed]:
-                reading = sensor_history[i]
-                sampled.append([reading["timestamp"], reading["value"]])
-            return sampled
+
+        # Sample evenly from available history
+        step = len(sensor_history) // entries_needed
+        sampled = []
+        indices = list(range(0, len(sensor_history), step))[:entries_needed]
+        for i in indices:
+            reading = sensor_history[i]
+            sampled.append([reading["timestamp"], reading["value"]])
+        return sampled
 
     @mcp.tool()
     async def simulate_watering(ml: int = Field(..., description="Amount of water added (ml)")):

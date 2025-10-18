@@ -1,5 +1,7 @@
-"""Simple test to check the server works"""
+"""Simple test to check the server works with proper assertions"""
 import asyncio
+import json
+from fastmcp.tools.tool import FunctionTool
 from server import mcp
 from shared_state import reset_cycle
 
@@ -11,10 +13,18 @@ async def test_tools():
     tools = mcp._tool_manager._tools
     print(f"Available tools: {list(tools.keys())}")
 
+    # Assert that tools are available
+    assert isinstance(tools, dict), "Tools should be a dictionary"
+    assert "write_status" in tools, "'write_status' tool should be available"
+    assert "read_moisture" in tools, "'read_moisture' tool should be available"
+    assert len(tools) > 0, "Tool manager should not be empty"
+
     # Get the write_status tool
     write_status_tool = tools["write_status"]
     print(f"Tool type: {type(write_status_tool)}")
-    print(f"Tool attributes: {dir(write_status_tool)}")
+
+    # Assert the type of write_status_tool
+    assert isinstance(write_status_tool, FunctionTool), "write_status_tool should be a FunctionTool"
 
     # Try to call it using run method with arguments parameter
     try:
@@ -26,18 +36,39 @@ async def test_tools():
             "next_action_sequence": [{"order": 1, "action": "observe", "value": None}],
             "reasoning": "Testing"
         })
-        print(f"✓ Status written result type: {type(result)}")
-        print(f"✓ Status written content type: {type(result.content)}")
-        print(f"✓ Status written content: {result.content}")
+
+        # Assert status write result
+        assert result is not None, "Status write should return a result"
+        assert hasattr(result, 'content'), "Result should have content attribute"
+        assert len(result.content) > 0, "Result content should not be empty"
+
+        # Parse and validate the JSON response
+        status_data = json.loads(result.content[0].text)
+        assert status_data["proceed"] is True, "Status write should allow proceeding"
+        assert "timestamp" in status_data, "Status should include timestamp"
+
+        print(f"✓ Status written successfully: proceed={status_data['proceed']}")
 
         # Now try reading moisture
         moisture_tool = tools["read_moisture"]
         reading = await moisture_tool.run(arguments={})
-        print(f"✓ Moisture reading result type: {type(reading)}")
-        print(f"✓ Moisture reading content type: {type(reading.content)}")
-        print(f"✓ Moisture reading content: {reading.content}")
+
+        # Assert moisture reading result
+        assert reading is not None, "Moisture reading should return a result"
+        assert hasattr(reading, 'content'), "Reading should have content attribute"
+
+        # Parse and validate moisture data
+        moisture_data = json.loads(reading.content[0].text)
+        assert "value" in moisture_data, "Moisture data should have value"
+        assert "timestamp" in moisture_data, "Moisture data should have timestamp"
+        assert 1500 <= moisture_data["value"] <= 3500, f"Moisture value {moisture_data['value']} should be in reasonable range"
+
+        print(f"✓ Moisture reading successful: value={moisture_data['value']}")
+        print("✅ All assertions passed!")
+
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Test failed with error: {e}")
+        raise
 
 if __name__ == "__main__":
     asyncio.run(test_tools())

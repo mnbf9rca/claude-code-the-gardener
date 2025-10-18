@@ -1,7 +1,7 @@
 """
 Plant Status Tool - The gatekeeper tool that must be called first each cycle
 """
-from typing import Dict, List, Any, Literal
+from typing import Dict, List, Any, Literal, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -16,7 +16,7 @@ class NextAction(BaseModel):
     """Represents a planned action"""
     order: int = Field(..., description="Order of execution (1-based)")
     action: Literal["water", "light", "observe", "wait"] = Field(..., description="Action type")
-    value: int | None = Field(None, description="Action value (ml for water, minutes for light)")
+    value: Optional[int] = Field(None, description="Action value (ml for water, minutes for light)")
 
 
 class PlantStatusInput(BaseModel):
@@ -36,7 +36,7 @@ class PlantStatusInput(BaseModel):
 class PlantStatusResponse(BaseModel):
     """Response from writing plant status"""
     proceed: bool = Field(..., description="Whether to proceed with other tool calls")
-    reason: str | None = Field(None, description="Reason if not proceeding")
+    reason: Optional[str] = Field(None, description="Reason if not proceeding")
     timestamp: str = Field(..., description="When status was written")
 
 
@@ -52,7 +52,7 @@ def setup_plant_status_tools(mcp: FastMCP):
             ..., description="Assessment of plant health"
         ),
         next_action_sequence: List[Dict[str, Any]] = Field(
-            ..., description="Planned sequence of actions"
+            ..., description="Planned sequence of actions (order, action, value)"
         ),
         reasoning: str = Field(..., description="Brief explanation of status and plan")
     ) -> PlantStatusResponse:

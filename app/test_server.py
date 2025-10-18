@@ -1,12 +1,33 @@
 """
-Basic smoke tests for Plant Care MCP Server
+Basic smoke tests for Plant Care MCP Server with proper test isolation
 """
 import pytest
+import pytest_asyncio
 import asyncio
 import json
 from datetime import datetime
 from server import mcp
 from shared_state import reset_cycle
+import tools.plant_status as ps_module
+import tools.moisture_sensor as ms_module
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_server_state():
+    """Setup/teardown fixture to reset server state before each test"""
+    # Reset cycle state
+    reset_cycle()
+
+    # Reset plant status history and current status
+    ps_module.status_history.clear()
+    ps_module.current_status = None
+
+    # Reset moisture sensor history and mock value
+    ms_module.sensor_history.clear()
+    ms_module.mock_sensor_value = 2000
+
+    yield
+    # Teardown if needed (currently no cleanup required)
 
 
 @pytest.mark.asyncio
@@ -21,6 +42,7 @@ async def test_server_initialization():
     assert "get_status_history" in tools
     assert "read_moisture" in tools
     assert "get_sensor_history" in tools
+    assert "simulate_watering" in tools
 
     print(f"✓ Server initialized with {len(tools)} tools")
 
@@ -28,9 +50,6 @@ async def test_server_initialization():
 @pytest.mark.asyncio
 async def test_gatekeeper_enforcement():
     """Test that moisture sensor requires plant status to be written first"""
-    # Reset the cycle
-    reset_cycle()
-
     # Try to read moisture without writing status first
     moisture_tool = mcp._tool_manager._tools["read_moisture"]
 
@@ -47,9 +66,6 @@ async def test_gatekeeper_enforcement():
 @pytest.mark.asyncio
 async def test_write_status_and_read_sensor():
     """Test the basic flow of writing status then reading sensor"""
-    # Reset the cycle
-    reset_cycle()
-
     # Write plant status
     write_status_tool = mcp._tool_manager._tools["write_status"]
     tool_result = await write_status_tool.run(arguments={
@@ -81,28 +97,70 @@ async def test_write_status_and_read_sensor():
 
 
 @pytest.mark.asyncio
-async def test_status_history():
+async def test_status_history_with_data():
     """Test that status history is maintained"""
+    # First write a status to have something in history
+    write_status_tool = mcp._tool_manager._tools["write_status"]
+    await write_status_tool.run(arguments={
+        "sensor_reading": 2100,
+        "water_24h": 50.0,
+        "light_today": 120.0,
+        "plant_state": "healthy",
+        "next_action_sequence": [],
+        "reasoning": "Test status for history"
+    })
+
     # Get history
     history_tool = mcp._tool_manager._tools["get_status_history"]
     tool_result = await history_tool.run(arguments={"limit": 5})
     history = json.loads(tool_result.content[0].text)
 
-    # Should have at least one entry from previous test
+    # Should have exactly one entry
     assert isinstance(history, list)
-    if history:
-        assert "timestamp" in history[0]
-        assert "plant_state" in history[0]
+    assert len(history) == 1
+    assert "timestamp" in history[0]
+    assert "plant_state" in history[0]
+    assert history[0]["plant_state"] == "healthy"
     print(f"✓ Status history maintained: {len(history)} records")
+
+
+@pytest.mark.asyncio
+async def test_empty_status_history():
+    """Test that an empty status history returns an empty list without errors"""
+    # Ensure history is really empty by accessing the module directly
+    ps_module.status_history.clear()
+
+    # Get history when empty
+    history_tool = mcp._tool_manager._tools["get_status_history"]
+    tool_result = await history_tool.run(arguments={"limit": 5})
+
+    # Handle case where content might be empty or have text
+    if tool_result.content and len(tool_result.content) > 0:
+        history = json.loads(tool_result.content[0].text)
+    else:
+        history = []  # Treat empty content as empty list
+
+    assert isinstance(history, list)
+    assert len(history) == 0, f"Expected empty history but got {len(history)} items: {history}"
+    print("✓ Empty status history returns empty list without errors")
 
 
 @pytest.mark.asyncio
 async def test_duplicate_status_prevention():
     """Test that status can't be written twice in same cycle"""
-    # Don't reset cycle - use existing one from previous test
     write_status_tool = mcp._tool_manager._tools["write_status"]
 
-    # Try to write status again
+    # Write status first time
+    await write_status_tool.run(arguments={
+        "sensor_reading": 2000,
+        "water_24h": 100.0,
+        "light_today": 240.0,
+        "plant_state": "healthy",
+        "next_action_sequence": [],
+        "reasoning": "First write"
+    })
+
+    # Try to write status again in same cycle
     tool_result = await write_status_tool.run(arguments={
         "sensor_reading": 1900,
         "water_24h": 100.0,
@@ -118,19 +176,39 @@ async def test_duplicate_status_prevention():
     print("✓ Duplicate status write properly prevented")
 
 
-def run_tests():
-    """Run all tests"""
-    print("\n=== Plant Care MCP Server Tests ===\n")
+@pytest.mark.asyncio
+async def test_sensor_history_sampling():
+    """Test that sensor history sampling works correctly"""
+    # First enable writing by setting status
+    write_status_tool = mcp._tool_manager._tools["write_status"]
+    await write_status_tool.run(arguments={
+        "sensor_reading": 2000,
+        "water_24h": 0,
+        "light_today": 0,
+        "plant_state": "healthy",
+        "next_action_sequence": [],
+        "reasoning": "Test setup"
+    })
 
-    # Run tests in order
-    asyncio.run(test_server_initialization())
-    asyncio.run(test_gatekeeper_enforcement())
-    asyncio.run(test_write_status_and_read_sensor())
-    asyncio.run(test_status_history())
-    asyncio.run(test_duplicate_status_prevention())
+    # Add multiple sensor readings
+    moisture_tool = mcp._tool_manager._tools["read_moisture"]
+    for _ in range(10):
+        await moisture_tool.run(arguments={})
 
-    print("\n✅ All tests passed!\n")
+    # Get sensor history
+    history_tool = mcp._tool_manager._tools["get_sensor_history"]
+    tool_result = await history_tool.run(arguments={"hours": 1})
+    history = json.loads(tool_result.content[0].text)
+
+    assert isinstance(history, list)
+    assert len(history) > 0
+    # Check structure of returned data
+    if history:
+        assert len(history[0]) == 2  # [timestamp, value] pairs
+    print(f"✓ Sensor history sampling works: {len(history)} samples")
 
 
+# Use pytest to run tests instead of custom runner
 if __name__ == "__main__":
-    run_tests()
+    # Run with: pytest test_server.py -v
+    pytest.main([__file__, "-v"])
