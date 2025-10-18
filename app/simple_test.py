@@ -1,4 +1,18 @@
-"""Simple test to check the server works with proper assertions"""
+"""
+Simple Manual Test for Debugging FastMCP Server
+
+PURPOSE:
+- Manual smoke test for quick debugging during development
+- Helps understand FastMCP tool structure and response format
+- NOT part of the automated test suite (use pytest test_*.py for that)
+- Useful for testing server changes without full pytest overhead
+
+USAGE:
+    uv run python simple_test.py
+
+This is intentionally separate from the pytest test suite to allow
+quick manual testing and debugging of the MCP server behavior.
+"""
 import asyncio
 import json
 from fastmcp.tools.tool import FunctionTool

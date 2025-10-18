@@ -1,11 +1,16 @@
 """
-Basic smoke tests for Plant Care MCP Server with proper test isolation
+Integration Tests for Plant Care MCP Server
+
+These tests verify the complete MCP server functionality with all components
+working together. They test through the MCP server interface, not individual modules.
+
+For unit tests of individual modules, see:
+- test_plant_status.py - Unit tests for plant status module
+- test_moisture_sensor.py - Unit tests for moisture sensor module
 """
 import pytest
 import pytest_asyncio
-import asyncio
 import json
-from datetime import datetime
 from server import mcp
 from shared_state import reset_cycle
 import tools.plant_status as ps_module
