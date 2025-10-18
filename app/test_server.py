@@ -15,6 +15,7 @@ import pytest
 import pytest_asyncio
 import json
 import httpx
+import asyncio
 from datetime import datetime, timedelta
 from freezegun import freeze_time
 from pytest_httpx import HTTPXMock
@@ -53,9 +54,17 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
-    # Close and reset httpx client for light module
-    if light_module.http_client:
+    # Reset reconciliation flag (new scheduling feature)
+    light_module._reconciliation_done = False
+
+    # Clear persisted state file BEFORE test runs (new scheduling feature)
+    light_module.STATE_FILE.unlink(missing_ok=True)
+
+    # Close httpx client unconditionally
+    try:
         await light_module.http_client.aclose()
+    except AttributeError:
+        pass
     light_module.http_client = None
 
     # Setup Home Assistant mocks
@@ -79,10 +88,24 @@ async def reset_server_state(httpx_mock: HTTPXMock):
 
     yield
 
-    # Teardown - close httpx client
-    if light_module.http_client:
+    # Teardown - cleanup after test completes
+    # Cancel background tasks unconditionally (handles both running and None cases)
+    try:
+        light_module.scheduled_task.cancel()
+        await light_module.scheduled_task
+    except (AttributeError, asyncio.CancelledError, TypeError):
+        pass
+    light_module.scheduled_task = None
+
+    # Clear persisted state file unconditionally
+    light_module.STATE_FILE.unlink(missing_ok=True)
+
+    # Close httpx client unconditionally
+    try:
         await light_module.http_client.aclose()
-        light_module.http_client = None
+    except AttributeError:
+        pass
+    light_module.http_client = None
 
 
 @pytest.mark.asyncio
@@ -311,8 +334,20 @@ async def test_water_pump_integration():
 
 @pytest.mark.asyncio
 async def test_light_integration():
-    """Test light control integration with gatekeeper"""
-    # Try to turn on light before writing status - should fail
+    """Test light control integration with gatekeeper (using idempotent status check)"""
+    # Use get_light_status (idempotent) to test gatekeeper - requires no side effects
+    status_tool = mcp._tool_manager._tools["get_light_status"]
+
+    # Status check should work without write_status (it's read-only)
+    tool_result = await status_tool.run(arguments={})
+    status = json.loads(tool_result.content[0].text)
+
+    # Should show light is off and available
+    assert status["status"] == "off"
+    assert status["can_activate"] is True
+    assert status["minutes_until_available"] == 0
+
+    # Now test that turn_on requires write_status
     turn_on_tool = mcp._tool_manager._tools["turn_on"]
     with pytest.raises(ValueError, match="Must call write_status first"):
         await turn_on_tool.run(arguments={"minutes": 60})
@@ -336,13 +371,12 @@ async def test_light_integration():
     assert result["duration_minutes"] == 60
     assert "off_at" in result
 
-    # Check light status
-    status_tool = mcp._tool_manager._tools["get_light_status"]
+    # Check light status again
     tool_result = await status_tool.run(arguments={})
     status = json.loads(tool_result.content[0].text)
     assert status["status"] == "on"
     assert status["can_activate"] is False
-    print("✓ Light control integration works with gatekeeper")
+    print("✓ Light control integration works with gatekeeper (idempotent status checks)")
 
 
 @pytest.mark.asyncio
