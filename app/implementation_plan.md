@@ -1,36 +1,20 @@
 # Plant Care MCP Implementation Plan
 
 ## Current Status
-- Phase 1 COMPLETED ✅
-- All core functionality working
-- Tests passing
+- **Phase 1: COMPLETED ✅** - Core MCP setup with basic tools
+- All code review feedback addressed
+- 21 tests passing
+- Ready for Phase 2
 
-## Phase 1 Todo List (COMPLETED)
+## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
 - [x] Install FastMCP and dependencies in pyproject.toml
 - [x] Create basic FastMCP server structure in app/server.py
 - [x] Create tools directory structure
 - [x] Implement plant_status tool (gatekeeper)
 - [x] Implement moisture_sensor tool with mock data
-- [x] Create basic smoke tests
-- [x] Test server locally to verify tools work
-
-## Phase 1: Core MCP Setup & Basic Tools (First PR)
-1. **Install FastMCP and dependencies** ✅
-   - Added `fastmcp` and `pydantic` to pyproject.toml
-   - Added test dependencies
-
-2. **Create simple MCP server structure**
-   - `app/server.py` - Main FastMCP server that composes all services
-   - `app/tools/` directory for individual tool implementations
-
-3. **Implement mandatory tools**
-   - `app/tools/plant_status.py` - The gating tool (must be called first)
-   - `app/tools/moisture_sensor.py` - Mock sensor reading
-   - Use in-memory storage (dictionaries)
-
-4. **Basic testing setup**
-   - Create `app/test_server.py` with basic smoke tests
-   - Test that tools are discoverable and callable
+- [x] Create test suite (21 tests: 6 unit for plant_status, 8 unit for moisture_sensor, 7 integration)
+- [x] Address all code review feedback
+- [x] Fix type consistency using Pydantic models
 
 ## Phase 2: Action Tools (Second PR)
 1. **Implement action tools**
@@ -69,9 +53,45 @@
 - Single server with multiple tools
 - No authentication initially
 - Simple flat file structure
+- Pydantic models for type safety
 
-## Implementation Notes
-- Following KISS and YAGNI principles
-- This is a hobby project, not enterprise
-- Using PRs to checkpoint progress
-- Focus on getting minimal working system first
+## Lessons Learned from Phase 1
+- FastMCP supports Pydantic models as tool parameters
+- Test isolation is crucial - use pytest fixtures
+- Separate unit tests from integration tests for clarity
+- Mock data helps test without hardware dependencies
+- Type consistency improves code reliability
+- Code review feedback is valuable for improvement
+
+## How to Run
+
+### Development Server
+```bash
+# Install dependencies
+uv sync --dev
+
+# Run MCP inspector (opens browser)
+uv run fastmcp dev server.py
+
+# Run server with stdio transport
+uv run fastmcp run server:mcp --transport stdio
+```
+
+### Running Tests
+```bash
+# Run all tests
+uv run pytest test_*.py -v
+
+# Run specific test file
+uv run pytest test_plant_status.py -v
+
+# Run manual debugging test
+uv run python simple_test.py
+```
+
+## Ready for Phase 2
+- Foundation established with gatekeeper pattern
+- Test infrastructure in place (21 tests)
+- Type system properly configured
+- Mock sensor provides realistic test data
+- Clear separation of concerns in code structure
