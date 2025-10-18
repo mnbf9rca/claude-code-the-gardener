@@ -6,42 +6,80 @@ This document describes the current thinking for the tools needed for the plant 
 
 ### Write Tools
 
-- `log_thought(thought_object)` - Record reasoning and planning. Required before taking actions.
+- `log_thought(observation, hypothesis, candidate_actions, reasoning, uncertainties, tags)` - Record reasoning and planning. Helps build a history of reasoning for review and learning.
 
+Parameters:
+- `observation` (string): What was observed about the plant
+- `hypothesis` (string): Your hypothesis about what's happening
+- `candidate_actions` (list): List of candidate actions with order, action type, and optional value
+- `reasoning` (string): Your reasoning for this hypothesis
+- `uncertainties` (string): What you're uncertain about
+- `tags` (list): Tags for categorization (optional, default: [])
+
+Returns:
 ```json
 {
   "timestamp": "ISO8601",
-  "observation": "sensor dropped 200 points, leaves appear slightly wilted",
-  "hypothesis": "soil drying faster due to increased light exposure",
-  "candidate_actions": [
-    {"order": 1, "action": "water", "value": 40},
-    {"order": 2, "action": "observe", "value": null}
-  ],
-  "reasoning": "gradual increase to avoid overwatering",
-  "uncertainties": "text",
-  "tags": ["moisture", "observation"]
+  "success": true
 }
 ```
 
 ### Query Tools
 
-- `get_recent(n)` - Returns last N thought entries (default n=3, max 20)
-- `get_range(start_time, end_time)` - Entries within time window
-- `search(keyword, hours=24)` - Search observations, hypotheses, and reasoning fields
+- `get_recent(n, offset)` - Returns last N thought entries with pagination
+  - `n` (int): Number of recent thoughts (default 3, max 50)
+  - `offset` (int): Number of entries to skip from the end for pagination (default 0)
+  - Returns: `{"count": N, "thoughts": [...]}`
+
+- `get_range(start_time, end_time)` - Entries within time window (ISO8601 format)
+  - Returns: `{"count": N, "thoughts": [...]}`
+
+- `search(keyword, hours)` - Search observations, hypotheses, and reasoning fields
+  - `keyword` (string): Keyword to search for (case-insensitive)
+  - `hours` (int): How many hours back to search (default 24)
+  - Returns: `{"count": N, "thoughts": [...]}`
+
+**State Management:**
+- Keeps last 1000 thoughts in memory
+- Full history persisted to disk in JSONL format
+- Auto-loads on first tool invocation
 
 ## Action Log Service
 
 ### Write Tools
 
-- `log_action(type, details)` - Record action with context. Types: `water|light|observe|alert`. Details is JSON with relevant fields.
+- `log_action(type, details)` - Record action with context. Creates a record of all actions for review and analysis.
+
+Parameters:
+- `type` (string): Type of action - must be one of: `water`, `light`, `observe`, `alert`
+- `details` (object): Details about the action taken (flexible JSON)
+
+Returns:
+```json
+{
+  "timestamp": "ISO8601",
+  "success": true
+}
+```
 
 ### Query Tools
 
-- `get_recent(n)` - Returns last N action entries (default n=5, max 50)
-- `get_water_24h()` - Returns `{"total_ml": 150, "events": 3}`
-- `get_light_today()` - Returns `{"total_minutes": 180, "activations": 2}`
-- `get_sensor_history(hours)` - Array of `[timestamp, value]` pairs at 10-minute intervals
-- `search(keyword, hours=24)` - Text search in observation fields, returns matching entries
+- `get_recent(n, offset)` - Returns last N action entries with pagination
+  - `n` (int): Number of recent actions (default 5, max 50)
+  - `offset` (int): Number of entries to skip from the end for pagination (default 0)
+  - Returns: `{"count": N, "actions": [...]}`
+
+- `search(keyword, hours)` - Text search in action details
+  - `keyword` (string): Keyword to search for (case-insensitive)
+  - `hours` (int): How many hours back to search (default 24)
+  - Returns: `{"count": N, "actions": [...]}`
+
+**State Management:**
+- Keeps last 1000 actions in memory
+- Full history persisted to disk in JSONL format
+- Auto-loads on first tool invocation
+
+**Note:** For specialized queries like water usage or light timing, use the respective tool's query methods (e.g., `get_usage_24h()` on water_pump, `get_status()` on light).
 
 ## Plant Status Service
 

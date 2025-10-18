@@ -3,8 +3,9 @@
 ## Current Status
 - **Phase 1: COMPLETED ✅** - Core MCP setup with basic tools
 - **Phase 2: COMPLETED ✅** - Action tools with state persistence and integrations
-- 91 tests passing
-- Ready for Phase 3
+- **Phase 3: COMPLETED ✅** - Thinking & logging tools
+- 122 tests passing
+- Ready for Phase 4
 
 ## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
 - [x] Install FastMCP and dependencies in pyproject.toml
@@ -47,15 +48,28 @@
 - [x] Test fixtures and integration tests
 - [x] Time-based testing with freezegun
 
-## Phase 3: Thinking & Logging (Third PR)
-1. **Implement state management tools**
-   - `app/tools/thinking.py` - Store thoughts/plans
-   - `app/tools/action_log.py` - Track actions
-   - In-memory storage with list/dict structures
+## Phase 3: Thinking & Logging (COMPLETED ✅)
+### Core Implementation
+- [x] Thinking Tool (`app/tools/thinking.py`)
+   - [x] `log_thought()` with structured reasoning (observation, hypothesis, candidate_actions, reasoning, uncertainties, tags)
+   - [x] `get_recent(n, offset)` with pagination support
+   - [x] `get_range(start_time, end_time)` for time-based queries
+   - [x] `search(keyword, hours)` for keyword searching
+   - [x] JSONL persistence with 1000-entry memory cache
+   - [x] 14 comprehensive tests
+- [x] Action Log Tool (`app/tools/action_log.py`)
+   - [x] `log_action(type, details)` with type validation (water|light|observe|alert)
+   - [x] `get_recent(n, offset)` with pagination support
+   - [x] `search(keyword, hours)` for keyword searching
+   - [x] JSONL persistence with 1000-entry memory cache
+   - [x] 17 comprehensive tests
 
-2. **Add query capabilities**
-   - Implement `get_recent()`, `search()` methods
-   - Simple substring matching
+### Infrastructure
+- [x] Updated server.py to register new tools
+- [x] Updated tool_descriptions.md with detailed API documentation
+- [x] All 122 tests passing
+- [x] Memory-efficient deque-based storage
+- [x] Auto-loading state from disk on first use
 
 ## Phase 4: HTTP Deployment (Fourth PR)
 1. **Add HTTP server capability**
@@ -94,6 +108,14 @@
 - OpenCV works consistently across Mac and Raspberry Pi
 - Startup reconciliation prevents state drift
 
+### Phase 3
+- In-memory deques with JSONL persistence scale well (1000 entries in memory)
+- Pagination support (offset parameter) enables efficient browsing of large histories
+- Simple substring search is sufficient for a hobby project
+- Pydantic Literal types provide clean enum validation
+- Consistent patterns across tools make testing straightforward
+- freezegun library is invaluable for time-based testing
+
 ## How to Run
 
 ### Development Server
@@ -120,13 +142,14 @@ uv run pytest test_plant_status.py -v
 uv run python manual_debug.py
 ```
 
-## Ready for Phase 3
+## Ready for Phase 4
 
-- All action tools implemented and tested (91 tests)
-- State persistence standardized on JSONL
+- All core tools implemented and tested (122 tests)
+- State persistence standardized on JSONL across all tools
 - Home Assistant integration working
 - Real hardware integration (camera) validated
 - Resource management patterns established
+- Thinking and action logging ready for Claude to use
 - Clear patterns for adding new tools
 
 ## Technical Notes for Next Phase
