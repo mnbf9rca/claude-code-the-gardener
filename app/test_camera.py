@@ -107,37 +107,42 @@ async def test_photo_history_storage(setup_camera_state):
 
 
 @pytest.mark.asyncio
-async def test_get_recent_photos(setup_camera_state):
-    """Test getting recent photo URLs"""
+@pytest.mark.parametrize("num_photos,limit,expected_count", [
+    (0, None, 0),  # Empty history, default limit
+    (3, None, 3),  # 3 photos, default limit (5)
+    (3, 2, 2),     # 3 photos, limit 2
+    (10, 5, 5),    # 10 photos, limit 5
+])
+async def test_get_recent_photos(setup_camera_state, num_photos, limit, expected_count):
+    """Test getting recent photo URLs with various scenarios"""
     mcp = setup_camera_state
     capture_tool = mcp._tool_manager._tools["capture"]
     recent_tool = mcp._tool_manager._tools["get_recent_photos"]
 
-    # Initially should be empty
-    tool_result = await recent_tool.run(arguments={})
-    # When tool returns empty list, content is empty
-    assert tool_result.content == []
-
-    # Capture some photos
+    # Capture the specified number of photos
     captured_urls = []
-    for _ in range(3):
+    for _ in range(num_photos):
         tool_result = await capture_tool.run(arguments={})
         capture_result = json.loads(tool_result.content[0].text)
         captured_urls.append(capture_result["url"])
 
-    # Get recent photos with default limit
-    tool_result = await recent_tool.run(arguments={})
-    result = json.loads(tool_result.content[0].text)
-    assert len(result) == 3
-    assert all("url" in photo and "timestamp" in photo for photo in result)
+    # Get recent photos with specified limit
+    args = {"limit": limit} if limit else {}
+    tool_result = await recent_tool.run(arguments=args)
 
-    # Get with custom limit
-    tool_result = await recent_tool.run(arguments={"limit": 2})
-    result = json.loads(tool_result.content[0].text)
-    assert len(result) == 2
-    # Should get the most recent ones
-    assert result[0]["url"] == captured_urls[-2]
-    assert result[1]["url"] == captured_urls[-1]
+    # Check results based on expected count
+    if expected_count == 0:
+        assert tool_result.content == []
+    else:
+        result = json.loads(tool_result.content[0].text)
+        assert len(result) == expected_count
+        assert all("url" in photo and "timestamp" in photo for photo in result)
+
+        # Verify we got the most recent ones
+        if limit and limit < num_photos:
+            expected_urls = captured_urls[-limit:]
+            actual_urls = [photo["url"] for photo in result]
+            assert actual_urls == expected_urls
 
 
 @pytest.mark.asyncio

@@ -88,7 +88,7 @@ uv run pytest test_*.py -v
 uv run pytest test_plant_status.py -v
 
 # Run manual debugging test
-uv run python simple_test.py
+uv run python manual_debug.py
 ```
 
 ## Ready for Phase 2
