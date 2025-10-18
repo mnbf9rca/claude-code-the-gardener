@@ -320,8 +320,18 @@ async def test_camera_integration():
     """Test camera integration with gatekeeper"""
     # Try to capture before writing status - should fail
     capture_tool = mcp._tool_manager._tools["capture"]
-    with pytest.raises(ValueError, match="Must call write_status first"):
-        await capture_tool.run(arguments={})
+    result = await capture_tool.run(arguments={})
+
+    # Camera now returns error response instead of raising
+    # Extract the response based on tool result structure
+    if hasattr(result, 'structured_content') and result.structured_content:
+        response = result.structured_content
+    else:
+        # Fallback to parsing from content
+        response = {"success": False, "error": "Unknown error"}
+
+    assert response["success"] is False
+    assert "write_status" in response.get("error", "")
 
     # Write status first
     write_status_tool = mcp._tool_manager._tools["write_status"]
@@ -336,16 +346,45 @@ async def test_camera_integration():
 
     # Now capture should work
     tool_result = await capture_tool.run(arguments={})
-    result = json.loads(tool_result.content[0].text)
 
+    # Extract response using structured_content
+    if hasattr(tool_result, 'structured_content') and tool_result.structured_content:
+        result = tool_result.structured_content
+    else:
+        # Fallback to parsing from content
+        from mcp.types import TextContent
+        for content_item in tool_result.content:
+            if isinstance(content_item, TextContent):
+                result = json.loads(content_item.text)
+                break
+
+    # Should be successful now
+    assert result["success"] is True
     assert "url" in result
-    assert result["url"].startswith("http://192.168.1.100/photos/")
+    # Camera now returns real paths, not mock URLs
+    assert result["url"].endswith(".jpg")
     assert "timestamp" in result
 
     # Check recent photos
     recent_tool = mcp._tool_manager._tools["get_recent_photos"]
     tool_result = await recent_tool.run(arguments={"limit": 5})
-    photos = json.loads(tool_result.content[0].text)
+
+    # Extract photos from result
+    if hasattr(tool_result, 'structured_content') and tool_result.structured_content:
+        photos_data = tool_result.structured_content
+    else:
+        from mcp.types import TextContent
+        for content_item in tool_result.content:
+            if isinstance(content_item, TextContent):
+                photos_data = json.loads(content_item.text)
+                break
+
+    # Handle wrapped result format
+    if isinstance(photos_data, dict) and "result" in photos_data:
+        photos = photos_data["result"]
+    else:
+        photos = photos_data
+
     assert len(photos) == 1
     assert photos[0]["url"] == result["url"]
     print("✓ Camera integration works with gatekeeper and history")

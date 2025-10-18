@@ -30,12 +30,11 @@ htmlcov/
 .env
 .env.local
 
-# Photos (test and real)
+# Photos (runtime photos only, not test fixtures)
 photos/
-test_photos*/
-*.jpg
-*.jpeg
-*.png
+/test_photos*/
+# Allow test fixtures
+!test_fixtures/
 
 # Logs
 *.log
@@ -43,5 +42,6 @@ test_photos*/
 # MacOS
 .DS_Store
 
-# Project specific
+# Project specific manual/debug files
 manual_debug.py
+# Note: camera_manual_check.py is NOT ignored - it's a diagnostic utility that should be in version control
