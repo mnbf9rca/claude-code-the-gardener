@@ -11,6 +11,7 @@ import httpx
 import os
 import json
 import asyncio
+import atexit
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -57,6 +58,22 @@ async def close_http_client():
     if http_client is not None:
         await http_client.aclose()
         http_client = None
+
+
+def _cleanup_http_client_sync():
+    """Synchronous wrapper for async HTTP client cleanup (called by atexit)"""
+    global http_client
+    if http_client is not None:
+        try:
+            # Run the async cleanup in a new event loop
+            asyncio.run(close_http_client())
+        except Exception as e:
+            # Don't let cleanup errors break shutdown
+            print(f"Warning: Failed to close HTTP client during shutdown: {e}")
+
+
+# Register cleanup on module unload
+atexit.register(_cleanup_http_client_sync)
 
 # Light state
 light_state = {
