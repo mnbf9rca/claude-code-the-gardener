@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Photos (runtime photos only, not test fixtures)
+# Only ignore the photos directory at the root of app, not subdirectories
+/photos/
+/test_photos*/
+# Explicitly allow test fixtures and their contents
+!test_fixtures/
+!test_fixtures/**
+
+# Runtime State (persisted state files)
+# Includes:
+#   - water_pump_history.jsonl (water dispensing events)
+#   - light_state.json (current light state)
+#   - light_history.jsonl (light events)
+#   - camera_usage.jsonl (camera tool usage log)
+data/
+
+# Logs
+*.log
+
+# MacOS
+.DS_Store
+
+# Project specific manual/debug files
+manual_debug.py
+# Note: camera_manual_check.py is NOT ignored - it's a diagnostic utility that should be in version control

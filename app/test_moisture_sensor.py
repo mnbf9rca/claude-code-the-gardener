@@ -21,17 +21,15 @@ async def reset_state():
 
 @pytest.mark.asyncio
 async def test_read_moisture_requires_status():
-    """Test that moisture reading requires status to be written first"""
+    """Test that moisture reading does NOT require status to be written first"""
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
 
     read_tool = test_mcp._tool_manager._tools["read_moisture"]
 
     # Should fail when status not written
-    with pytest.raises(ValueError) as exc_info:
-        await read_tool.run(arguments={})
-
-    assert "Must call write_status first" in str(exc_info.value)
+    result = await read_tool.run(arguments={})
+    assert result.content is not None
 
 
 @pytest.mark.asyncio
@@ -116,23 +114,6 @@ async def test_sensor_history_sampling():
 
 
 @pytest.mark.asyncio
-async def test_simulate_watering():
-    """Test the simulate_watering mock tool"""
-    initial_value = ms_module.mock_sensor_value
-
-    test_mcp = FastMCP("Test")
-    ms_module.setup_moisture_sensor_tools(test_mcp)
-    water_tool = test_mcp._tool_manager._tools["simulate_watering"]
-
-    # Simulate watering 50ml
-    result = await water_tool.run(arguments={"ml": 50})
-
-    # Sensor value should increase
-    assert ms_module.mock_sensor_value > initial_value
-    assert ms_module.mock_sensor_value <= 3500  # Should not exceed max
-
-
-@pytest.mark.asyncio
 async def test_sensor_value_boundaries():
     """Test that sensor values stay within realistic boundaries"""
     current_cycle_status["written"] = True
@@ -147,14 +128,6 @@ async def test_sensor_value_boundaries():
     # Read should not go below minimum
     await read_tool.run(arguments={})
     assert ms_module.mock_sensor_value >= 1500
-
-    # Set to high value and simulate watering
-    ms_module.mock_sensor_value = 3400
-    water_tool = test_mcp._tool_manager._tools["simulate_watering"]
-    await water_tool.run(arguments={"ml": 100})
-
-    # Should not exceed maximum
-    assert ms_module.mock_sensor_value <= 3500
 
 
 @pytest.mark.asyncio

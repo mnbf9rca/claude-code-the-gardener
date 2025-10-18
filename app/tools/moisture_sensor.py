@@ -37,10 +37,6 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         """
         global mock_sensor_value
 
-        # Check if plant status has been written first
-        if not current_cycle_status["written"]:
-            raise ValueError("Must call write_status first before reading sensors")
-
         # Simulate natural moisture decline over time
         # and add some realistic noise
         mock_sensor_value = max(
@@ -94,20 +90,3 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
             reading = sensor_history[i]
             sampled.append([reading["timestamp"], reading["value"]])
         return sampled
-
-    @mcp.tool()
-    async def simulate_watering(ml: int = Field(..., description="Amount of water added (ml)")):
-        """
-        MOCK TOOL: Simulate the effect of watering on the sensor.
-        This is for testing only and will be removed in production.
-        """
-        global mock_sensor_value
-
-        # Each 10ml increases sensor reading by ~50-80 points
-        increase = (ml // 10) * random.randint(50, 80)
-        mock_sensor_value = min(3500, mock_sensor_value + increase)  # Cap at very wet
-
-        return {
-            "message": f"Simulated watering {ml}ml",
-            "new_sensor_value": mock_sensor_value
-        }

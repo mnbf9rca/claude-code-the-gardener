@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug MCP Server (FastMCP Dev)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app/.venv/bin/fastmcp",
+      "args": [
+        "dev",
+        "server.py:mcp"
+      ],
+      "cwd": "${workspaceFolder}/app",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/app"
+      }
+    },
+    {
+      "name": "Debug Current Test File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app/.venv/bin/pytest",
+      "args": [
+        "${file}",
+        "-v",
+        "-s"
+      ],
+      "cwd": "${workspaceFolder}/app",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Debug All Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app/.venv/bin/pytest",
+      "args": [
+        "-v",
+        "-s"
+      ],
+      "cwd": "${workspaceFolder}/app",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

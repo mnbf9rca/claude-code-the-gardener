@@ -214,3 +214,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# photos used for testing
+photos/
+
+# Application state files (history, usage data)
+data/
