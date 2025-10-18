@@ -40,38 +40,30 @@ camera_available: bool = False
 camera_error: Optional[str] = None
 
 # State persistence
-STATE_FILE = Path(__file__).parent.parent / "data" / "camera_state.json"
+USAGE_FILE = Path(__file__).parent.parent / "data" / "camera_usage.jsonl"
 
 
 def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
     """
-    Append a tool usage event to the history file.
-    Uses append-only pattern - does not load full history into memory.
+    Append a tool usage event to the JSONL usage file.
+    Uses append-only pattern (JSONL) - does not load full history into memory.
     """
     try:
         # Ensure data directory exists
-        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        USAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-        # Load existing data or create new structure
-        if STATE_FILE.exists():
-            with open(STATE_FILE, 'r') as f:
-                data = json.load(f)
-        else:
-            data = {"tool_usage_history": []}
-
-        # Append new event with tool name and timestamp
+        # Create event with tool name and timestamp
         event = {
             "tool": tool_name,
             "timestamp": datetime.now().isoformat(),
             **event_data
         }
-        data["tool_usage_history"].append(event)
 
-        # Save back to disk
-        with open(STATE_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
+        # Append to JSONL file (one JSON object per line)
+        with open(USAGE_FILE, 'a') as f:
+            f.write(json.dumps(event) + '\n')
 
-        logging.debug(f"Logged {tool_name} usage to {STATE_FILE}")
+        logging.debug(f"Logged {tool_name} usage to {USAGE_FILE}")
 
     except Exception as e:
         # Don't fail the tool call if logging fails

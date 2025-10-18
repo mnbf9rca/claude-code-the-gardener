@@ -30,8 +30,9 @@ LIGHT_ENTITY_ID = os.getenv("LIGHT_ENTITY_ID", "switch.smart_plug_mini")
 # HTTP client for Home Assistant
 http_client: Optional[httpx.AsyncClient] = None
 
-# State persistence
+# State persistence - separate files for state vs history
 STATE_FILE = Path(__file__).parent.parent / "data" / "light_state.json"
+HISTORY_FILE = Path(__file__).parent.parent / "data" / "light_history.jsonl"
 
 # Background task for scheduled turn-off
 scheduled_task: Optional[asyncio.Task] = None
@@ -85,29 +86,36 @@ def initialize_state_file():
             "status": "off",
             "last_on": None,
             "last_off": None,
-            "scheduled_off": None,
-            "light_history": []
+            "scheduled_off": None
         }
         with open(STATE_FILE, 'w') as f:
             json.dump(default_state, f, indent=2)
         print("Initialized light state file with safe defaults (off)")
 
 
+def initialize_history_file():
+    """
+    Ensure history file exists.
+    JSONL files can start empty - each line is a separate JSON event.
+    """
+    if not HISTORY_FILE.exists():
+        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        HISTORY_FILE.touch()  # Create empty file
+        print("Initialized light history file (JSONL)")
+
+
 def save_state():
-    """Save light state and history to disk using atomic write for data integrity"""
+    """Save current light state to disk using atomic write for data integrity"""
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        state_data = {
-            **light_state,
-            "light_history": light_history
-        }
 
         # Write to temporary file first, then atomic rename to prevent corruption
         import tempfile
         fd, temp_path = tempfile.mkstemp(dir=STATE_FILE.parent, suffix='.tmp')
         try:
             with os.fdopen(fd, 'w') as f:
-                json.dump(state_data, f, indent=2)
+                # Only save current state, not history
+                json.dump(light_state, f, indent=2)
             # Atomic rename on POSIX systems
             os.replace(temp_path, STATE_FILE)
         except Exception:
@@ -119,20 +127,31 @@ def save_state():
         print(f"Warning: Failed to save light state: {e}")
 
 
+def append_event_to_history(event: Dict[str, Any]):
+    """
+    Append a single event to the JSONL history file (append-only, never deletes).
+    Each line is a complete JSON object representing one light event.
+    """
+    try:
+        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        # Append new event as a single line of JSON
+        with open(HISTORY_FILE, 'a') as f:
+            f.write(json.dumps(event) + '\n')
+    except Exception as e:
+        print(f"Warning: Failed to append event to light history: {e}")
+
+
 def load_state() -> Dict[str, Any]:
     """
-    Load persisted light state and history from disk.
+    Load persisted light state from disk.
     Always returns a valid state dict (initializes file if missing).
     """
-    global light_history
     try:
         initialize_state_file()
         with open(STATE_FILE, 'r') as f:
             data = json.load(f)
-            # Load history separately
-            light_history[:] = data.get("light_history", [])
-            print(f"Loaded {len(light_history)} light events from disk")
-            # Return state without history (caller updates light_state dict)
+            # Return state (no history in this file anymore)
             return {
                 "status": data.get("status", "off"),
                 "last_on": data.get("last_on"),
@@ -142,13 +161,49 @@ def load_state() -> Dict[str, Any]:
     except Exception as e:
         print(f"Error: Failed to load light state: {e}")
         # Return safe defaults if loading fails
-        light_history[:] = []
         return {
             "status": "off",
             "last_on": None,
             "last_off": None,
             "scheduled_off": None
         }
+
+
+def load_history():
+    """
+    Load recent light events from JSONL history file into memory.
+    Loads all events for now (light events are infrequent compared to water pump).
+    """
+    global light_history
+    try:
+        initialize_history_file()
+
+        if not HISTORY_FILE.exists() or HISTORY_FILE.stat().st_size == 0:
+            light_history[:] = []
+            print("No existing light history found")
+            return
+
+        # Read JSONL file - each line is one event
+        events = []
+        with open(HISTORY_FILE, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    event = json.loads(line)
+                    events.append(event)
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    print(f"Warning: Skipping malformed line in history: {e}")
+                    continue
+
+        light_history[:] = events
+        print(f"Loaded {len(light_history)} light events from disk")
+
+    except Exception as e:
+        print(f"Error: Failed to load light history: {e}")
+        light_history[:] = []
 
 
 def clear_scheduled_state():
@@ -165,8 +220,8 @@ def clear_scheduled_state():
 
 def ensure_state_loaded():
     """
-    Ensure state has been loaded from disk on first tool invocation.
-    This is called by each tool before accessing light_history.
+    Ensure state and history have been loaded from disk on first tool invocation.
+    This is called by each tool before accessing light_state or light_history.
     """
     global _state_loaded
 
@@ -174,12 +229,13 @@ def ensure_state_loaded():
         _state_loaded = True
         persisted = load_state()
         light_state.update(persisted)
+        load_history()  # Load history from JSONL file
 
 
 def record_event(event_type: str, details: Dict[str, Any]):
     """
     Record a light event to history with timestamp.
-    Events are persisted to disk immediately.
+    Events are persisted to disk immediately (append-only JSONL).
 
     Event types:
     - turn_on: Light turned on
@@ -194,9 +250,9 @@ def record_event(event_type: str, details: Dict[str, Any]):
         "event_type": event_type,
         **details
     }
-    light_history.append(event)
+    light_history.append(event)  # Keep in memory for get_light_history tool
+    append_event_to_history(event)  # Persist to disk (JSONL append)
     print(f"Light event recorded: {event_type}")
-    save_state()
 
 
 # Background Task Management
@@ -236,6 +292,9 @@ async def execute_scheduled_turn_off():
             now_iso = datetime.now().isoformat()
             light_state["status"] = "off"
             light_state["last_off"] = now_iso
+
+            # Persist state to disk
+            save_state()
 
             # Record event before clearing scheduled state
             record_event("turn_off_scheduled", {
@@ -596,6 +655,9 @@ def setup_light_tools(mcp: FastMCP):
         light_state["last_on"] = now.isoformat()
         light_state["scheduled_off"] = off_time.isoformat()
 
+        # Persist state to disk
+        save_state()
+
         # Record turn_on event
         record_event("turn_on", {
             "duration_minutes": minutes,
@@ -640,6 +702,9 @@ def setup_light_tools(mcp: FastMCP):
         light_state["status"] = "off"
         light_state["last_off"] = now.isoformat()
 
+        # Persist state to disk
+        save_state()
+
         # Record manual turn off event
         was_scheduled = light_state["scheduled_off"] is not None
         record_event("turn_off_manual", {
@@ -647,7 +712,7 @@ def setup_light_tools(mcp: FastMCP):
             "scheduled_off": light_state["scheduled_off"] if was_scheduled else None
         })
 
-        # Clear scheduled state (but keep state file)
+        # Clear scheduled state (this also calls save_state())
         clear_scheduled_state()
 
         return {

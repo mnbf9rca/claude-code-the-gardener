@@ -42,8 +42,9 @@ async def setup_light_state(httpx_mock: HTTPXMock):
     # Reset state loaded flag (new history tracking feature)
     light_module._state_loaded = False
 
-    # Clear persisted state file (new history tracking feature)
+    # Clear persisted state and history files (new history tracking feature)
     light_module.STATE_FILE.unlink(missing_ok=True)
+    light_module.HISTORY_FILE.unlink(missing_ok=True)
 
     # Reset HTTP client to ensure clean state
     light_module.http_client = None

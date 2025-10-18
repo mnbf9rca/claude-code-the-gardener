@@ -65,8 +65,9 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     # Reset reconciliation flag (new scheduling feature)
     light_module._reconciliation_done = False
 
-    # Clear persisted state file BEFORE test runs (new scheduling feature)
+    # Clear persisted state and history files BEFORE test runs
     light_module.STATE_FILE.unlink(missing_ok=True)
+    light_module.HISTORY_FILE.unlink(missing_ok=True)
 
     # Close httpx client unconditionally
     try:

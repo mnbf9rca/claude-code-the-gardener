@@ -55,9 +55,11 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
             pass
     light_module.scheduled_task = None
 
-    # Use temp directory for state file
+    # Use temp directory for state and history files
     original_state_file = light_module.STATE_FILE
+    original_history_file = light_module.HISTORY_FILE
     light_module.STATE_FILE = tmp_path / "light_state.json"
+    light_module.HISTORY_FILE = tmp_path / "light_history.jsonl"
 
     # Reset HTTP client
     light_module.http_client = None
@@ -96,8 +98,9 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
         await light_module.http_client.aclose()
         light_module.http_client = None
 
-    # Restore original state file path
+    # Restore original file paths
     light_module.STATE_FILE = original_state_file
+    light_module.HISTORY_FILE = original_history_file
 
 
 # =============================================================================
@@ -308,19 +311,24 @@ async def test_turn_on_persists_state(setup_scheduling_test_state):
     # Verify file doesn't exist yet
     assert not light_module.STATE_FILE.exists()
 
-    # Turn on light
+    # Turn on light and verify state while time is frozen
+    # (prevents background task from executing immediately)
     with freeze_time("2024-01-01 12:00:00"):
         await turn_on_tool.run(arguments={"minutes": 60})
 
-    # Verify state was persisted
-    assert light_module.STATE_FILE.exists()
+        # Small yield to allow state file to be written before checking
+        import asyncio
+        await asyncio.sleep(0)
 
-    # Load and verify
-    with open(light_module.STATE_FILE, 'r') as f:
-        state = json.load(f)
+        # Verify state was persisted
+        assert light_module.STATE_FILE.exists()
 
-    assert state["status"] == "on"
-    assert state["scheduled_off"] is not None
+        # Load and verify
+        with open(light_module.STATE_FILE, 'r') as f:
+            state = json.load(f)
+
+        assert state["status"] == "on"
+        assert state["scheduled_off"] is not None
 
 
 # =============================================================================

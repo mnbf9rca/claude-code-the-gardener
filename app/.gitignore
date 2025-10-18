@@ -39,6 +39,11 @@ htmlcov/
 !test_fixtures/**
 
 # Runtime State (persisted state files)
+# Includes:
+#   - water_pump_history.jsonl (water dispensing events)
+#   - light_state.json (current light state)
+#   - light_history.jsonl (light events)
+#   - camera_usage.jsonl (camera tool usage log)
 data/
 
 # Logs

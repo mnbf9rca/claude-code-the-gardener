@@ -65,6 +65,12 @@ async def setup_integration_state(ha_availability):
     light_module.light_state["last_off"] = None  # "Never used" - bypasses 30-min cooldown
     light_module.light_state["scheduled_off"] = None
 
+    # Clear persisted state and history files
+    light_module.STATE_FILE.unlink(missing_ok=True)
+    light_module.HISTORY_FILE.unlink(missing_ok=True)
+    light_module._state_loaded = False
+    light_module.light_history.clear()
+
     # Reset HTTP client
     if light_module.http_client:
         await light_module.http_client.aclose()
