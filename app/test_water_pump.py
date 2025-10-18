@@ -5,6 +5,7 @@ These tests verify the water pump functionality including:
 - Dispensing water within limits
 - 24-hour rolling limit enforcement
 - Usage tracking and reporting
+- State persistence and recovery
 """
 import pytest
 import pytest_asyncio
@@ -15,6 +16,7 @@ from fastmcp import FastMCP
 import tools.water_pump as wp_module
 from tools.water_pump import setup_water_pump_tools
 from shared_state import reset_cycle, current_cycle_status
+from pathlib import Path
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -27,6 +29,13 @@ async def setup_pump_state():
     # Clear water history
     wp_module.water_history.clear()
 
+    # Reset state loading flag
+    wp_module._state_loaded = False
+
+    # Clean up state file if it exists
+    if wp_module.STATE_FILE.exists():
+        wp_module.STATE_FILE.unlink()
+
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
     setup_water_pump_tools(mcp)
@@ -35,6 +44,11 @@ async def setup_pump_state():
 
     # Cleanup
     wp_module.water_history.clear()
+    wp_module._state_loaded = False
+
+    # Clean up state file
+    if wp_module.STATE_FILE.exists():
+        wp_module.STATE_FILE.unlink()
 
 
 @pytest.mark.asyncio
@@ -213,3 +227,142 @@ async def test_history_cleanup(setup_pump_state):
         # Verify first event is gone by checking timestamps
         timestamps = [datetime.fromisoformat(e["timestamp"]) for e in wp_module.water_history]
         assert all(t > datetime(2024, 1, 1, 12, 0) for t in timestamps)
+
+
+# ===== State Persistence Tests =====
+
+@pytest.mark.asyncio
+async def test_state_file_creation(setup_pump_state):
+    """Test that state file is created on first save"""
+    mcp = setup_pump_state
+    dispense_tool = mcp._tool_manager._tools["dispense"]
+
+    # State file should not exist initially
+    assert not wp_module.STATE_FILE.exists()
+
+    # Dispense water
+    await dispense_tool.run(arguments={"ml": 50})
+
+    # State file should now exist
+    assert wp_module.STATE_FILE.exists()
+
+    # Verify contents
+    with open(wp_module.STATE_FILE, 'r') as f:
+        data = json.load(f)
+        assert "water_history" in data
+        assert len(data["water_history"]) == 1
+        assert data["water_history"][0]["ml"] == 50
+
+
+@pytest.mark.asyncio
+async def test_state_persistence_across_restarts(setup_pump_state):
+    """Test that water history persists across server restarts"""
+    mcp = setup_pump_state
+    dispense_tool = mcp._tool_manager._tools["dispense"]
+
+    # Dispense some water
+    await dispense_tool.run(arguments={"ml": 50})
+    await dispense_tool.run(arguments={"ml": 75})
+
+    assert len(wp_module.water_history) == 2
+
+    # Simulate restart by clearing in-memory state
+    wp_module.water_history.clear()
+    wp_module._state_loaded = False
+    assert len(wp_module.water_history) == 0
+
+    # Call a tool which should load state
+    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    tool_result = await usage_tool.run(arguments={})
+    result = json.loads(tool_result.content[0].text)
+
+    # History should be restored
+    assert len(wp_module.water_history) == 2
+    assert result["used_ml"] == 125
+    assert result["events"] == 2
+
+
+@pytest.mark.asyncio
+async def test_state_persists_with_cleanup(setup_pump_state):
+    """Test that state persists correctly even after history cleanup"""
+    mcp = setup_pump_state
+    dispense_tool = mcp._tool_manager._tools["dispense"]
+
+    with freeze_time("2024-01-01 12:00:00") as frozen_time:
+        # Dispense water at time 0
+        await dispense_tool.run(arguments={"ml": 50})
+
+        # Move forward 49 hours
+        frozen_time.move_to("2024-01-03 13:00:00")
+
+        # Dispense more water (this should clean up the first event)
+        await dispense_tool.run(arguments={"ml": 60})
+
+        # Only the recent event should remain in memory
+        assert len(wp_module.water_history) == 1
+
+        # Verify state file reflects the cleanup
+        with open(wp_module.STATE_FILE, 'r') as f:
+            data = json.load(f)
+            assert len(data["water_history"]) == 1
+            assert data["water_history"][0]["ml"] == 60
+
+
+@pytest.mark.asyncio
+async def test_state_loading_on_first_tool_call(setup_pump_state):
+    """Test that state is lazily loaded on first tool invocation"""
+    mcp = setup_pump_state
+
+    # Manually create a state file with recent timestamps
+    wp_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    now = datetime.now()
+    test_history = [
+        {"timestamp": (now - timedelta(hours=2)).isoformat(), "ml": 30},
+        {"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 45}
+    ]
+    with open(wp_module.STATE_FILE, 'w') as f:
+        json.dump({"water_history": test_history}, f)
+
+    # Verify state is not loaded yet
+    assert not wp_module._state_loaded
+    assert len(wp_module.water_history) == 0
+
+    # Call a tool
+    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    tool_result = await usage_tool.run(arguments={})
+    result = json.loads(tool_result.content[0].text)
+
+    # State should now be loaded
+    assert wp_module._state_loaded
+    assert len(wp_module.water_history) == 2
+    assert result["events"] == 2
+
+
+@pytest.mark.asyncio
+async def test_state_loads_only_once(setup_pump_state):
+    """Test that state is loaded only once, not on every tool call"""
+    mcp = setup_pump_state
+    dispense_tool = mcp._tool_manager._tools["dispense"]
+    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+
+    # Manually create a state file with recent timestamp
+    wp_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    now = datetime.now()
+    test_history = [{"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 30}]
+    with open(wp_module.STATE_FILE, 'w') as f:
+        json.dump({"water_history": test_history}, f)
+
+    # First tool call should load state
+    await usage_tool.run(arguments={})
+    assert wp_module._state_loaded
+    assert len(wp_module.water_history) == 1
+
+    # Manually modify the file (simulating external change)
+    with open(wp_module.STATE_FILE, 'w') as f:
+        json.dump({"water_history": []}, f)
+
+    # Second tool call should NOT reload state
+    await dispense_tool.run(arguments={"ml": 50})
+
+    # Should still have the original loaded state plus the new dispense
+    assert len(wp_module.water_history) == 2
