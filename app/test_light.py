@@ -5,21 +5,27 @@ These tests verify the light control functionality including:
 - Turning light on/off
 - Timing constraint enforcement
 - Status reporting
+- Home Assistant integration (mocked)
 """
 import pytest
 import pytest_asyncio
 import json
+import httpx
 from datetime import datetime, timedelta
 from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.light as light_module
 from tools.light import setup_light_tools
 from shared_state import reset_cycle, current_cycle_status
+from pytest_httpx import HTTPXMock
+
+# Apply to all tests in this module
+pytestmark = pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def setup_light_state():
-    """Reset light state before each test"""
+async def setup_light_state(httpx_mock: HTTPXMock):
+    """Reset light state before each test and setup HA mocks"""
     # Reset cycle state
     reset_cycle()
     current_cycle_status["written"] = True  # Allow tool calls
@@ -30,11 +36,36 @@ async def setup_light_state():
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
+    # Reset HTTP client to ensure clean state
+    light_module.http_client = None
+
+    # Setup default Home Assistant mocks
+    # Note: Using callbacks and adding them multiple times to allow reuse
+    def mock_turn_on(request):
+        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"}])
+
+    def mock_turn_off(request):
+        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"}])
+
+    def mock_get_state(request):
+        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": light_module.light_state["status"]})
+
+    # Add each callback multiple times to allow reuse
+    for _ in range(20):  # Enough for most tests
+        httpx_mock.add_callback(mock_turn_on, url=f"{light_module.HA_URL}/api/services/switch/turn_on")
+        httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
+        httpx_mock.add_callback(mock_get_state, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
     setup_light_tools(mcp)
 
     yield mcp
+
+    # Cleanup
+    if light_module.http_client:
+        await light_module.http_client.aclose()
+        light_module.http_client = None
 
 
 @pytest.mark.asyncio
@@ -248,3 +279,139 @@ async def test_gatekeeper_enforcement(setup_light_state):
 
     with pytest.raises(ValueError, match="Must call write_status first"):
         await turn_on_tool.run(arguments={"minutes": 60})
+
+
+@pytest.mark.asyncio
+async def test_turn_off_basic(setup_light_state):
+    """Test basic turn_off functionality"""
+    mcp = setup_light_state
+    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+
+    # Turn on the light first
+    await turn_on_tool.run(arguments={"minutes": 60})
+    assert light_module.light_state["status"] == "on"
+
+    # Turn it off
+    tool_result = await turn_off_tool.run(arguments={})
+    result = json.loads(tool_result.content[0].text)
+
+    assert result["status"] == "off"
+    assert "turned_off_at" in result
+    assert result["message"] == "Light turned off successfully"
+    assert light_module.light_state["status"] == "off"
+    assert light_module.light_state["scheduled_off"] is None
+
+
+@pytest.mark.asyncio
+async def test_turn_off_gatekeeper(setup_light_state):
+    """Test that turn_off requires plant status to be written"""
+    mcp = setup_light_state
+    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+
+    # Reset the cycle status
+    current_cycle_status["written"] = False
+
+    with pytest.raises(ValueError, match="Must call write_status first"):
+        await turn_off_tool.run(arguments={})
+
+
+@pytest.mark.asyncio
+async def test_ha_service_failure_turn_on(setup_light_state, httpx_mock: HTTPXMock):
+    """Test graceful handling when Home Assistant turn_on fails"""
+    mcp = setup_light_state
+    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+
+    # Clear existing mocks and add a failure callback
+    httpx_mock.reset()
+
+    def mock_turn_on_fail(request):
+        return httpx.Response(500, json={"error": "Internal Server Error"})
+
+    httpx_mock.add_callback(mock_turn_on_fail, url=f"{light_module.HA_URL}/api/services/switch/turn_on")
+
+    # Should raise error when HA fails
+    with pytest.raises(ValueError, match="Failed to communicate with Home Assistant"):
+        await turn_on_tool.run(arguments={"minutes": 60})
+
+    # State should not be updated
+    assert light_module.light_state["status"] == "off"
+
+
+@pytest.mark.asyncio
+async def test_ha_service_failure_turn_off(setup_light_state, httpx_mock: HTTPXMock):
+    """Test graceful handling when Home Assistant turn_off fails"""
+    mcp = setup_light_state
+    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+
+    # Turn on the light
+    await turn_on_tool.run(arguments={"minutes": 60})
+
+    # Clear mocks and add a failure callback for turn_off
+    httpx_mock.reset()
+
+    def mock_turn_off_fail(request):
+        return httpx.Response(500, json={"error": "Internal Server Error"})
+
+    httpx_mock.add_callback(mock_turn_off_fail, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
+
+    # Should raise error when HA fails
+    with pytest.raises(ValueError, match="Failed to communicate with Home Assistant"):
+        await turn_off_tool.run(arguments={})
+
+    # State should still be on (not updated due to failure)
+    assert light_module.light_state["status"] == "on"
+
+
+@pytest.mark.asyncio
+async def test_get_status_syncs_with_ha(setup_light_state, httpx_mock: HTTPXMock):
+    """Test that get_light_status syncs with Home Assistant state"""
+    mcp = setup_light_state
+    status_tool = mcp._tool_manager._tools["get_light_status"]
+
+    # Clear mocks and set HA state to 'on'
+    httpx_mock.reset()
+
+    def mock_get_state_on(request):
+        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"})
+
+    httpx_mock.add_callback(mock_get_state_on, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+
+    # Local state says off, but HA says on
+    assert light_module.light_state["status"] == "off"
+
+    # Check status should sync with HA
+    tool_result = await status_tool.run(arguments={})
+    result = json.loads(tool_result.content[0].text)
+
+    # Should now reflect HA state
+    assert result["status"] == "on"
+    assert light_module.light_state["status"] == "on"
+
+
+@pytest.mark.asyncio
+async def test_auto_off_calls_ha(setup_light_state):
+    """Test that auto-off triggers Home Assistant turn_off and updates state"""
+    mcp = setup_light_state
+    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    status_tool = mcp._tool_manager._tools["get_light_status"]
+
+    with freeze_time("2024-01-01 12:00:00") as frozen_time:
+        # Turn on for 30 minutes
+        await turn_on_tool.run(arguments={"minutes": 30})
+        assert light_module.light_state["status"] == "on"
+        assert light_module.light_state["scheduled_off"] is not None
+
+        # Move past scheduled off time
+        frozen_time.move_to("2024-01-01 12:31:00")
+
+        # Check status should trigger auto-off
+        tool_result = await status_tool.run(arguments={})
+        result = json.loads(tool_result.content[0].text)
+
+        # Verify auto-off happened
+        assert result["status"] == "off"
+        assert light_module.light_state["status"] == "off"
+        assert light_module.light_state["scheduled_off"] is None
+        assert light_module.light_state["last_off"] is not None

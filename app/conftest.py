@@ -10,6 +10,16 @@ import pytest
 import cv2
 
 
+def pytest_configure(config):
+    """Configure pytest with custom markers."""
+    config.addinivalue_line(
+        "markers", "httpx_mock: Configure httpx mock behavior"
+    )
+    config.addinivalue_line(
+        "markers", "integration: Mark test as integration test (may require external services)"
+    )
+
+
 @pytest.fixture
 def test_photos_dir() -> Generator[Path, None, None]:
     """Create and provide a temporary directory for test photos."""

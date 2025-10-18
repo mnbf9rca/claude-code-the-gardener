@@ -14,8 +14,10 @@ For unit tests of individual modules, see:
 import pytest
 import pytest_asyncio
 import json
+import httpx
 from datetime import datetime, timedelta
 from freezegun import freeze_time
+from pytest_httpx import HTTPXMock
 from server import mcp
 from shared_state import reset_cycle
 import tools.plant_status as ps_module
@@ -24,9 +26,12 @@ import tools.water_pump as wp_module
 import tools.light as light_module
 import tools.camera as camera_module
 
+# Apply to all tests in this module
+pytestmark = pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
+
 
 @pytest_asyncio.fixture(autouse=True)
-async def reset_server_state():
+async def reset_server_state(httpx_mock: HTTPXMock):
     """Setup/teardown fixture to reset server state before each test"""
     # Reset cycle state
     reset_cycle()
@@ -48,11 +53,36 @@ async def reset_server_state():
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
+    # Close and reset httpx client for light module
+    if light_module.http_client:
+        await light_module.http_client.aclose()
+    light_module.http_client = None
+
+    # Setup Home Assistant mocks
+    def mock_turn_on(request):
+        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"}])
+
+    def mock_turn_off(request):
+        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"}])
+
+    def mock_get_state(request):
+        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": light_module.light_state["status"]})
+
+    # Add each callback multiple times to allow reuse
+    for _ in range(20):
+        httpx_mock.add_callback(mock_turn_on, url=f"{light_module.HA_URL}/api/services/switch/turn_on")
+        httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
+        httpx_mock.add_callback(mock_get_state, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+
     # Reset camera history
     camera_module.photo_history.clear()
 
     yield
-    # Teardown if needed (currently no cleanup required)
+
+    # Teardown - close httpx client
+    if light_module.http_client:
+        await light_module.http_client.aclose()
+        light_module.http_client = None
 
 
 @pytest.mark.asyncio
