@@ -2,6 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Run HTTP Server",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "run_http",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/app",
+      "envFile": "${workspaceFolder}/app/.env",
+      "justMyCode": false
+    },
+    {
       "name": "Debug MCP Server (FastMCP Dev)",
       "type": "debugpy",
       "request": "launch",

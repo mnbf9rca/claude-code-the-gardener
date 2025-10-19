@@ -4,8 +4,9 @@
 - **Phase 1: COMPLETED ✅** - Core MCP setup with basic tools
 - **Phase 2: COMPLETED ✅** - Action tools with state persistence and integrations
 - **Phase 3: COMPLETED ✅** - Thinking & logging tools + JSONL refactoring
-- 146 tests passing (55 new tests in Phase 3)
-- Ready for Phase 4
+- **Phase 4: COMPLETED ✅** - HTTP deployment with systemd service
+- 146 tests passing
+- Ready for production deployment on Raspberry Pi
 
 ## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
 - [x] Install FastMCP and dependencies in pyproject.toml
@@ -83,15 +84,33 @@
 - [x] All 146 tests passing
 - [x] ~300 lines of duplicated code eliminated
 
-## Phase 4: HTTP Deployment (Fourth PR)
-1. **Add HTTP server capability**
-   - Use FastMCP's built-in HTTP server
-   - Create `app/run_http.py` for deployment
-   - Basic CORS configuration
+## Phase 4: HTTP Deployment (COMPLETED ✅)
+### HTTP Server
+- [x] Created `app/run_http.py` - HTTP server runner with environment configuration
+- [x] Environment variables for host/port configuration (MCP_HOST, MCP_PORT)
+- [x] Streamable HTTP transport (FastMCP's recommended transport)
+- [x] Tested locally - server starts and responds correctly
 
-2. **Create deployment configuration**
-   - `fastmcp.json` for server configuration
-   - systemd service file for Raspberry Pi
+### Deployment Infrastructure
+- [x] Created `plant-care-mcp.service` - systemd service file for Raspberry Pi
+  - [x] Auto-restart on failure
+  - [x] Runs as non-root user (pi)
+  - [x] Environment file support
+  - [x] Journal logging
+- [x] Updated `.env.example` with MCP server configuration
+- [x] Created comprehensive README.md with:
+  - [x] Development setup instructions
+  - [x] Local testing guide
+  - [x] Raspberry Pi deployment steps
+  - [x] Systemd service setup
+  - [x] Environment variable documentation
+
+### Development Tools
+- [x] Created `.vscode/launch.json` with 4 debug configurations:
+  - [x] Run HTTP Server
+  - [x] Run MCP Server (stdio)
+  - [x] Run MCP Dev Inspector
+  - [x] Run All Tests
 
 ## Key Design Decisions
 - No database initially - in-memory dictionaries
@@ -131,12 +150,25 @@
 - Centralized utilities (JsonlHistory) eliminate bugs across all modules simultaneously
 - Missing ensure_loaded() calls are easy to miss - having one implementation prevents this
 
+### Phase 4
+- FastMCP's built-in HTTP server eliminates need for external web servers (Nginx, Apache)
+- Streamable HTTP is the recommended transport (better than legacy SSE)
+- Environment variables (MCP_HOST, MCP_PORT) provide deployment flexibility
+- Systemd services provide robust process management for production
+- VS Code launch.json configurations dramatically improve developer experience
+- KISS principle: ~100 lines of code/config for full production deployment
+- No need for Docker, health checks, or metrics for a hobby project (YAGNI)
+- Comprehensive README documentation is crucial for hobby projects that might sit idle
+
 ## How to Run
 
 ### Development Server
 ```bash
 # Install dependencies
 uv sync --dev
+
+# Run HTTP server (for remote access)
+uv run python run_http.py
 
 # Run MCP inspector (opens browser)
 uv run fastmcp dev server.py
@@ -145,48 +177,76 @@ uv run fastmcp dev server.py
 uv run fastmcp run server:mcp --transport stdio
 ```
 
+### VS Code Debug Configurations
+Use the Run & Debug panel (Cmd+Shift+D / Ctrl+Shift+D) to select:
+- **Run HTTP Server** - Start HTTP server with debugging
+- **Run MCP Dev Inspector** - Start browser-based inspector
+- **Run MCP Server (stdio)** - Start stdio transport
+- **Run All Tests** - Run pytest with debugging
+
 ### Running Tests
 ```bash
 # Run all tests
-uv run pytest test_*.py -v
+uv run pytest -v
 
 # Run specific test file
 uv run pytest test_plant_status.py -v
 
-# Run manual debugging test
-uv run python manual_debug.py
+# Run with coverage
+uv run pytest --cov=tools -v
 ```
 
-## Ready for Phase 4
+### Production Deployment
+See [README.md](README.md) for complete Raspberry Pi deployment instructions with systemd.
 
-- All core tools implemented and tested (146 tests)
-- State persistence fully consolidated via JsonlHistory utility
-- JSONL used consistently across all 5 stateful modules
-- Home Assistant integration working
-- Real hardware integration (camera) validated
-- Resource management patterns established
-- Thinking and action logging ready for Claude to use
-- Clean, DRY codebase with minimal duplication
-- New stateful tools can use JsonlHistory out of the box
+## Ready for Production Deployment
 
-## Technical Notes for Next Phase
+- ✅ All core tools implemented and tested (146 tests)
+- ✅ HTTP server with Streamable HTTP transport
+- ✅ Systemd service for Raspberry Pi deployment
+- ✅ Environment-based configuration (.env)
+- ✅ Comprehensive documentation (README.md)
+- ✅ VS Code debug configurations for development
+- ✅ State persistence via JsonlHistory utility
+- ✅ Home Assistant integration working
+- ✅ Real hardware integration (camera) validated
+- ✅ Resource management patterns established
+- ✅ Clean, maintainable codebase following KISS and YAGNI
 
-### What Works
+### Next Steps (Post-Deployment)
+- Build ESP32 firmware for moisture sensor and water pump
+- Replace mock sensor/pump tools with real HTTP calls to ESP32
+- Deploy to Raspberry Pi and set up cron job for Claude
+- Monitor Claude's plant care performance over time
 
-- Water pump: Full JSONL history, daily limits enforced
-- Light: HA integration, scheduling, state reconciliation
-- Camera: Real USB capture, cross-platform tested
-- All tools: Proper resource cleanup and error handling
+## Production Deployment Notes
 
-### Configuration Required
+### What's Implemented and Working
 
-- `.env` file needed with Home Assistant credentials for light control
-- Camera requires USB webcam (auto-detects device_index 0)
-- All state files stored in `app/data/` directory (auto-created)
+- ✅ Water pump: Full JSONL history, daily limits enforced (mock ESP32)
+- ✅ Light: Home Assistant integration, scheduling, state reconciliation
+- ✅ Camera: Real USB capture, cross-platform tested (Mac/Raspberry Pi)
+- ✅ Thinking & Action logs: JSONL persistence with efficient querying
+- ✅ HTTP server: Streamable HTTP transport on configurable host/port
+- ✅ All tools: Proper resource cleanup and error handling
 
-### Known Limitations
+### Configuration Required for Deployment
 
-- Water_pump, moisture_sensor uses mock ESP32 (no real hardware yet) - need to be replaced with real HTTP calls to esp32 device once built
-- Light requires Home Assistant running and accessible
-- Camera requires OpenCV and USB webcam hardware
-- No authentication on MCP server yet
+- `.env` file with configuration (see `.env.example`):
+  - `MCP_HOST` and `MCP_PORT` for HTTP server
+  - `HOME_ASSISTANT_URL` and `HOME_ASSISTANT_TOKEN` for light control
+  - `LIGHT_ENTITY_ID` for smart plug entity
+  - Camera settings (device index, resolution, quality)
+- USB webcam connected to Raspberry Pi
+- Home Assistant instance running and accessible
+- All state files auto-created in `app/data/` directory
+- Photo storage auto-created in `app/photos/` directory
+
+### Known Limitations & Future Work
+
+- ⚠️ **Mock hardware**: `moisture_sensor` and `water_pump` use mock ESP32 responses
+  - Need to build ESP32 firmware
+  - Replace mock calls with real HTTP calls to ESP32 device
+- ⚠️ **No authentication**: MCP server has no auth (suitable for private network only)
+- ⚠️ **Light dependency**: Requires Home Assistant running and accessible
+- ⚠️ **Camera dependency**: Requires OpenCV and USB webcam hardware
