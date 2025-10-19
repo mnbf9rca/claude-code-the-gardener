@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
+from utils.logging_config import get_logger
 import httpx
 import os
 import json
@@ -18,6 +19,9 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Get logger
+logger = get_logger(__name__)
 
 # Constants
 MIN_ON_MINUTES = 30  # Minimum time light can be on
@@ -70,7 +74,7 @@ def _cleanup_http_client_sync():
             asyncio.run(close_http_client())
         except Exception as e:
             # Don't let cleanup errors break shutdown
-            print(f"Warning: Failed to close HTTP client during shutdown: {e}")
+            logger.warning(f"Failed to close HTTP client during shutdown: {e}")
 
 
 # Register cleanup on module unload
@@ -111,7 +115,7 @@ def initialize_state_file():
         }
         with open(STATE_FILE, 'w') as f:
             json.dump(default_state, f, indent=2)
-        print("Initialized light state file with safe defaults (off)")
+        logger.debug("Initialized light state file with safe defaults (off)")
 
 
 # Note: initialize_history_file() removed - handled by JsonlHistory auto_create
@@ -137,7 +141,7 @@ def save_state():
                 os.unlink(temp_path)
             raise
     except Exception as e:
-        print(f"Warning: Failed to save light state: {e}")
+        logger.warning(f"Failed to save light state: {e}")
 
 
 # Note: append_event_to_history() removed - use light_history.append() instead
@@ -160,7 +164,7 @@ def load_state() -> Dict[str, Any]:
                 "scheduled_off": data.get("scheduled_off")
             }
     except Exception as e:
-        print(f"Error: Failed to load light state: {e}")
+        logger.error(f"Failed to load light state: {e}")
         # Return safe defaults if loading fails
         return {
             "status": "off",
@@ -182,7 +186,7 @@ def clear_scheduled_state():
         light_state["scheduled_off"] = None
         save_state()
     except Exception as e:
-        print(f"Warning: Failed to clear scheduled state: {e}")
+        logger.warning(f"Failed to clear scheduled state: {e}")
 
 
 def ensure_state_loaded():
@@ -218,7 +222,7 @@ def record_event(event_type: str, details: Dict[str, Any]):
         **details
     }
     light_history.append(event)  # Handles both memory and disk (JSONL append)
-    print(f"Light event recorded: {event_type}")
+    logger.debug(f"Light event recorded: {event_type}")
 
 
 # Background Task Management
@@ -231,7 +235,7 @@ async def execute_scheduled_turn_off():
     try:
         # Calculate how long to wait
         if not light_state["scheduled_off"]:
-            print("Warning: No scheduled_off time set, cancelling task")
+            logger.warning("No scheduled_off time set, cancelling task")
             return
 
         scheduled_time = datetime.fromisoformat(light_state["scheduled_off"])
@@ -243,14 +247,14 @@ async def execute_scheduled_turn_off():
         else:
             wait_seconds = (scheduled_time - now).total_seconds()
 
-        print(f"Scheduled turn-off in {wait_seconds:.1f} seconds at {light_state['scheduled_off']}")
+        logger.debug(f"Scheduled turn-off in {wait_seconds:.1f} seconds at {light_state['scheduled_off']}")
 
         # Wait until scheduled time
         if wait_seconds > 0:
             await asyncio.sleep(wait_seconds)
 
         # Turn off the light via Home Assistant
-        print("Executing scheduled turn-off")
+        logger.debug("Executing scheduled turn-off")
         success = await call_ha_service("turn_off", LIGHT_ENTITY_ID)
 
         if success:
@@ -269,15 +273,15 @@ async def execute_scheduled_turn_off():
             })
 
             clear_scheduled_state()
-            print("Light turned off successfully at scheduled time")
+            logger.info("Light turned off successfully at scheduled time")
         else:
-            print("Warning: Failed to turn off light via Home Assistant")
+            logger.warning("Failed to turn off light via Home Assistant")
 
     except asyncio.CancelledError:
-        print("Scheduled turn-off task was cancelled")
+        logger.debug("Scheduled turn-off task was cancelled")
         raise
     except Exception as e:
-        print(f"Error in scheduled turn-off task: {e}")
+        logger.error(f"Error in scheduled turn-off task: {e}")
     finally:
         scheduled_task = None
 
@@ -294,7 +298,7 @@ def schedule_turn_off_task(off_time_iso: str):
 
     # Create new background task
     scheduled_task = asyncio.create_task(execute_scheduled_turn_off())
-    print(f"Background task scheduled to turn off light at {off_time_iso}")
+    logger.debug(f"Background task scheduled to turn off light at {off_time_iso}")
 
 
 def cancel_scheduled_task():
@@ -303,7 +307,7 @@ def cancel_scheduled_task():
 
     if scheduled_task and not scheduled_task.done():
         scheduled_task.cancel()
-        print("Cancelled scheduled turn-off task")
+        logger.debug("Cancelled scheduled turn-off task")
         scheduled_task = None
 
 
@@ -318,17 +322,17 @@ async def reconcile_state_on_startup():
     2. If scheduled_off is in the future: reschedule task (resume plan)
     3. Always sync with Home Assistant actual state
     """
-    print("=== Starting light state reconciliation ===")
+    logger.debug("=== Starting light state reconciliation ===")
 
     try:
         # Load persisted state
         persisted = load_state()
         light_state.update(persisted)
-        print(f"Loaded persisted state: {persisted}")
+        logger.debug(f"Loaded persisted state: {persisted}")
 
         # Query Home Assistant for actual state
         actual_state = await get_ha_entity_state(LIGHT_ENTITY_ID)
-        print(f"Home Assistant reports light is: {actual_state}")
+        logger.debug(f"Home Assistant reports light is: {actual_state}")
 
         # Check if we have a scheduled off time
         if light_state["scheduled_off"]:
@@ -337,7 +341,7 @@ async def reconcile_state_on_startup():
 
             if now >= scheduled_time:
                 # Case 1: Scheduled time has passed - turn off immediately
-                print(f"Scheduled off time {light_state['scheduled_off']} has passed. Enforcing schedule.")
+                logger.info(f"Scheduled off time {light_state['scheduled_off']} has passed. Enforcing schedule.")
 
                 recovery_details = {
                     "scheduled_time": light_state["scheduled_off"],
@@ -346,18 +350,18 @@ async def reconcile_state_on_startup():
                 }
 
                 if actual_state == "on":
-                    print("Light is still on, turning off now...")
+                    logger.info("Light is still on, turning off now...")
                     success = await call_ha_service("turn_off", LIGHT_ENTITY_ID)
                     if success:
                         light_state["status"] = "off"
                         light_state["last_off"] = now.isoformat()
                         recovery_details["action"] = "turned_off"
-                        print("Light turned off successfully")
+                        logger.info("Light turned off successfully")
                     else:
                         recovery_details["action"] = "turn_off_failed"
-                        print("Warning: Failed to turn off light")
+                        logger.warning("Failed to turn off light")
                 else:
-                    print("Light is already off, updating state")
+                    logger.debug("Light is already off, updating state")
                     light_state["status"] = "off"
                     recovery_details["action"] = "already_off"
 
@@ -370,7 +374,7 @@ async def reconcile_state_on_startup():
             else:
                 # Case 2: Scheduled time is in the future - reschedule task
                 remaining_seconds = (scheduled_time - now).total_seconds()
-                print(f"Scheduled off time is in {remaining_seconds:.1f}s. Rescheduling task.")
+                logger.debug(f"Scheduled off time is in {remaining_seconds:.1f}s. Rescheduling task.")
 
                 # Sync state with Home Assistant
                 if actual_state == "on":
@@ -384,10 +388,10 @@ async def reconcile_state_on_startup():
                         "remaining_minutes": int(remaining_seconds / 60),
                         "ha_state": "on"
                     })
-                    print("Task rescheduled successfully")
+                    logger.debug("Task rescheduled successfully")
                 else:
                     # Light is off but was supposed to be on - might have been manually turned off
-                    print("Warning: Light is off but had a scheduled turn-off. Clearing schedule.")
+                    logger.warning("Light is off but had a scheduled turn-off. Clearing schedule.")
                     light_state["status"] = "off"
 
                     # Record detection of manual intervention
@@ -401,15 +405,15 @@ async def reconcile_state_on_startup():
 
         else:
             # No scheduled time - just sync with actual state
-            print("No scheduled turn-off time. Syncing with Home Assistant.")
+            logger.debug("No scheduled turn-off time. Syncing with Home Assistant.")
             if actual_state:
                 light_state["status"] = actual_state
                 save_state()
 
-        print(f"=== Reconciliation complete. Final state: {light_state['status']} ===")
+        logger.debug(f"=== Reconciliation complete. Final state: {light_state['status']} ===")
 
     except Exception as e:
-        print(f"Error during state reconciliation: {e}")
+        logger.error(f"Error during state reconciliation: {e}")
         # On error, assume safe defaults
         light_state["status"] = "off"
         clear_scheduled_state()
@@ -504,17 +508,17 @@ async def call_ha_service(service: str, entity_id: str, max_retries: int = 3) ->
             last_error = e
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                print(f"Transient error calling HA service {service} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                logger.warning(f"Transient error calling HA service {service} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
                 await asyncio.sleep(wait_time)
             continue
 
         except Exception as e:
             # Non-transient errors - fail immediately
-            print(f"Warning: Failed to call Home Assistant service {service}: {e}")
+            logger.warning(f"Failed to call Home Assistant service {service}: {e}")
             return False
 
     # All retries exhausted
-    print(f"Warning: Failed to call Home Assistant service {service} after {max_retries} attempts: {last_error}")
+    logger.error(f"Failed to call Home Assistant service {service} after {max_retries} attempts: {last_error}")
     return False
 
 
@@ -532,7 +536,7 @@ async def get_ha_entity_state(entity_id: str) -> Optional[str]:
         data = response.json()
         return data.get("state")
     except Exception as e:
-        print(f"Warning: Failed to get Home Assistant entity state: {e}")
+        logger.warning(f"Failed to get Home Assistant entity state: {e}")
         return None
 
 
@@ -559,8 +563,8 @@ def validate_environment():
 
     if errors:
         error_msg = "Light tool configuration errors:\n  - " + "\n  - ".join(errors)
-        print(f"Warning: {error_msg}")
-        print("Light tools will run in fallback mode. Set environment variables to enable Home Assistant integration.")
+        logger.warning(f"{error_msg}")
+        logger.warning("Light tools will run in fallback mode. Set environment variables to enable Home Assistant integration.")
 
 
 def setup_light_tools(mcp: FastMCP):
@@ -707,7 +711,7 @@ def setup_light_tools(mcp: FastMCP):
         # Safety net: Check if scheduled off time has passed
         # (Background task should handle this, but this is defense-in-depth)
         if light_state["status"] == "on" and light_state["scheduled_off"] and datetime.now() >= datetime.fromisoformat(light_state["scheduled_off"]):
-            print("Warning: Scheduled off time passed but light still on (background task may have failed)")
+            logger.warning("Scheduled off time passed but light still on (background task may have failed)")
             # Turn off as safety measure
             await call_ha_service("turn_off", LIGHT_ENTITY_ID)
             light_state["status"] = "off"
