@@ -99,6 +99,28 @@ async def test_log_thought_minimal(setup_thinking_state):
 
 
 @pytest.mark.asyncio
+async def test_log_thought_malformed_candidate_actions(setup_thinking_state):
+    """Test that malformed candidate_actions types are rejected"""
+    mcp = setup_thinking_state
+    log_thought_tool = mcp._tool_manager._tools["log_thought"]
+
+    # Pass a string instead of a list for candidate_actions
+    with pytest.raises(Exception):  # Will be a Pydantic validation error
+        await log_thought_tool.run(arguments={
+            "observation": "Test observation",
+            "hypothesis": "Test hypothesis",
+            "candidate_actions": "this should be a list",
+            "reasoning": "Testing",
+            "uncertainties": "None",
+            "tags": []
+        })
+
+    # Note: The tool accepts List[Dict[str, Any]], so it doesn't validate
+    # the structure of individual dict items. This is intentional to allow
+    # flexibility in what candidate_actions can contain.
+
+
+@pytest.mark.asyncio
 async def test_get_recent_default(setup_thinking_state):
     """Test getting recent thoughts with default limit"""
     mcp = setup_thinking_state

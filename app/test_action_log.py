@@ -156,6 +156,20 @@ async def test_log_action_invalid_type(setup_action_log_state):
 
 
 @pytest.mark.asyncio
+async def test_log_action_invalid_details_structure(setup_action_log_state):
+    """Test that invalid details structure is rejected"""
+    mcp = setup_action_log_state
+    log_action_tool = mcp._tool_manager._tools["log_action"]
+
+    # Pass a string instead of a dict for details
+    with pytest.raises(Exception):  # Will be a Pydantic validation error
+        await log_action_tool.run(arguments={
+            "type": "alert",
+            "details": "this should be a dict"
+        })
+
+
+@pytest.mark.asyncio
 async def test_get_recent_default(setup_action_log_state):
     """Test getting recent actions with default limit"""
     mcp = setup_action_log_state

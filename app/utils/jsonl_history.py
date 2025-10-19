@@ -162,11 +162,10 @@ class JsonlHistory:
         if offset == 0:
             # Most recent N entries
             return all_entries[-n:] if total >= n else all_entries
-        else:
-            # Skip offset from the end, then take N
-            start_idx = max(0, total - offset - n)
-            end_idx = total - offset
-            return all_entries[start_idx:end_idx]
+
+        # Skip offset from the end, then take N
+        start_idx = max(0, total - offset - n)
+        return all_entries[start_idx:total - offset]
 
     def get_by_time_range(
         self,

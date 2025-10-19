@@ -2,7 +2,6 @@
 Water Pump Tool - Dispense water with daily usage limits
 Mock implementation for now, will integrate with ESP32 pump later.
 """
-from typing import Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -47,8 +46,14 @@ def get_usage_last_24h() -> tuple[int, int]:
     if not recent_events:
         return 0, 0
 
-    # Sum up the ml from all events
-    total_ml = sum(event["ml"] for event in recent_events)
+    # Sum up the ml from all events with defensive handling
+    total_ml = 0
+    for event in recent_events:
+        ml_value = event.get("ml", 0)
+        # Ensure the value is numeric and convert to int
+        if isinstance(ml_value, (int, float)) and ml_value > 0:
+            total_ml += int(ml_value)
+
     count = len(recent_events)
 
     return total_ml, count

@@ -108,19 +108,14 @@ def setup_action_log_tools(mcp: FastMCP):
         Search for actions containing a keyword in the last N hours.
         Searches in action details (converted to string).
         """
-        # Use the utility's built-in search functionality
-        matching = action_history.search(
-            keyword=keyword,
-            case_sensitive=False
-        )
+        # Get recent actions within the time window
+        recent_actions = action_history.get_by_time_window(hours=hours)
 
-        # Filter by time window
-        recent_matching = []
-        for action in matching:
-            # Use the time window helper
-            recent_actions = action_history.get_by_time_window(hours=hours)
-            if action in recent_actions:
-                recent_matching.append(action)
+        # Filter recent actions for keyword matches
+        recent_matching = [
+            action for action in recent_actions
+            if keyword.lower() in str(action).lower()
+        ]
 
         # Convert to Pydantic models
         action_entries = [ActionEntry(**a) for a in recent_matching]

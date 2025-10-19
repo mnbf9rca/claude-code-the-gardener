@@ -68,8 +68,9 @@ def test_append_multiple_events(temp_history_file):
         {"id": 3, "data": "third"}
     ]
 
-    for event in events:
-        history.append(event)
+    history.append(events[0])
+    history.append(events[1])
+    history.append(events[2])
 
     assert history.count() == 3
     assert history.get_all() == events
@@ -79,8 +80,17 @@ def test_get_recent_basic(temp_history_file):
     """Test getting recent entries"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    for i in range(10):
-        history.append({"id": i})
+    # Append 10 entries explicitly
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
+    history.append({"id": 5})
+    history.append({"id": 6})
+    history.append({"id": 7})
+    history.append({"id": 8})
+    history.append({"id": 9})
 
     recent_5 = history.get_recent(5)
     assert len(recent_5) == 5
@@ -92,8 +102,17 @@ def test_get_recent_with_offset(temp_history_file):
     """Test pagination with offset"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    for i in range(10):
-        history.append({"id": i})
+    # Append 10 entries explicitly
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
+    history.append({"id": 5})
+    history.append({"id": 6})
+    history.append({"id": 7})
+    history.append({"id": 8})
+    history.append({"id": 9})
 
     # Get 3 entries, skipping the 5 most recent
     result = history.get_recent(n=3, offset=5)
@@ -106,8 +125,11 @@ def test_get_recent_more_than_available(temp_history_file):
     """Test requesting more entries than available"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    for i in range(5):
-        history.append({"id": i})
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
 
     result = history.get_recent(100)
     assert len(result) == 5
@@ -119,13 +141,17 @@ def test_get_by_time_range(temp_history_file):
 
     base_time = datetime(2024, 1, 1, 12, 0, 0)
 
-    # Add events at different times
-    for i in range(5):
-        with freeze_time(base_time + timedelta(hours=i)):
-            history.append({
-                "id": i,
-                "timestamp": (base_time + timedelta(hours=i)).isoformat()
-            })
+    # Add events at different times - explicit instead of loop
+    with freeze_time(base_time + timedelta(hours=0)):
+        history.append({"id": 0, "timestamp": (base_time + timedelta(hours=0)).isoformat()})
+    with freeze_time(base_time + timedelta(hours=1)):
+        history.append({"id": 1, "timestamp": (base_time + timedelta(hours=1)).isoformat()})
+    with freeze_time(base_time + timedelta(hours=2)):
+        history.append({"id": 2, "timestamp": (base_time + timedelta(hours=2)).isoformat()})
+    with freeze_time(base_time + timedelta(hours=3)):
+        history.append({"id": 3, "timestamp": (base_time + timedelta(hours=3)).isoformat()})
+    with freeze_time(base_time + timedelta(hours=4)):
+        history.append({"id": 4, "timestamp": (base_time + timedelta(hours=4)).isoformat()})
 
     # Query for hours 1-3
     start = base_time + timedelta(hours=1)
@@ -190,6 +216,29 @@ def test_search_case_insensitive(temp_history_file):
     assert len(result) == 0
 
 
+def test_search_special_characters(temp_history_file):
+    """Test search with special characters in keyword"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    history.append({"note": "Fertilizer applied: N-P-K 10-10-10"})
+    history.append({"note": "Checked pH level: 6.5"})
+    history.append({"note": "Water dispensed @ 8:00am"})
+    history.append({"note": "Light duration extended"})
+
+    # Search for a keyword with special characters
+    result = history.search("N-P-K")
+    assert len(result) == 1
+    assert "N-P-K" in result[0]["note"]
+
+    result = history.search("@ 8:00am")
+    assert len(result) == 1
+    assert "@ 8:00am" in result[0]["note"]
+
+    # Search for a keyword with punctuation that does not exist
+    result = history.search("pH:7.0")
+    assert len(result) == 0
+
+
 def test_search_specific_fields(temp_history_file):
     """Test searching in specific fields"""
     history = JsonlHistory(file_path=temp_history_file)
@@ -214,8 +263,9 @@ def test_load_from_existing_file(temp_history_file):
 
     temp_history_file.parent.mkdir(parents=True, exist_ok=True)
     with open(temp_history_file, 'w') as f:
-        for event in events:
-            f.write(json.dumps(event) + '\n')
+        f.write(json.dumps(events[0]) + '\n')
+        f.write(json.dumps(events[1]) + '\n')
+        f.write(json.dumps(events[2]) + '\n')
 
     # Create history and load
     history = JsonlHistory(file_path=temp_history_file)
@@ -228,11 +278,13 @@ def test_load_from_existing_file(temp_history_file):
 def test_lazy_loading(temp_history_file):
     """Test that loading is lazy"""
     # Pre-populate file
-    events = [{"id": i} for i in range(5)]
     temp_history_file.parent.mkdir(parents=True, exist_ok=True)
     with open(temp_history_file, 'w') as f:
-        for event in events:
-            f.write(json.dumps(event) + '\n')
+        f.write(json.dumps({"id": 0}) + '\n')
+        f.write(json.dumps({"id": 1}) + '\n')
+        f.write(json.dumps({"id": 2}) + '\n')
+        f.write(json.dumps({"id": 3}) + '\n')
+        f.write(json.dumps({"id": 4}) + '\n')
 
     history = JsonlHistory(file_path=temp_history_file)
 
@@ -249,9 +301,17 @@ def test_memory_pruning(temp_history_file):
     """Test that memory is pruned when exceeding max"""
     history = JsonlHistory(file_path=temp_history_file, max_memory_entries=5)
 
-    # Add 10 events
-    for i in range(10):
-        history.append({"id": i})
+    # Add 10 events explicitly
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
+    history.append({"id": 5})
+    history.append({"id": 6})
+    history.append({"id": 7})
+    history.append({"id": 8})
+    history.append({"id": 9})
 
     # Should only keep 5 most recent in memory
     assert history.count() == 5
@@ -261,11 +321,25 @@ def test_memory_pruning(temp_history_file):
 
 def test_load_respects_max_memory(temp_history_file):
     """Test that loading from disk respects max_memory_entries"""
-    # Pre-populate file with 100 events
+    # Pre-populate file with 15 events (reduced from 100 to make explicit writing feasible)
     temp_history_file.parent.mkdir(parents=True, exist_ok=True)
     with open(temp_history_file, 'w') as f:
-        for i in range(100):
-            f.write(json.dumps({"id": i}) + '\n')
+        # Write 15 entries
+        f.write(json.dumps({"id": 0}) + '\n')
+        f.write(json.dumps({"id": 1}) + '\n')
+        f.write(json.dumps({"id": 2}) + '\n')
+        f.write(json.dumps({"id": 3}) + '\n')
+        f.write(json.dumps({"id": 4}) + '\n')
+        f.write(json.dumps({"id": 5}) + '\n')
+        f.write(json.dumps({"id": 6}) + '\n')
+        f.write(json.dumps({"id": 7}) + '\n')
+        f.write(json.dumps({"id": 8}) + '\n')
+        f.write(json.dumps({"id": 9}) + '\n')
+        f.write(json.dumps({"id": 10}) + '\n')
+        f.write(json.dumps({"id": 11}) + '\n')
+        f.write(json.dumps({"id": 12}) + '\n')
+        f.write(json.dumps({"id": 13}) + '\n')
+        f.write(json.dumps({"id": 14}) + '\n')
 
     # Load with max 10
     history = JsonlHistory(file_path=temp_history_file, max_memory_entries=10)
@@ -273,8 +347,8 @@ def test_load_respects_max_memory(temp_history_file):
 
     # Should only have loaded the last 10
     assert history.count() == 10
-    assert history.get_all()[0]["id"] == 90
-    assert history.get_all()[9]["id"] == 99
+    assert history.get_all()[0]["id"] == 5
+    assert history.get_all()[9]["id"] == 14
 
 
 def test_malformed_lines_skipped(temp_history_file):
@@ -299,8 +373,11 @@ def test_clear(temp_history_file):
     """Test clearing the history"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    for i in range(5):
-        history.append({"id": i})
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
 
     assert history.count() == 5
 
@@ -309,12 +386,32 @@ def test_clear(temp_history_file):
     assert not history._loaded
 
 
+def test_clear_persistence(temp_history_file):
+    """Test that clear() does not modify or remove data from the underlying JSONL file"""
+    history = JsonlHistory(file_path=temp_history_file)
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
+
+    history.clear()
+    # Reload from file to check persistence
+    new_history = JsonlHistory(file_path=temp_history_file)
+    new_history.load()
+    assert new_history.count() == 5
+    assert [e["id"] for e in new_history.get_all()] == [0, 1, 2, 3, 4]
+
+
 def test_len_operator(temp_history_file):
     """Test len() operator support"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    for i in range(5):
-        history.append({"id": i})
+    history.append({"id": 0})
+    history.append({"id": 1})
+    history.append({"id": 2})
+    history.append({"id": 3})
+    history.append({"id": 4})
 
     assert len(history) == 5
 
@@ -334,8 +431,11 @@ def test_persistence_across_instances(temp_history_file):
     """Test that data persists across different instances"""
     # First instance - write data
     history1 = JsonlHistory(file_path=temp_history_file)
-    for i in range(5):
-        history1.append({"id": i})
+    history1.append({"id": 0})
+    history1.append({"id": 1})
+    history1.append({"id": 2})
+    history1.append({"id": 3})
+    history1.append({"id": 4})
 
     # Second instance - read data
     history2 = JsonlHistory(file_path=temp_history_file)

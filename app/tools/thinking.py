@@ -134,9 +134,16 @@ def setup_thinking_tools(mcp: FastMCP):
         Get thoughts within a specific time range.
         Useful for analyzing reasoning during a specific period.
         """
-        # Parse time bounds
-        start_dt = datetime.fromisoformat(start_time)
-        end_dt = datetime.fromisoformat(end_time)
+        # Parse time bounds with error handling
+        try:
+            start_dt = datetime.fromisoformat(start_time)
+            end_dt = datetime.fromisoformat(end_time)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid ISO8601 timestamp format. "
+                f"Expected format: 'YYYY-MM-DDTHH:MM:SS' or 'YYYY-MM-DD HH:MM:SS'. "
+                f"Error: {str(e)}"
+            )
 
         # Get entries by time range
         matching = thought_history.get_by_time_range(start_dt, end_dt)
