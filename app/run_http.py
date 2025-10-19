@@ -5,6 +5,7 @@ Runs the MCP server with HTTP transport for remote access
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import uvicorn
 from starlette.staticfiles import StaticFiles
 from server import mcp
 from utils.logging_config import get_logger
@@ -37,19 +38,16 @@ def main():
     logger.info("Press Ctrl+C to stop")
     logger.info("=" * 60)
 
-    # Mount static files for photos before starting server
-    # FastMCP exposes the underlying FastAPI app via mcp.app
-    if hasattr(mcp, 'app'):
-        mcp.app.mount("/photos", StaticFiles(directory=str(PHOTOS_DIR)), name="photos")
-        logger.info(f"Static files mounted: {PHOTOS_DIR}")
+    # Create the ASGI app with HTTP transport
+    # This returns a Starlette app we can customize
+    app = mcp.http_app(path="/mcp")
 
-    # Run the server with HTTP transport
-    mcp.run(
-        transport="http",
-        host=HOST,
-        port=PORT,
-        path="/mcp"
-    )
+    # Mount static files to the Starlette app
+    app.mount("/photos", StaticFiles(directory=str(PHOTOS_DIR)), name="photos")
+    logger.info(f"Static files mounted: {PHOTOS_DIR}")
+
+    # Run uvicorn directly with the configured app
+    uvicorn.run(app, host=HOST, port=PORT)
 
 if __name__ == "__main__":
     main()
