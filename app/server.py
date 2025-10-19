@@ -8,6 +8,8 @@ from tools.moisture_sensor import setup_moisture_sensor_tools
 from tools.water_pump import setup_water_pump_tools
 from tools.light import setup_light_tools
 from tools.camera import setup_camera_tools
+from tools.thinking import setup_thinking_tools
+from tools.action_log import setup_action_log_tools
 
 # Initialize the MCP server
 mcp = FastMCP("Plant Care System")
@@ -18,6 +20,8 @@ setup_moisture_sensor_tools(mcp)
 setup_water_pump_tools(mcp)
 setup_light_tools(mcp)
 setup_camera_tools(mcp)
+setup_thinking_tools(mcp)
+setup_action_log_tools(mcp)
 
 if __name__ == "__main__":
     # For local testing

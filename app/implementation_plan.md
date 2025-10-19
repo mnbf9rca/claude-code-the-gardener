@@ -3,8 +3,9 @@
 ## Current Status
 - **Phase 1: COMPLETED ✅** - Core MCP setup with basic tools
 - **Phase 2: COMPLETED ✅** - Action tools with state persistence and integrations
-- 91 tests passing
-- Ready for Phase 3
+- **Phase 3: COMPLETED ✅** - Thinking & logging tools + JSONL refactoring
+- 146 tests passing (55 new tests in Phase 3)
+- Ready for Phase 4
 
 ## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
 - [x] Install FastMCP and dependencies in pyproject.toml
@@ -47,15 +48,40 @@
 - [x] Test fixtures and integration tests
 - [x] Time-based testing with freezegun
 
-## Phase 3: Thinking & Logging (Third PR)
-1. **Implement state management tools**
-   - `app/tools/thinking.py` - Store thoughts/plans
-   - `app/tools/action_log.py` - Track actions
-   - In-memory storage with list/dict structures
+## Phase 3: Thinking & Logging (COMPLETED ✅)
+### Core Implementation
+- [x] Thinking Tool (`app/tools/thinking.py`)
+   - [x] `log_thought()` with structured reasoning (observation, hypothesis, candidate_actions, reasoning, uncertainties, tags)
+   - [x] `get_recent(n, offset)` with pagination support
+   - [x] `get_range(start_time, end_time)` for time-based queries
+   - [x] `search(keyword, hours)` for keyword searching
+   - [x] JSONL persistence with 1000-entry memory cache
+   - [x] 14 comprehensive tests
+- [x] Action Log Tool (`app/tools/action_log.py`)
+   - [x] `log_action(type, details)` with type validation (water|light|observe|alert)
+   - [x] `get_recent(n, offset)` with pagination support
+   - [x] `search(keyword, hours)` for keyword searching
+   - [x] JSONL persistence with 1000-entry memory cache
+   - [x] 17 comprehensive tests
 
-2. **Add query capabilities**
-   - Implement `get_recent()`, `search()` methods
-   - Simple substring matching
+### Infrastructure
+- [x] Updated server.py to register new tools
+- [x] Updated tool_descriptions.md with detailed API documentation
+- [x] Memory-efficient deque-based storage
+- [x] Auto-loading state from disk on first use
+
+### JSONL Refactoring (Completed)
+- [x] Created `utils/jsonl_history.py` - centralized JSONL state management utility
+- [x] 24 comprehensive tests for JsonlHistory utility
+- [x] Refactored all 5 modules to use JsonlHistory:
+   - thinking.py (-42% code reduction)
+   - action_log.py (-51% code reduction)
+   - water_pump.py (-51% code reduction)
+   - light.py (removed 100+ lines of manual JSONL code)
+   - camera.py (simplified audit logging)
+- [x] Fixed lazy loading bug in get_by_time_window()
+- [x] All 146 tests passing
+- [x] ~300 lines of duplicated code eliminated
 
 ## Phase 4: HTTP Deployment (Fourth PR)
 1. **Add HTTP server capability**
@@ -94,6 +120,17 @@
 - OpenCV works consistently across Mac and Raspberry Pi
 - Startup reconciliation prevents state drift
 
+### Phase 3
+- In-memory deques with JSONL persistence scale well (1000 entries in memory)
+- Pagination support (offset parameter) enables efficient browsing of large histories
+- Simple substring search is sufficient for a hobby project
+- Pydantic Literal types provide clean enum validation
+- Consistent patterns across tools make testing straightforward
+- freezegun library is invaluable for time-based testing
+- **DRY refactoring**: Following "Rule of Three" - consolidating after 3+ duplications pays off
+- Centralized utilities (JsonlHistory) eliminate bugs across all modules simultaneously
+- Missing ensure_loaded() calls are easy to miss - having one implementation prevents this
+
 ## How to Run
 
 ### Development Server
@@ -120,14 +157,17 @@ uv run pytest test_plant_status.py -v
 uv run python manual_debug.py
 ```
 
-## Ready for Phase 3
+## Ready for Phase 4
 
-- All action tools implemented and tested (91 tests)
-- State persistence standardized on JSONL
+- All core tools implemented and tested (146 tests)
+- State persistence fully consolidated via JsonlHistory utility
+- JSONL used consistently across all 5 stateful modules
 - Home Assistant integration working
 - Real hardware integration (camera) validated
 - Resource management patterns established
-- Clear patterns for adding new tools
+- Thinking and action logging ready for Claude to use
+- Clean, DRY codebase with minimal duplication
+- New stateful tools can use JsonlHistory out of the box
 
 ## Technical Notes for Next Phase
 

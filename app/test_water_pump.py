@@ -27,15 +27,16 @@ async def setup_pump_state(tmp_path):
     reset_cycle()
     current_cycle_status["written"] = True  # Allow tool calls
 
-    # Clear water history
-    wp_module.water_history.clear()
-
-    # Reset state loading flag
-    wp_module._state_loaded = False
-
     # Use temp directory for state file (don't touch production state!)
-    original_state_file = wp_module.STATE_FILE
-    wp_module.STATE_FILE = tmp_path / "water_pump_history.jsonl"
+    from utils.jsonl_history import JsonlHistory
+
+    original_history = wp_module.water_history
+
+    # Create new history instance with temp file
+    wp_module.water_history = JsonlHistory(
+        file_path=tmp_path / "water_pump_history.jsonl",
+        max_memory_entries=1000
+    )
 
     # Create MCP instance and setup tools
     mcp = FastMCP("test")
@@ -43,12 +44,8 @@ async def setup_pump_state(tmp_path):
 
     yield mcp
 
-    # Cleanup
-    wp_module.water_history.clear()
-    wp_module._state_loaded = False
-
-    # Restore original state file path
-    wp_module.STATE_FILE = original_state_file
+    # Restore original history
+    wp_module.water_history = original_history
 
 
 @pytest.mark.asyncio
@@ -234,16 +231,16 @@ async def test_state_file_creation(setup_pump_state):
     dispense_tool = mcp._tool_manager._tools["dispense"]
 
     # State file should not exist initially
-    assert not wp_module.STATE_FILE.exists()
+    assert not wp_module.water_history.file_path.exists()
 
     # Dispense water
     await dispense_tool.run(arguments={"ml": 50})
 
     # State file should now exist
-    assert wp_module.STATE_FILE.exists()
+    assert wp_module.water_history.file_path.exists()
 
     # Verify contents (JSONL format - each line is a JSON object)
-    with open(wp_module.STATE_FILE, "r") as f:
+    with open(wp_module.water_history.file_path, "r") as f:
         lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -265,7 +262,7 @@ async def test_state_persistence_across_restarts(setup_pump_state):
 
     # Simulate restart by clearing in-memory state
     wp_module.water_history.clear()
-    wp_module._state_loaded = False
+    wp_module.water_history._loaded = False
     assert len(wp_module.water_history) == 0
 
     # Call a tool which should load state
@@ -285,19 +282,24 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
     mcp = setup_pump_state
 
     # Manually create a JSONL state file with recent timestamps
-    wp_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    file_path = wp_module.water_history.file_path
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
     test_history = [
         {"timestamp": (now - timedelta(hours=2)).isoformat(), "ml": 30},
         {"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 45},
     ]
     # Write as JSONL (one JSON object per line)
-    with open(wp_module.STATE_FILE, "w") as f:
+    with open(file_path, "w") as f:
         for event in test_history:
             f.write(json.dumps(event) + '\n')
 
+    # Create new instance to simulate fresh load
+    from utils.jsonl_history import JsonlHistory
+    wp_module.water_history = JsonlHistory(file_path=file_path, max_memory_entries=1000)
+
     # Verify state is not loaded yet
-    assert not wp_module._state_loaded
+    assert not wp_module.water_history._loaded
     assert len(wp_module.water_history) == 0
 
     # Call a tool
@@ -306,7 +308,7 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
     result = json.loads(tool_result.content[0].text)
 
     # State should now be loaded
-    assert wp_module._state_loaded
+    assert wp_module.water_history._loaded
     assert len(wp_module.water_history) == 2
     assert result["events"] == 2
 
@@ -319,21 +321,26 @@ async def test_state_loads_only_once(setup_pump_state):
     usage_tool = mcp._tool_manager._tools["get_usage_24h"]
 
     # Manually create a JSONL state file with recent timestamp
-    wp_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    file_path = wp_module.water_history.file_path
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
     test_history = [{"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 30}]
     # Write as JSONL (one JSON object per line)
-    with open(wp_module.STATE_FILE, "w") as f:
+    with open(file_path, "w") as f:
         for event in test_history:
             f.write(json.dumps(event) + '\n')
 
+    # Create new instance to simulate fresh load
+    from utils.jsonl_history import JsonlHistory
+    wp_module.water_history = JsonlHistory(file_path=file_path, max_memory_entries=1000)
+
     # First tool call should load state
     await usage_tool.run(arguments={})
-    assert wp_module._state_loaded
+    assert wp_module.water_history._loaded
     assert len(wp_module.water_history) == 1
 
     # Manually modify the file (simulating external change)
-    with open(wp_module.STATE_FILE, "w") as f:
+    with open(file_path, "w") as f:
         json.dump({"water_history": []}, f)
 
     # Second tool call should NOT reload state

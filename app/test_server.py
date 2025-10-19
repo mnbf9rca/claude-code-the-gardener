@@ -56,10 +56,11 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     light_module.light_state["last_off"] = None
     light_module.light_state["scheduled_off"] = None
 
-    # Reset light history (new history tracking feature)
+    # Reset light history (uses JsonlHistory utility)
     light_module.light_history.clear()
+    light_module.light_history._loaded = False
 
-    # Reset state loaded flag (new history tracking feature)
+    # Reset state loaded flag
     light_module._state_loaded = False
 
     # Reset reconciliation flag (new scheduling feature)
@@ -67,7 +68,7 @@ async def reset_server_state(httpx_mock: HTTPXMock):
 
     # Clear persisted state and history files BEFORE test runs
     light_module.STATE_FILE.unlink(missing_ok=True)
-    light_module.HISTORY_FILE.unlink(missing_ok=True)
+    light_module.light_history.file_path.unlink(missing_ok=True)
 
     # Close httpx client unconditionally
     try:
