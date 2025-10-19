@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional, Tuple, Dict, List, Any
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from shared_state import current_cycle_status
+from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
 from dotenv import load_dotenv
 

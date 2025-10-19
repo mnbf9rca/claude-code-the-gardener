@@ -1,7 +1,6 @@
 """
 Shared test fixtures for the plant care system tests
 """
-import os
 import tempfile
 import shutil
 from pathlib import Path
@@ -33,11 +32,10 @@ def test_photos_dir() -> Generator[Path, None, None]:
 @pytest.fixture
 def sample_photos() -> List[Path]:
     """Provide paths to pre-captured test photos."""
-    fixtures_dir = Path(__file__).parent / "test_fixtures" / "photos"
-    photos = list(fixtures_dir.glob("test_plant_*.jpg"))
-    if not photos:
-        raise FileNotFoundError("No sample photos available in test_fixtures/photos/")
-    return sorted(photos)
+    fixtures_dir = Path(__file__).parent / "tests" / "fixtures" / "photos"
+    if photos := sorted(fixtures_dir.glob("test_plant_*.jpg")):
+        return photos
+    raise FileNotFoundError("No sample photos available in tests/fixtures/photos/")
 
 
 @pytest.fixture
@@ -128,15 +126,15 @@ requires_camera = pytest.mark.skipif(
 
 
 def has_sample_photos() -> bool:
-    """Check if sample photos are available in test_fixtures/photos/."""
-    fixtures_dir = Path(__file__).parent / "test_fixtures" / "photos"
+    """Check if sample photos are available in tests/fixtures/photos/."""
+    fixtures_dir = Path(__file__).parent / "tests" / "fixtures" / "photos"
     return fixtures_dir.exists() and len(list(fixtures_dir.glob("*.jpg"))) > 0
 
 
 # Mark to skip tests that require sample photos
 requires_sample_photos = pytest.mark.skipif(
     not has_sample_photos(),
-    reason="No sample photos available in test_fixtures/photos/"
+    reason="No sample photos available in tests/fixtures/photos/"
 )
 
 
@@ -169,7 +167,7 @@ def reset_camera_module():
 @pytest.fixture
 def reset_cycle_state():
     """Reset the cycle state for tests."""
-    from shared_state import current_cycle_status, reset_cycle
+    from utils.shared_state import current_cycle_status, reset_cycle
 
     # Save original state
     original_written = current_cycle_status["written"]
@@ -188,6 +186,6 @@ def reset_cycle_state():
 @pytest.fixture
 def allow_camera_capture(reset_cycle_state):
     """Allow camera capture by marking status as written."""
-    from shared_state import current_cycle_status
+    from utils.shared_state import current_cycle_status
     current_cycle_status["written"] = True
     yield

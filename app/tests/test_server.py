@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from freezegun import freeze_time
 from pytest_httpx import HTTPXMock
 from server import mcp
-from shared_state import reset_cycle
+from utils.shared_state import reset_cycle
 import tools.plant_status as ps_module
 import tools.moisture_sensor as ms_module
 import tools.water_pump as wp_module

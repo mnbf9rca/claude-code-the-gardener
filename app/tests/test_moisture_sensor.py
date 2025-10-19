@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 from fastmcp import FastMCP
 import tools.moisture_sensor as ms_module
-from shared_state import reset_cycle, current_cycle_status
+from utils.shared_state import reset_cycle, current_cycle_status
 
 
 @pytest_asyncio.fixture(autouse=True)

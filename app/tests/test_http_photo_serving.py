@@ -14,7 +14,7 @@ import pytest
 def photo_server_fixture():
     """Provide photos directory and sample photo for HTTP serving tests"""
     # Use test fixtures photos directory
-    photos_dir = Path(__file__).parent / "test_fixtures" / "photos"
+    photos_dir = Path(__file__).parent / "fixtures" / "photos"
 
     # Ensure directory exists and has at least one photo
     if not photos_dir.exists() or not list(photos_dir.glob("*.jpg")):

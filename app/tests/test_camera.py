@@ -243,7 +243,7 @@ class TestCameraWithoutDevice:
 
         Note: Fixture parameters are used by pytest's dependency injection.
         """
-        from shared_state import current_cycle_status
+        from utils.shared_state import current_cycle_status
 
         # Ensure status not written
         current_cycle_status["written"] = False

@@ -16,7 +16,7 @@ from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.water_pump as wp_module
 from tools.water_pump import setup_water_pump_tools
-from shared_state import reset_cycle, current_cycle_status
+from utils.shared_state import reset_cycle, current_cycle_status
 from pathlib import Path
 
 
