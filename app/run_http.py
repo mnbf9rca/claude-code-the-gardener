@@ -25,7 +25,15 @@ PHOTOS_DIR = Path(os.getenv("CAMERA_SAVE_PATH", "./photos"))
 # Handle relative paths relative to app directory
 if not PHOTOS_DIR.is_absolute():
     PHOTOS_DIR = Path(__file__).parent / PHOTOS_DIR
-PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Create directory with explicit error handling
+try:
+    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    import sys
+    error_msg = f"Failed to create photos directory '{PHOTOS_DIR}': {e}"
+    logger.error(error_msg)
+    sys.exit(1)
 
 def main():
     """Start the MCP server with HTTP transport"""
