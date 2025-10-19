@@ -11,7 +11,7 @@ import pytest
 import pytest_asyncio
 import json
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.light as light_module
@@ -109,7 +109,7 @@ async def test_turn_on_min_max_duration(setup_light_state):
     # Wait for auto-off
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
         light_module.light_state["status"] = "off"
-        light_module.light_state["last_off"] = datetime.now().isoformat()
+        light_module.light_state["last_off"] = datetime.now(timezone.utc).isoformat()
         light_module.light_state["scheduled_off"] = None
 
         # Wait minimum off time
@@ -185,7 +185,7 @@ async def test_minimum_off_time_enforcement(setup_light_state):
 
         # Simulate light turning off
         light_module.light_state["status"] = "off"
-        light_module.light_state["last_off"] = datetime.now().isoformat()
+        light_module.light_state["last_off"] = datetime.now(timezone.utc).isoformat()
         light_module.light_state["scheduled_off"] = None
 
         # Try to turn on immediately

@@ -3,7 +3,7 @@ Moisture Sensor Tool - Reads soil moisture levels
 For now, returns mock data. Will integrate with ESP32 later.
 """
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import random
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -44,7 +44,7 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
             mock_sensor_value - random.randint(5, 15) + random.randint(0, 5)
         )
 
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         reading = MoistureReading(
             value=mock_sensor_value,
             timestamp=timestamp,

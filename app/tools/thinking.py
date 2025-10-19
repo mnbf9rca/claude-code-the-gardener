@@ -3,7 +3,7 @@ Thinking Tool - Log Claude's reasoning process
 Stores structured thoughts for review and learning.
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from pathlib import Path
@@ -85,7 +85,7 @@ def setup_thinking_tools(mcp: FastMCP):
         This helps build a history of reasoning for review and learning.
         """
         # Create thought entry
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         thought = {
             "timestamp": timestamp,
             "observation": observation,

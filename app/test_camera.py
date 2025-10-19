@@ -11,6 +11,7 @@ These tests verify the camera functionality including:
 import json
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlparse
 
 import pytest
 from freezegun import freeze_time
@@ -68,8 +69,13 @@ class TestCameraWithRealDevice:
         assert "timestamp" in result
         assert result["url"].endswith(".jpg")
 
-        # Check the file exists
-        photo_path = Path(result["url"])
+        # URL should now be HTTP format
+        assert result["url"].startswith("http")
+
+        # Extract filename from HTTP URL and verify file exists
+        parsed_url = urlparse(result["url"])
+        filename = Path(parsed_url.path).name
+        photo_path = test_photos_dir / filename
         assert photo_path.exists()
         assert photo_path.stat().st_size > 0
 
@@ -100,9 +106,12 @@ class TestCameraWithRealDevice:
         # All URLs should be unique
         assert len(set(urls)) == 3
 
-        # All files should exist
+        # All files should exist (extract filename from HTTP URL)
         for url in urls:
-            assert Path(url).exists()
+            parsed_url = urlparse(url)
+            filename = Path(parsed_url.path).name
+            photo_path = test_photos_dir / filename
+            assert photo_path.exists()
 
     @pytest.mark.asyncio
     @requires_camera

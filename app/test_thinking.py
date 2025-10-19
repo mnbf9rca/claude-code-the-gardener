@@ -13,7 +13,7 @@ These tests verify the thinking functionality including:
 import pytest
 import pytest_asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.thinking as thinking_module
@@ -211,7 +211,7 @@ async def test_get_range(setup_thinking_state):
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
     get_range_tool = mcp._tool_manager._tools["get_range"]
 
-    base_time = datetime(2024, 1, 1, 12, 0, 0)
+    base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     # Log thoughts at different times
     for i in range(5):

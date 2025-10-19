@@ -11,7 +11,7 @@ import pytest_asyncio
 import json
 import httpx
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from freezegun import freeze_time
 from fastmcp import FastMCP
@@ -159,8 +159,8 @@ async def test_background_task_executes_turn_off(setup_scheduling_test_state):
     # Setup state as if light is on with scheduled off time
     with freeze_time("2024-01-01 12:00:00"):
         light_module.light_state["status"] = "on"
-        light_module.light_state["last_on"] = datetime.now().isoformat()
-        light_module.light_state["scheduled_off"] = (datetime.now() + timedelta(seconds=1)).isoformat()
+        light_module.light_state["last_on"] = datetime.now(timezone.utc).isoformat()
+        light_module.light_state["scheduled_off"] = (datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()
 
     # Create and run the background task
     task = asyncio.create_task(light_module.execute_scheduled_turn_off())
@@ -180,7 +180,7 @@ async def test_background_task_handles_past_scheduled_time(setup_scheduling_test
     with freeze_time("2024-01-01 12:00:00"):
         # Set scheduled time in the past
         light_module.light_state["status"] = "on"
-        light_module.light_state["scheduled_off"] = (datetime.now() - timedelta(minutes=5)).isoformat()
+        light_module.light_state["scheduled_off"] = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
 
     # Run background task
     task = asyncio.create_task(light_module.execute_scheduled_turn_off())
@@ -196,9 +196,9 @@ async def test_background_task_cancellation_during_sleep(setup_scheduling_test_s
     """Test that background task can be cancelled during sleep phase and cleanup properly"""
     # Set scheduled time in the real future (not using freezegun so task actually sleeps)
     light_module.light_state["status"] = "on"
-    light_module.light_state["last_on"] = datetime.now().isoformat()
+    light_module.light_state["last_on"] = datetime.now(timezone.utc).isoformat()
     # Schedule for 30 seconds in the future to ensure task will be sleeping
-    scheduled_time = datetime.now() + timedelta(seconds=30)
+    scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=30)
     light_module.light_state["scheduled_off"] = scheduled_time.isoformat()
 
     # Create background task
@@ -260,8 +260,8 @@ async def test_save_and_load_state(setup_scheduling_test_state):
     # Set up some state
     with freeze_time("2024-01-01 12:00:00"):
         light_module.light_state["status"] = "on"
-        light_module.light_state["last_on"] = datetime.now().isoformat()
-        light_module.light_state["scheduled_off"] = (datetime.now() + timedelta(minutes=30)).isoformat()
+        light_module.light_state["last_on"] = datetime.now(timezone.utc).isoformat()
+        light_module.light_state["scheduled_off"] = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
 
     # Save state
     light_module.save_state()
@@ -284,8 +284,8 @@ async def test_clear_scheduled_state(setup_scheduling_test_state):
     with freeze_time("2024-01-01 12:00:00"):
         light_module.light_state["status"] = "off"
         light_module.light_state["last_on"] = "2024-01-01T11:00:00"
-        light_module.light_state["last_off"] = datetime.now().isoformat()
-        light_module.light_state["scheduled_off"] = "2024-01-01T12:30:00"
+        light_module.light_state["last_off"] = datetime.now(timezone.utc).isoformat()
+        light_module.light_state["scheduled_off"] = "2024-01-01T12:30:00+00:00"
 
     # Save initial state
     light_module.save_state()
@@ -364,7 +364,7 @@ async def test_reconciliation_past_scheduled_off_turns_off_light(setup_schedulin
             "status": "on",
             "last_on": "2024-01-01T11:00:00",
             "last_off": None,
-            "scheduled_off": "2024-01-01T11:30:00"  # 30 minutes ago
+            "scheduled_off": "2024-01-01T11:30:00+00:00"  # 30 minutes ago
         }
         light_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(light_module.STATE_FILE, 'w') as f:
@@ -399,7 +399,7 @@ async def test_reconciliation_future_scheduled_off_reschedules_task(setup_schedu
             "status": "on",
             "last_on": "2024-01-01T11:30:00",
             "last_off": None,
-            "scheduled_off": "2024-01-01T13:00:00"  # 1 hour in future
+            "scheduled_off": "2024-01-01T13:00:00+00:00"  # 1 hour in future
         }
         light_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(light_module.STATE_FILE, 'w') as f:
@@ -426,7 +426,7 @@ async def test_reconciliation_future_scheduled_off_reschedules_task(setup_schedu
         assert light_module.scheduled_task is not None
         assert not light_module.scheduled_task.done()
         assert light_module.light_state["status"] == "on"
-        assert light_module.light_state["scheduled_off"] == "2024-01-01T13:00:00"
+        assert light_module.light_state["scheduled_off"] == "2024-01-01T13:00:00+00:00"
 
 
 @pytest.mark.asyncio
@@ -438,7 +438,7 @@ async def test_reconciliation_clears_schedule_if_light_manually_turned_off(setup
             "status": "on",
             "last_on": "2024-01-01T11:30:00",
             "last_off": None,
-            "scheduled_off": "2024-01-01T13:00:00"  # Future
+            "scheduled_off": "2024-01-01T13:00:00+00:00"  # Future
         }
         light_module.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(light_module.STATE_FILE, 'w') as f:
@@ -588,4 +588,4 @@ async def test_crash_recovery_simulation(setup_scheduling_test_state, httpx_mock
         # Verify: Task was rescheduled (light still has 30 min to go)
         assert light_module.scheduled_task is not None
         assert light_module.light_state["status"] == "on"
-        assert light_module.light_state["scheduled_off"] == "2024-01-01T13:00:00"
+        assert light_module.light_state["scheduled_off"] == "2024-01-01T13:00:00+00:00"

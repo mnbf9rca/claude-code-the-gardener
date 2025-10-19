@@ -36,7 +36,7 @@ def sample_photos() -> List[Path]:
     fixtures_dir = Path(__file__).parent / "test_fixtures" / "photos"
     photos = list(fixtures_dir.glob("test_plant_*.jpg"))
     if not photos:
-        pytest.skip("No sample photos available in test_fixtures/photos/")
+        raise FileNotFoundError("No sample photos available in test_fixtures/photos/")
     return sorted(photos)
 
 
@@ -124,6 +124,19 @@ def has_real_camera() -> bool:
 requires_camera = pytest.mark.skipif(
     not has_real_camera(),
     reason="No real camera available on this system"
+)
+
+
+def has_sample_photos() -> bool:
+    """Check if sample photos are available in test_fixtures/photos/."""
+    fixtures_dir = Path(__file__).parent / "test_fixtures" / "photos"
+    return fixtures_dir.exists() and len(list(fixtures_dir.glob("*.jpg"))) > 0
+
+
+# Mark to skip tests that require sample photos
+requires_sample_photos = pytest.mark.skipif(
+    not has_sample_photos(),
+    reason="No sample photos available in test_fixtures/photos/"
 )
 
 
