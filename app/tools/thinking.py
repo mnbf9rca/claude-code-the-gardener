@@ -105,7 +105,7 @@ def setup_thinking_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def get_recent(
+    async def get_recent_thoughts(
         n: int = Field(default=DEFAULT_RECENT_LIMIT, description=f"Number of recent thoughts (max {MAX_RECENT_LIMIT})", ge=1, le=MAX_RECENT_LIMIT),
         offset: int = Field(default=0, description="Number of entries to skip from the end (for pagination)", ge=0)
     ) -> RecentThoughtsResponse:
@@ -126,7 +126,7 @@ def setup_thinking_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def get_range(
+    async def get_thoughts_in_range(
         start_time: str = Field(..., description="Start time (ISO8601 format)"),
         end_time: str = Field(..., description="End time (ISO8601 format)")
     ) -> RecentThoughtsResponse:
@@ -157,7 +157,7 @@ def setup_thinking_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def search(
+    async def search_thoughts(
         keyword: str = Field(..., description="Keyword to search for"),
         hours: int = Field(default=DEFAULT_SEARCH_HOURS, description="How many hours back to search", ge=1)
     ) -> SearchResponse:

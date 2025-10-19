@@ -174,7 +174,7 @@ async def test_get_recent_default(setup_action_log_state):
     """Test getting recent actions with default limit"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_actions"]
 
     # Log 10 actions
     for i in range(10):
@@ -199,7 +199,7 @@ async def test_get_recent_custom_limit(setup_action_log_state):
     """Test getting recent actions with custom limit"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_actions"]
 
     # Log 10 actions
     for i in range(10):
@@ -222,7 +222,7 @@ async def test_get_recent_pagination(setup_action_log_state):
     """Test pagination with offset"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_actions"]
 
     # Log 10 actions
     for i in range(10):
@@ -246,7 +246,7 @@ async def test_search_keyword(setup_action_log_state):
     """Test searching for keywords in actions"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_actions"]
 
     # Log actions with different keywords
     await log_action_tool.run(arguments={
@@ -276,7 +276,7 @@ async def test_search_case_insensitive(setup_action_log_state):
     """Test that search is case-insensitive"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_actions"]
 
     await log_action_tool.run(arguments={
         "type": "water",
@@ -295,7 +295,7 @@ async def test_search_time_window(setup_action_log_state):
     """Test search respects time window"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_actions"]
 
     base_time = datetime.now()
 
@@ -352,7 +352,7 @@ async def test_state_recovery(setup_action_log_state):
     """Test that state is recovered from disk on restart"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_actions"]
 
     # Log some actions
     for i in range(3):
@@ -405,7 +405,7 @@ async def test_memory_pruning(setup_action_log_state):
 async def test_get_recent_empty(setup_action_log_state):
     """Test getting recent actions when none exist"""
     mcp = setup_action_log_state
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_actions"]
 
     tool_result = await get_recent_tool.run(arguments={})
     result = json.loads(tool_result.content[0].text)
@@ -419,7 +419,7 @@ async def test_search_no_results(setup_action_log_state):
     """Test search when no results match"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_actions"]
 
     await log_action_tool.run(arguments={
         "type": "water",
@@ -438,7 +438,7 @@ async def test_mixed_action_types(setup_action_log_state):
     """Test logging and retrieving mixed action types"""
     mcp = setup_action_log_state
     log_action_tool = mcp._tool_manager._tools["log_action"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_actions"]
 
     # Log different types
     await log_action_tool.run(arguments={

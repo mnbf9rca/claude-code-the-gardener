@@ -79,7 +79,7 @@ def setup_action_log_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def get_recent(
+    async def get_recent_actions(
         n: int = Field(default=DEFAULT_RECENT_LIMIT, description=f"Number of recent actions (max {MAX_RECENT_LIMIT})", ge=1, le=MAX_RECENT_LIMIT),
         offset: int = Field(default=0, description="Number of entries to skip from the end (for pagination)", ge=0)
     ) -> RecentActionsResponse:
@@ -100,7 +100,7 @@ def setup_action_log_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def search(
+    async def search_actions(
         keyword: str = Field(..., description="Keyword to search for"),
         hours: int = Field(default=DEFAULT_SEARCH_HOURS, description="How many hours back to search", ge=1)
     ) -> SearchResponse:

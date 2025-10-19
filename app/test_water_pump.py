@@ -52,7 +52,7 @@ async def setup_pump_state(tmp_path):
 async def test_dispense_basic(setup_pump_state):
     """Test basic water dispensing"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     tool_result = await dispense_tool.run(arguments={"ml": 50})
     result = json.loads(tool_result.content[0].text)
@@ -67,7 +67,7 @@ async def test_dispense_basic(setup_pump_state):
 async def test_dispense_minimum_maximum(setup_pump_state):
     """Test min/max dispensing limits"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Test minimum (10ml)
     tool_result = await dispense_tool.run(arguments={"ml": 10})
@@ -84,7 +84,7 @@ async def test_dispense_minimum_maximum(setup_pump_state):
 async def test_dispense_validation(setup_pump_state):
     """Test that invalid amounts are rejected"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Test below minimum - FastMCP handles Pydantic validation
     with pytest.raises(Exception):  # Will be a Pydantic validation error
@@ -99,7 +99,7 @@ async def test_dispense_validation(setup_pump_state):
 async def test_dispense_validation_non_integer_values(setup_pump_state):
     """Test that non-integer and invalid ml values are rejected"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Test string value
     with pytest.raises(Exception):  # Pydantic validation error
@@ -122,7 +122,7 @@ async def test_dispense_validation_non_integer_values(setup_pump_state):
 async def test_24h_limit_enforcement(setup_pump_state):
     """Test that 500ml/24h limit is enforced"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Dispense 500ml total
     for _ in range(5):
@@ -140,7 +140,7 @@ async def test_24h_limit_enforcement(setup_pump_state):
 async def test_24h_rolling_window(setup_pump_state):
     """Test that the 24h limit is a rolling window"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
         # Dispense 300ml
@@ -169,8 +169,8 @@ async def test_24h_rolling_window(setup_pump_state):
 async def test_get_usage_24h(setup_pump_state):
     """Test getting water usage statistics"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
-    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
+    usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
 
     # Initially should be empty
     tool_result = await usage_tool.run(arguments={})
@@ -194,7 +194,7 @@ async def test_get_usage_24h(setup_pump_state):
 async def test_partial_dispensing_at_limit(setup_pump_state):
     """Test that we dispense only what's available when near limit"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Dispense 460ml
     for _ in range(4):
@@ -212,7 +212,7 @@ async def test_partial_dispensing_at_limit(setup_pump_state):
 async def test_gatekeeper_enforcement(setup_pump_state):
     """Test that plant status must be written first"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Reset the cycle status
     current_cycle_status["written"] = False
@@ -228,7 +228,7 @@ async def test_gatekeeper_enforcement(setup_pump_state):
 async def test_state_file_creation(setup_pump_state):
     """Test that state file is created on first append (JSONL format)"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # State file should not exist initially
     assert not wp_module.water_history.file_path.exists()
@@ -252,7 +252,7 @@ async def test_state_file_creation(setup_pump_state):
 async def test_state_persistence_across_restarts(setup_pump_state):
     """Test that water history persists across server restarts"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Dispense some water
     await dispense_tool.run(arguments={"ml": 50})
@@ -266,7 +266,7 @@ async def test_state_persistence_across_restarts(setup_pump_state):
     assert len(wp_module.water_history) == 0
 
     # Call a tool which should load state
-    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
     tool_result = await usage_tool.run(arguments={})
     result = json.loads(tool_result.content[0].text)
 
@@ -303,7 +303,7 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
     assert len(wp_module.water_history) == 0
 
     # Call a tool
-    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
     tool_result = await usage_tool.run(arguments={})
     result = json.loads(tool_result.content[0].text)
 
@@ -317,8 +317,8 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
 async def test_state_loads_only_once(setup_pump_state):
     """Test that state is loaded only once, not on every tool call (JSONL format)"""
     mcp = setup_pump_state
-    dispense_tool = mcp._tool_manager._tools["dispense"]
-    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
+    usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
 
     # Manually create a JSONL state file with recent timestamp
     file_path = wp_module.water_history.file_path

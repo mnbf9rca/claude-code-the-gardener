@@ -99,7 +99,7 @@ async def test_sensor_history_sampling():
     """Test that history sampling works correctly"""
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
-    history_tool = test_mcp._tool_manager._tools["get_sensor_history"]
+    history_tool = test_mcp._tool_manager._tools["get_moisture_history"]
 
     # Add exactly 60 entries (1 hour of data)
     for i in range(60):
@@ -135,7 +135,7 @@ async def test_history_sampling_with_more_data_than_needed():
     """Test sampling when we have more data points than requested"""
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
-    history_tool = test_mcp._tool_manager._tools["get_sensor_history"]
+    history_tool = test_mcp._tool_manager._tools["get_moisture_history"]
 
     # Add 120 entries (2 hours of data)
     for i in range(120):

@@ -57,7 +57,7 @@ class TestCameraWithRealDevice:
         # Setup MCP with camera tools
         mcp = FastMCP("test")
         setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture"]
+        capture_tool = mcp._tool_manager._tools["capture_photo"]
 
         # Capture a photo
         tool_result = await capture_tool.run(arguments={})
@@ -94,7 +94,7 @@ class TestCameraWithRealDevice:
         """
         mcp = FastMCP("test")
         setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture"]
+        capture_tool = mcp._tool_manager._tools["capture_photo"]
 
         # Capture multiple photos
         urls = []
@@ -150,7 +150,7 @@ class TestCameraWithoutDevice:
         """
         mcp = FastMCP("test")
         setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture"]
+        capture_tool = mcp._tool_manager._tools["capture_photo"]
 
         # Try to capture
         tool_result = await capture_tool.run(arguments={})
@@ -178,7 +178,7 @@ class TestCameraWithoutDevice:
 
         mcp = FastMCP("test")
         setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture"]
+        capture_tool = mcp._tool_manager._tools["capture_photo"]
 
         # Try to capture
         tool_result = await capture_tool.run(arguments={})
@@ -225,7 +225,7 @@ class TestCameraWithoutDevice:
 
         mcp = FastMCP("test")
         setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture"]
+        capture_tool = mcp._tool_manager._tools["capture_photo"]
 
         # Try to capture
         tool_result = await capture_tool.run(arguments={})
@@ -250,7 +250,7 @@ class TestCameraWithoutDevice:
 
         mcp = FastMCP("test")
         setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture"]
+        capture_tool = mcp._tool_manager._tools["capture_photo"]
 
         # Try to capture
         tool_result = await capture_tool.run(arguments={})

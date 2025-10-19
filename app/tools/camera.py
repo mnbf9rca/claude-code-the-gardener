@@ -291,7 +291,7 @@ def setup_camera_tools(mcp: FastMCP):
     """Set up camera tools on the MCP server"""
 
     @mcp.tool()
-    async def capture() -> CaptureResponse:
+    async def capture_photo() -> CaptureResponse:
         """
         Take a photo of the plant.
         Uses real USB camera if available, otherwise returns error.

@@ -574,7 +574,7 @@ def setup_light_tools(mcp: FastMCP):
     validate_environment()
 
     @mcp.tool()
-    async def turn_on(
+    async def turn_on_light(
         minutes: int = Field(
             ...,
             description=f"Duration in minutes ({MIN_ON_MINUTES}-{MAX_ON_MINUTES})",
@@ -644,7 +644,7 @@ def setup_light_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def turn_off() -> Dict[str, str]:
+    async def turn_off_light() -> Dict[str, str]:
         """
         Manually turn off the grow light.
         This will turn off the light immediately regardless of scheduled duration.

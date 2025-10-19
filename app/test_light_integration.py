@@ -117,7 +117,7 @@ async def test_real_turn_on_and_status(setup_integration_state):
     """Test turning on the real light and checking status"""
     import asyncio
     mcp = setup_integration_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     # Turn on the light
@@ -144,8 +144,8 @@ async def test_real_turn_off(setup_integration_state):
     """Test turning off the real light"""
     import asyncio
     mcp = setup_integration_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
-    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     # Turn on first
@@ -181,7 +181,7 @@ async def test_real_state_sync(setup_integration_state):
     """Test that status syncs with real Home Assistant state"""
     import asyncio
     mcp = setup_integration_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     # Turn on the light
@@ -206,7 +206,7 @@ async def test_real_state_sync(setup_integration_state):
 async def test_real_timing_constraints(setup_integration_state):
     """Test that one timing constraint works with real HA (exhaustive testing in mocked tests)"""
     mcp = setup_integration_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Turn on the light
     await turn_on_tool.run(arguments={"minutes": 30})

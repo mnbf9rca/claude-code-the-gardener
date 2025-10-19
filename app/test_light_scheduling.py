@@ -112,7 +112,7 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
 async def test_turn_on_creates_background_task(setup_scheduling_test_state):
     """Test that turn_on creates a scheduled background task"""
     mcp = setup_scheduling_test_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Verify no task exists initially
     assert light_module.scheduled_task is None
@@ -130,8 +130,8 @@ async def test_turn_on_creates_background_task(setup_scheduling_test_state):
 async def test_turn_off_cancels_background_task(setup_scheduling_test_state):
     """Test that turn_off cancels the scheduled background task"""
     mcp = setup_scheduling_test_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
-    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off_light"]
 
     # Turn on light (creates background task)
     await turn_on_tool.run(arguments={"minutes": 60})
@@ -307,7 +307,7 @@ async def test_clear_scheduled_state(setup_scheduling_test_state):
 async def test_turn_on_persists_state(setup_scheduling_test_state):
     """Test that turn_on persists state to disk"""
     mcp = setup_scheduling_test_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Verify file doesn't exist yet
     assert not light_module.STATE_FILE.exists()
@@ -521,8 +521,8 @@ async def test_reconciliation_handles_missing_state_file(setup_scheduling_test_s
 async def test_complete_flow_with_persistence(setup_scheduling_test_state):
     """Test complete flow: turn on → persist → turn off → verify persistence"""
     mcp = setup_scheduling_test_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
-    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off_light"]
 
     with freeze_time("2024-01-01 12:00:00"):
         # Turn on light
@@ -549,7 +549,7 @@ async def test_crash_recovery_simulation(setup_scheduling_test_state, httpx_mock
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
         # Step 1: Turn on light for 60 minutes
         mcp = setup_scheduling_test_state
-        turn_on_tool = mcp._tool_manager._tools["turn_on"]
+        turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
         await turn_on_tool.run(arguments={"minutes": 60})
 
         # Verify state persisted
