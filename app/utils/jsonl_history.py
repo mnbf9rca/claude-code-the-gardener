@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from collections import deque
 import json
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class JsonlHistory:
@@ -57,7 +60,7 @@ class JsonlHistory:
         if not self.file_path.exists() and self.auto_create:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
             self.file_path.touch()
-            print(f"Initialized JSONL file: {self.file_path}")
+            logger.debug(f"Initialized JSONL file: {self.file_path}")
 
     def append(self, event: Dict[str, Any]):
         """
@@ -81,7 +84,7 @@ class JsonlHistory:
             with open(self.file_path, 'a') as f:
                 f.write(json.dumps(event) + '\n')
         except Exception as e:
-            print(f"Warning: Failed to append to {self.file_path}: {e}")
+            logger.warning(f"Failed to append to {self.file_path}: {e}")
 
     def load(self):
         """
@@ -93,7 +96,7 @@ class JsonlHistory:
 
             if not self.file_path.exists() or self.file_path.stat().st_size == 0:
                 self._history = deque()
-                print(f"No existing history found at {self.file_path}")
+                logger.debug(f"No existing history found at {self.file_path}")
                 return
 
             # Read all events from file
@@ -108,7 +111,7 @@ class JsonlHistory:
                         event = json.loads(line)
                         all_events.append(event)
                     except (json.JSONDecodeError, ValueError) as e:
-                        print(f"Warning: Skipping malformed line in {self.file_path}: {e}")
+                        logger.warning(f"Skipping malformed line in {self.file_path}: {e}")
                         continue
 
             # Keep only the most recent max_memory_entries
@@ -116,10 +119,10 @@ class JsonlHistory:
                 all_events = all_events[-self.max_memory_entries:]
 
             self._history = deque(all_events)
-            print(f"Loaded {len(self._history)} entries from {self.file_path}")
+            logger.debug(f"Loaded {len(self._history)} entries from {self.file_path}")
 
         except Exception as e:
-            print(f"Error: Failed to load history from {self.file_path}: {e}")
+            logger.error(f"Failed to load history from {self.file_path}: {e}")
             self._history = deque()
 
     def ensure_loaded(self):

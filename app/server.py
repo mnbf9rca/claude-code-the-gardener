@@ -10,6 +10,10 @@ from tools.light import setup_light_tools
 from tools.camera import setup_camera_tools
 from tools.thinking import setup_thinking_tools
 from tools.action_log import setup_action_log_tools
+from utils.logging_config import get_logger
+
+# Get logger
+logger = get_logger(__name__)
 
 # Initialize the MCP server
 mcp = FastMCP("Plant Care System")
@@ -25,6 +29,6 @@ setup_action_log_tools(mcp)
 
 if __name__ == "__main__":
     # For local testing
-    print("Starting Plant Care MCP Server...")
-    print("Run with: fastmcp run server:mcp")
+    logger.debug("Starting Plant Care MCP Server...")
+    logger.debug("Run with: fastmcp run server:mcp")
     # The server will be started by fastmcp CLI

@@ -1,5 +1,10 @@
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
 def main():
-    print("Hello from app!")
+    logger.info("Hello from app!")
 
 
 if __name__ == "__main__":
