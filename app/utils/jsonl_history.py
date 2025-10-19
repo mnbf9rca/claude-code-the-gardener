@@ -5,7 +5,7 @@ This utility provides a consistent pattern for managing append-only JSONL files
 with a bounded in-memory cache. Used across multiple tools for state persistence.
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from collections import deque
 import json
@@ -217,7 +217,7 @@ class JsonlHistory:
         """
         self.ensure_loaded()
 
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         matching = []
         for entry in self._history:

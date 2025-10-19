@@ -3,7 +3,7 @@ Light Tool - Control grow light with timing constraints
 Integrates with Meross smart plug via Home Assistant HTTP API
 """
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
@@ -217,7 +217,7 @@ def record_event(event_type: str, details: Dict[str, Any]):
     - recovery_clear: Schedule cleared during startup reconciliation (manual intervention detected)
     """
     event = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "event_type": event_type,
         **details
     }
@@ -239,7 +239,7 @@ async def execute_scheduled_turn_off():
             return
 
         scheduled_time = datetime.fromisoformat(light_state["scheduled_off"])
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # If already past due, turn off immediately
         if now >= scheduled_time:
@@ -259,7 +259,7 @@ async def execute_scheduled_turn_off():
 
         if success:
             # Update state
-            now_iso = datetime.now().isoformat()
+            now_iso = datetime.now(timezone.utc).isoformat()
             light_state["status"] = "off"
             light_state["last_off"] = now_iso
 
@@ -337,7 +337,7 @@ async def reconcile_state_on_startup():
         # Check if we have a scheduled off time
         if light_state["scheduled_off"]:
             scheduled_time = datetime.fromisoformat(light_state["scheduled_off"])
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
 
             if now >= scheduled_time:
                 # Case 1: Scheduled time has passed - turn off immediately
@@ -456,7 +456,7 @@ def check_light_availability() -> tuple[bool, int]:
     if light_state["status"] == "on":
         if light_state["scheduled_off"]:
             remaining = (
-                datetime.fromisoformat(light_state["scheduled_off"]) - datetime.now()
+                datetime.fromisoformat(light_state["scheduled_off"]) - datetime.now(timezone.utc)
             ).total_seconds() / 60
             return False, max(1, int(remaining))
         return False, 0
@@ -467,7 +467,7 @@ def check_light_availability() -> tuple[bool, int]:
 
     # Check if minimum off time has elapsed
     last_off_time = datetime.fromisoformat(light_state["last_off"])
-    time_since_off = (datetime.now() - last_off_time).total_seconds() / 60
+    time_since_off = (datetime.now(timezone.utc) - last_off_time).total_seconds() / 60
 
     if time_since_off >= MIN_OFF_MINUTES:
         return True, 0
@@ -618,7 +618,7 @@ def setup_light_tools(mcp: FastMCP):
             raise ValueError("Failed to communicate with Home Assistant to turn on light")
 
         # Update local state
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         off_time = now + timedelta(minutes=minutes)
 
         light_state["status"] = "on"
@@ -668,7 +668,7 @@ def setup_light_tools(mcp: FastMCP):
             raise ValueError("Failed to communicate with Home Assistant to turn off light")
 
         # Update local state
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         light_state["status"] = "off"
         light_state["last_off"] = now.isoformat()
 
@@ -710,12 +710,12 @@ def setup_light_tools(mcp: FastMCP):
 
         # Safety net: Check if scheduled off time has passed
         # (Background task should handle this, but this is defense-in-depth)
-        if light_state["status"] == "on" and light_state["scheduled_off"] and datetime.now() >= datetime.fromisoformat(light_state["scheduled_off"]):
+        if light_state["status"] == "on" and light_state["scheduled_off"] and datetime.now(timezone.utc) >= datetime.fromisoformat(light_state["scheduled_off"]):
             logger.warning("Scheduled off time passed but light still on (background task may have failed)")
             # Turn off as safety measure
             await call_ha_service("turn_off", LIGHT_ENTITY_ID)
             light_state["status"] = "off"
-            light_state["last_off"] = datetime.now().isoformat()
+            light_state["last_off"] = datetime.now(timezone.utc).isoformat()
             clear_scheduled_state()
             # Cancel task if it still exists
             cancel_scheduled_task()

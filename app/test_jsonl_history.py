@@ -6,7 +6,7 @@ Tests the reusable JSONL history manager used across multiple tools.
 
 import pytest
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from pathlib import Path
 from utils.jsonl_history import JsonlHistory
@@ -139,7 +139,7 @@ def test_get_by_time_range(temp_history_file):
     """Test getting entries by time range"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    base_time = datetime(2024, 1, 1, 12, 0, 0)
+    base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     # Add events at different times - explicit instead of loop
     with freeze_time(base_time + timedelta(hours=0)):
@@ -167,7 +167,7 @@ def test_get_by_time_window(temp_history_file):
     """Test getting entries from last N hours"""
     history = JsonlHistory(file_path=temp_history_file)
 
-    base_time = datetime.now()
+    base_time = datetime.now(timezone.utc)
 
     # Add event 30 hours ago
     with freeze_time(base_time - timedelta(hours=30)):

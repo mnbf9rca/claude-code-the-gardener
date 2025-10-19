@@ -11,7 +11,7 @@ These tests verify the water pump functionality including:
 import pytest
 import pytest_asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.water_pump as wp_module
@@ -284,7 +284,7 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
     # Manually create a JSONL state file with recent timestamps
     file_path = wp_module.water_history.file_path
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     test_history = [
         {"timestamp": (now - timedelta(hours=2)).isoformat(), "ml": 30},
         {"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 45},
@@ -323,7 +323,7 @@ async def test_state_loads_only_once(setup_pump_state):
     # Manually create a JSONL state file with recent timestamp
     file_path = wp_module.water_history.file_path
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     test_history = [{"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 30}]
     # Write as JSONL (one JSON object per line)
     with open(file_path, "w") as f:

@@ -3,7 +3,7 @@ Action Log Tool - Record all actions taken by Claude
 Stores action history for review and analysis.
 """
 from typing import Dict, Any, List, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from pathlib import Path
@@ -63,7 +63,7 @@ def setup_action_log_tools(mcp: FastMCP):
         This creates a record of all actions for review and analysis.
         """
         # Create action entry
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         action = {
             "timestamp": timestamp,
             "type": type,

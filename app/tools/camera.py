@@ -8,7 +8,7 @@ import logging
 import atexit
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple, Dict, List, Any
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -34,6 +34,11 @@ CAMERA_CONFIG: Dict[str, Any] = {
     "capture_timeout": int(os.getenv("CAMERA_CAPTURE_TIMEOUT", "5")),
 }
 
+# Server configuration for photo URLs
+MCP_PUBLIC_HOST = os.getenv("MCP_PUBLIC_HOST", "localhost")
+MCP_PORT = os.getenv("MCP_PORT", "8000")
+SERVER_URL = f"http://{MCP_PUBLIC_HOST}:{MCP_PORT}"
+
 # Camera state
 camera: Optional[cv2.VideoCapture] = None
 camera_available: bool = False
@@ -55,7 +60,7 @@ def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
         # Create event with tool name and timestamp
         event = {
             "tool": tool_name,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             **event_data
         }
 
@@ -198,10 +203,10 @@ def _read_camera_frame(camera, result_container: Dict[str, Any]):
         result_container['error'] = str(e)
 
 
-def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str]]:
+def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
     """
     Capture a real photo using the USB camera with timeout protection.
-    Returns: (success, file_path, error_message)
+    Returns: (success, file_path, timestamp_iso, error_message)
     """
     global camera, camera_available, camera_error
 
@@ -210,7 +215,7 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str]]:
         camera_available, camera, camera_error = initialize_camera()
 
     if not camera_available or camera is None:
-        return False, None, camera_error or "Camera not available"
+        return False, None, None, camera_error or "Camera not available"
 
     try:
         # Ensure save directory exists
@@ -247,9 +252,12 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str]]:
             logging.error(error_msg)
             return False, None, error_msg
 
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # milliseconds
-        filename = f"plant_{timestamp}.jpg"
+        # Generate timestamp once for both filename and response (ensures consistency)
+        now = datetime.now(timezone.utc)
+        timestamp_iso = now.isoformat()
+        timestamp_filename = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # milliseconds for filename
+
+        filename = f"plant_{timestamp_filename}.jpg"
         filepath = save_path / filename
 
         # Save image with specified quality
@@ -259,12 +267,12 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str]]:
         img.save(filepath, "JPEG", quality=CAMERA_CONFIG["image_quality"])
 
         logging.info(f"Photo captured: {filepath}")
-        return True, str(filepath), None
+        return True, str(filepath), timestamp_iso, None
 
     except Exception as e:
         error_msg = f"Error capturing photo: {str(e)}"
         logging.error(error_msg)
-        return False, None, error_msg
+        return False, None, None, error_msg
 
 
 def cleanup_camera():
@@ -300,15 +308,18 @@ def setup_camera_tools(mcp: FastMCP):
                 error="Must call write_status first before capturing photo"
             )
 
-        timestamp = datetime.now().isoformat()
+        # Try to capture real photo (timestamp generated inside for consistency)
+        success, photo_path, timestamp, error_msg = capture_real_photo()
 
-        # Try to capture real photo
-        success, photo_path, error_msg = capture_real_photo()
-
-        if success and photo_path:
+        if success and photo_path and timestamp:
             # Real photo captured successfully
+            # Convert file path to HTTP URL
+            from pathlib import Path
+            filename = Path(photo_path).name
+            photo_url = f"{SERVER_URL}/photos/{filename}"
+
             photo_entry = {
-                "url": photo_path,
+                "url": photo_url,
                 "timestamp": timestamp,
             }
             photo_history.append(photo_entry)
@@ -320,12 +331,13 @@ def setup_camera_tools(mcp: FastMCP):
             # Log successful capture
             log_tool_usage("capture", {
                 "success": True,
-                "photo_path": photo_path
+                "photo_path": photo_path,
+                "photo_url": photo_url
             })
 
             return CaptureResponse(
                 success=True,
-                url=photo_path,
+                url=photo_url,
                 timestamp=timestamp
             )
         else:

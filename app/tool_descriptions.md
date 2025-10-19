@@ -134,6 +134,14 @@ Returns:
 
 - `capture()` - Take photo. Returns `{"url": "http://192.168.1.x/photos/timestamp.jpg", "timestamp": "ISO8601"}`
 
+## UTC Time Service
+
+### Query Tools
+
+- `get_current_time()` - Get current UTC time. Returns `{"timestamp": "ISO8601 UTC"}`
+
+Use this tool to query the current date and time for temporal reasoning. All timestamps throughout the system use UTC to avoid timezone issues.
+
 ## Web Search Service
 
 ### Query Tools

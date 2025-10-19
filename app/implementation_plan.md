@@ -5,7 +5,8 @@
 - **Phase 2: COMPLETED ✅** - Action tools with state persistence and integrations
 - **Phase 3: COMPLETED ✅** - Thinking & logging tools + JSONL refactoring
 - **Phase 4: COMPLETED ✅** - HTTP deployment with systemd service
-- 146 tests passing
+- **Phase 5: COMPLETED ✅** - UTC timestamps & HTTP image retrieval
+- **153 tests passing** (all timezone issues resolved)
 - Ready for production deployment on Raspberry Pi
 
 ## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
@@ -111,6 +112,38 @@
   - [x] Run MCP Server (stdio)
   - [x] Run MCP Dev Inspector
   - [x] Run All Tests
+
+## Phase 5: UTC Timestamps & HTTP Image Retrieval (COMPLETED ✅)
+
+### Core Implementation
+- [x] UTC Time Tool (`app/tools/utcnow.py`)
+  - [x] `get_current_time()` returns UTC timestamp
+  - [x] Allows Claude to query current date/time for temporal reasoning
+  - [x] 3 comprehensive tests
+- [x] HTTP Static File Serving
+  - [x] Added FastAPI static files mount in `run_http.py`
+  - [x] Photos served via `/photos/{filename}` endpoint
+  - [x] Auto-creates photos directory on startup
+- [x] Timestamp Consistency Audit
+  - [x] All tools now use `datetime.now(timezone.utc)` instead of `datetime.now()`
+  - [x] Fixed `camera.py` timestamp inconsistency (single timestamp for filename, log, and response)
+  - [x] Updated `utils/jsonl_history.py` for timezone-aware comparisons
+  - [x] Camera tool returns HTTP URLs instead of file paths
+- [x] Environment Configuration
+  - [x] Added `MCP_PUBLIC_HOST` to `.env.example` for photo URL construction
+  - [x] Updated all 7 tool modules with timezone imports
+- [x] Testing
+  - [x] Created `test_utcnow.py` with 3 tests
+  - [x] Updated camera tests to handle HTTP URLs
+  - [x] Fixed all test fixtures to use timezone-aware datetimes
+  - [x] **All 153 tests passing**
+
+### Lessons Learned
+- **UTC everywhere**: Using `datetime.now(timezone.utc)` eliminates timezone bugs and DST issues
+- **Timestamp consistency**: Generating timestamp once per operation prevents subtle mismatches
+- **Static file serving**: FastAPI's built-in static files feature is perfect for serving photos (no nginx needed)
+- **Test fixture updates**: When changing time handling, test fixtures need corresponding updates
+- **KISS for hobby projects**: HTTP photo URLs work fine; no need for CDN or complex image serving
 
 ## Key Design Decisions
 - No database initially - in-memory dictionaries

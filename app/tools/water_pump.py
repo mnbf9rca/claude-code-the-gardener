@@ -2,7 +2,7 @@
 Water Pump Tool - Dispense water with daily usage limits
 Mock implementation for now, will integrate with ESP32 pump later.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
@@ -91,7 +91,7 @@ def setup_water_pump_tools(mcp: FastMCP):
         actual_ml = min(ml, remaining)
 
         # Record the dispensing event
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         event = {
             "timestamp": timestamp,
             "ml": actual_ml

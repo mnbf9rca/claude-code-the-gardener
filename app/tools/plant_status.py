@@ -2,7 +2,7 @@
 Plant Status Tool - The gatekeeper tool that must be called first each cycle
 """
 from typing import Dict, List, Any, Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from shared_state import current_cycle_status
@@ -57,7 +57,7 @@ def setup_plant_status_tools(mcp: FastMCP):
             )
 
         # Create status record - convert NextAction objects to dicts for storage
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         status = {
             "timestamp": timestamp,
             "sensor_reading": sensor_reading,
