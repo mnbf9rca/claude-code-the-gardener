@@ -383,11 +383,11 @@ def setup_camera_tools(mcp: FastMCP):
         Get current camera configuration and status.
         Useful for debugging camera issues.
         """
-        global camera_available, camera_error
+        global camera, camera_available, camera_error
 
         # Check current camera status if not already checked
         if camera is None and not camera_available:
-            camera_available, _, camera_error = initialize_camera()
+            camera_available, camera, camera_error = initialize_camera()
 
         status = {
             "camera_enabled": CAMERA_CONFIG["enabled"],

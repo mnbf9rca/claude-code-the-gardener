@@ -41,7 +41,11 @@ pytest from discovering and running it during automated test suites.
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
+
+# Add parent (app) directory to path so we can import server and utils
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Set up test environment - EDIT THESE TO TEST DIFFERENT CONFIGURATIONS
 os.environ["CAMERA_ENABLED"] = "true"
@@ -88,7 +92,7 @@ async def check_status():
 
 async def check_capture():
     """Test photo capture and display results"""
-    if not (capture_tool := mcp._tool_manager._tools.get("capture")):
+    if not (capture_tool := mcp._tool_manager._tools.get("capture_photo")):
         return
 
     print("\n2. Testing photo capture...")
