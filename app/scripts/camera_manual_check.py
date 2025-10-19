@@ -103,13 +103,22 @@ async def check_capture():
         print(f"   Success: {photo['success']}")
 
         if photo['success']:
-            print(f"   URL/Path: {photo['url']}")
-            print(f"\n✅ Camera capture successful!")
-            print(f"   Photo saved to: {photo['url']}")
+            photo_url = photo['url']
+            print(f"   HTTP URL: {photo_url}")
 
-            if Path(photo['url']).exists():
-                file_size = Path(photo['url']).stat().st_size / 1024
+            # Extract filename from URL and construct local path
+            filename = photo_url.split('/')[-1]
+            save_path = os.environ.get("CAMERA_SAVE_PATH", "./test_photos")
+            local_path = Path(save_path) / filename
+
+            print(f"   Local path: {local_path}")
+            print(f"\n✅ Camera capture successful!")
+
+            if local_path.exists():
+                file_size = local_path.stat().st_size / 1024
                 print(f"   File size: {file_size:.1f} KB")
+            else:
+                print(f"   ⚠️  Warning: File not found at {local_path}")
         else:
             print(f"\n⚠️  Capture failed: {photo.get('error', 'Unknown error')}")
 
