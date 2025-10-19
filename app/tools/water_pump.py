@@ -5,7 +5,7 @@ Mock implementation for now, will integrate with ESP32 pump later.
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from shared_state import current_cycle_status
+from utils.shared_state import current_cycle_status
 from pathlib import Path
 from utils.jsonl_history import JsonlHistory
 

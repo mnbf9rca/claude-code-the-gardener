@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from shared_state import current_cycle_status
+from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
 from utils.logging_config import get_logger
 import httpx

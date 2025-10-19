@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Literal, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from shared_state import current_cycle_status
+from utils.shared_state import current_cycle_status
 
 # Storage for plant status
 status_history = []

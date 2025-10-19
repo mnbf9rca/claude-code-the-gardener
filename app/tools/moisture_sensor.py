@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import random
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from shared_state import current_cycle_status
+from utils.shared_state import current_cycle_status
 
 
 class MoistureReading(BaseModel):

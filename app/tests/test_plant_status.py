@@ -8,7 +8,7 @@ import pytest_asyncio
 from datetime import datetime
 from fastmcp import FastMCP
 import tools.plant_status as ps_module
-from shared_state import reset_cycle, current_cycle_status
+from utils.shared_state import reset_cycle, current_cycle_status
 
 
 @pytest_asyncio.fixture(autouse=True)

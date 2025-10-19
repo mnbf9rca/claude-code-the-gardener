@@ -17,7 +17,7 @@ import asyncio
 import json
 from fastmcp.tools.tool import FunctionTool
 from server import mcp
-from shared_state import reset_cycle
+from utils.shared_state import reset_cycle
 
 async def test_tools():
     # Reset cycle

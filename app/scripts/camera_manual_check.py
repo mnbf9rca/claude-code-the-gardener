@@ -49,7 +49,7 @@ os.environ["CAMERA_DEVICE_INDEX"] = "0"  # Try 0, 1, or 2 if camera not found
 os.environ["CAMERA_SAVE_PATH"] = "./test_photos"  # Directory for test captures
 
 from server import mcp
-from shared_state import reset_cycle, current_cycle_status
+from utils.shared_state import reset_cycle, current_cycle_status
 
 def extract_tool_result(result):
     """Extract data from MCP tool result (handles different formats)"""

@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 import tools.light as light_module
 from tools.light import setup_light_tools, get_ha_entity_state
-from shared_state import reset_cycle, current_cycle_status
+from utils.shared_state import reset_cycle, current_cycle_status
 
 # Load environment variables
 load_dotenv()

@@ -16,7 +16,7 @@ from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.light as light_module
 from tools.light import setup_light_tools
-from shared_state import reset_cycle, current_cycle_status
+from utils.shared_state import reset_cycle, current_cycle_status
 from pytest_httpx import HTTPXMock
 
 # Apply to all tests in this module
