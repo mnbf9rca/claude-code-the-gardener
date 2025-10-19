@@ -1,7 +1,6 @@
 """
 Shared test fixtures for the plant care system tests
 """
-import os
 import tempfile
 import shutil
 from pathlib import Path
@@ -34,10 +33,9 @@ def test_photos_dir() -> Generator[Path, None, None]:
 def sample_photos() -> List[Path]:
     """Provide paths to pre-captured test photos."""
     fixtures_dir = Path(__file__).parent / "tests" / "fixtures" / "photos"
-    photos = list(fixtures_dir.glob("test_plant_*.jpg"))
-    if not photos:
-        raise FileNotFoundError("No sample photos available in tests/fixtures/photos/")
-    return sorted(photos)
+    if photos := sorted(fixtures_dir.glob("test_plant_*.jpg")):
+        return photos
+    raise FileNotFoundError("No sample photos available in tests/fixtures/photos/")
 
 
 @pytest.fixture
