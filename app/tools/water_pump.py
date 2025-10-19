@@ -63,7 +63,7 @@ def setup_water_pump_tools(mcp: FastMCP):
     """Set up water pump tools on the MCP server"""
 
     @mcp.tool()
-    async def dispense(
+    async def dispense_water(
         ml: int = Field(
             ...,
             description=f"Amount to dispense in ml ({MIN_ML_PER_DISPENSE}-{MAX_ML_PER_DISPENSE})",
@@ -107,7 +107,7 @@ def setup_water_pump_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def get_usage_24h() -> WaterUsageResponse:
+    async def get_water_usage_24h() -> WaterUsageResponse:
         """
         Get water usage statistics for the last 24 hours.
         Returns total ml used, remaining ml available, and number of watering events.

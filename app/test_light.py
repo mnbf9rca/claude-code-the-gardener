@@ -83,7 +83,7 @@ async def setup_light_state(httpx_mock: HTTPXMock):
 async def test_turn_on_basic(setup_light_state):
     """Test basic light activation"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     tool_result = await turn_on_tool.run(arguments={"minutes": 60})
     result = json.loads(tool_result.content[0].text)
@@ -98,7 +98,7 @@ async def test_turn_on_basic(setup_light_state):
 async def test_turn_on_min_max_duration(setup_light_state):
     """Test minimum and maximum duration limits"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     # Test minimum (30 minutes)
@@ -125,7 +125,7 @@ async def test_turn_on_min_max_duration(setup_light_state):
 async def test_turn_on_validation(setup_light_state):
     """Test that invalid durations are rejected"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Test below minimum
     with pytest.raises(Exception):  # Pydantic validation error
@@ -140,7 +140,7 @@ async def test_turn_on_validation(setup_light_state):
 async def test_turn_on_validation_non_integer_values(setup_light_state):
     """Test that non-integer and invalid duration values are rejected"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Test string value
     with pytest.raises(Exception):  # Pydantic validation error
@@ -163,7 +163,7 @@ async def test_turn_on_validation_non_integer_values(setup_light_state):
 async def test_cannot_turn_on_when_already_on(setup_light_state):
     """Test that light cannot be turned on when already on"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Turn on light
     await turn_on_tool.run(arguments={"minutes": 60})
@@ -177,7 +177,7 @@ async def test_cannot_turn_on_when_already_on(setup_light_state):
 async def test_minimum_off_time_enforcement(setup_light_state):
     """Test that 30 minutes off time is enforced between activations"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
         # Turn on light
@@ -208,7 +208,7 @@ async def test_minimum_off_time_enforcement(setup_light_state):
 async def test_get_light_status(setup_light_state):
     """Test getting light status"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     # Check initial status
@@ -236,7 +236,7 @@ async def test_get_light_status(setup_light_state):
 async def test_auto_off_simulation(setup_light_state):
     """Test that light auto-turns off after scheduled time"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
@@ -264,7 +264,7 @@ async def test_auto_off_simulation(setup_light_state):
 async def test_availability_calculation(setup_light_state):
     """Test availability calculation for next activation"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
@@ -306,7 +306,7 @@ async def test_availability_calculation(setup_light_state):
 async def test_gatekeeper_enforcement(setup_light_state):
     """Test that plant status must be written first"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Reset the cycle status
     current_cycle_status["written"] = False
@@ -319,8 +319,8 @@ async def test_gatekeeper_enforcement(setup_light_state):
 async def test_turn_off_basic(setup_light_state):
     """Test basic turn_off functionality"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
-    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off_light"]
 
     # Turn on the light first
     await turn_on_tool.run(arguments={"minutes": 60})
@@ -341,7 +341,7 @@ async def test_turn_off_basic(setup_light_state):
 async def test_turn_off_gatekeeper(setup_light_state):
     """Test that turn_off requires plant status to be written"""
     mcp = setup_light_state
-    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off_light"]
 
     # Reset the cycle status
     current_cycle_status["written"] = False
@@ -354,7 +354,7 @@ async def test_turn_off_gatekeeper(setup_light_state):
 async def test_ha_service_failure_turn_on(setup_light_state, httpx_mock: HTTPXMock):
     """Test graceful handling when Home Assistant turn_on fails"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
 
     # Clear existing mocks and add a failure callback
     httpx_mock.reset()
@@ -376,8 +376,8 @@ async def test_ha_service_failure_turn_on(setup_light_state, httpx_mock: HTTPXMo
 async def test_ha_service_failure_turn_off(setup_light_state, httpx_mock: HTTPXMock):
     """Test graceful handling when Home Assistant turn_off fails"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
-    turn_off_tool = mcp._tool_manager._tools["turn_off"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
+    turn_off_tool = mcp._tool_manager._tools["turn_off_light"]
 
     # Turn on the light
     await turn_on_tool.run(arguments={"minutes": 60})
@@ -428,7 +428,7 @@ async def test_get_status_syncs_with_ha(setup_light_state, httpx_mock: HTTPXMock
 async def test_auto_off_calls_ha(setup_light_state):
     """Test that auto-off triggers Home Assistant turn_off and updates state"""
     mcp = setup_light_state
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     status_tool = mcp._tool_manager._tools["get_light_status"]
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:

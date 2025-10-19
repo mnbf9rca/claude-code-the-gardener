@@ -126,24 +126,24 @@ async def test_server_initialization():
 
     # Check that all tools are present
     # Plant status tools
-    assert "write_status" in tools
-    assert "get_current_status" in tools
-    assert "get_status_history" in tools
+    assert "write_plant_status" in tools
+    assert "get_current_plant_status" in tools
+    assert "get_plant_status_history" in tools
 
     # Moisture sensor tools
     assert "read_moisture" in tools
-    assert "get_sensor_history" in tools
+    assert "get_moisture_history" in tools
 
     # Water pump tools
-    assert "dispense" in tools
-    assert "get_usage_24h" in tools
+    assert "dispense_water" in tools
+    assert "get_water_usage_24h" in tools
 
     # Light tools
-    assert "turn_on" in tools
+    assert "turn_on_light" in tools
     assert "get_light_status" in tools
 
     # Camera tools
-    assert "capture" in tools
+    assert "capture_photo" in tools
     assert "get_recent_photos" in tools
 
     print(f"✓ Server initialized with {len(tools)} tools")
@@ -153,7 +153,7 @@ async def test_server_initialization():
 async def test_gatekeeper_enforcement():
     """Test that moisture sensor requires plant status to be written first"""
     # Try to read moisture without writing status first
-    moisture_tool = mcp._tool_manager._tools["turn_off"]
+    moisture_tool = mcp._tool_manager._tools["turn_off_light"]
 
     with pytest.raises(ValueError) as exc_info:
         result = await moisture_tool.run(arguments={})
@@ -169,7 +169,7 @@ async def test_gatekeeper_enforcement():
 async def test_write_status_and_read_sensor():
     """Test the basic flow of writing status then reading sensor"""
     # Write plant status
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     tool_result = await write_status_tool.run(arguments={
         "sensor_reading": 2000,
         "water_24h": 100.0,
@@ -202,7 +202,7 @@ async def test_write_status_and_read_sensor():
 async def test_status_history_with_data():
     """Test that status history is maintained"""
     # First write a status to have something in history
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 2100,
         "water_24h": 50.0,
@@ -213,7 +213,7 @@ async def test_status_history_with_data():
     })
 
     # Get history
-    history_tool = mcp._tool_manager._tools["get_status_history"]
+    history_tool = mcp._tool_manager._tools["get_plant_status_history"]
     tool_result = await history_tool.run(arguments={"limit": 5})
     history = json.loads(tool_result.content[0].text)
 
@@ -233,7 +233,7 @@ async def test_empty_status_history():
     ps_module.status_history.clear()
 
     # Get history when empty
-    history_tool = mcp._tool_manager._tools["get_status_history"]
+    history_tool = mcp._tool_manager._tools["get_plant_status_history"]
     tool_result = await history_tool.run(arguments={"limit": 5})
 
     # Handle case where content might be empty or have text
@@ -250,7 +250,7 @@ async def test_empty_status_history():
 @pytest.mark.asyncio
 async def test_duplicate_status_prevention():
     """Test that status can't be written twice in same cycle"""
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
 
     # Write status first time
     await write_status_tool.run(arguments={
@@ -282,7 +282,7 @@ async def test_duplicate_status_prevention():
 async def test_sensor_history_sampling():
     """Test that sensor history sampling works correctly"""
     # First enable writing by setting status
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 2000,
         "water_24h": 0,
@@ -298,7 +298,7 @@ async def test_sensor_history_sampling():
         await moisture_tool.run(arguments={})
 
     # Get sensor history
-    history_tool = mcp._tool_manager._tools["get_sensor_history"]
+    history_tool = mcp._tool_manager._tools["get_moisture_history"]
     tool_result = await history_tool.run(arguments={"hours": 1})
     history = json.loads(tool_result.content[0].text)
 
@@ -314,12 +314,12 @@ async def test_sensor_history_sampling():
 async def test_water_pump_integration():
     """Test water pump integration with gatekeeper"""
     # Try to dispense water before writing status - should fail
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
     with pytest.raises(ValueError, match="Must call write_status first"):
         await dispense_tool.run(arguments={"ml": 50})
 
     # Write status first
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 1800,
         "water_24h": 0,
@@ -354,12 +354,12 @@ async def test_light_integration():
     assert status["minutes_until_available"] == 0
 
     # Now test that turn_on requires write_status
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     with pytest.raises(ValueError, match="Must call write_status first"):
         await turn_on_tool.run(arguments={"minutes": 60})
 
     # Write status first
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 2000,
         "water_24h": 0,
@@ -389,7 +389,7 @@ async def test_light_integration():
 async def test_camera_integration():
     """Test camera integration with gatekeeper"""
     # Try to capture before writing status - should fail
-    capture_tool = mcp._tool_manager._tools["capture"]
+    capture_tool = mcp._tool_manager._tools["capture_photo"]
     result = await capture_tool.run(arguments={})
 
     # Camera now returns error response instead of raising
@@ -404,7 +404,7 @@ async def test_camera_integration():
     assert "write_status" in response.get("error", "")
 
     # Write status first
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 2000,
         "water_24h": 0,
@@ -464,7 +464,7 @@ async def test_camera_integration():
 async def test_full_cycle_integration():
     """Test a complete plant care cycle with all tools"""
     # 1. Write initial status
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 1600,  # Dry
         "water_24h": 100,
@@ -485,25 +485,25 @@ async def test_full_cycle_integration():
     assert moisture["value"] < 2000  # Dry
 
     # 3. Dispense water
-    dispense_tool = mcp._tool_manager._tools["dispense"]
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
     tool_result = await dispense_tool.run(arguments={"ml": 80})
     water = json.loads(tool_result.content[0].text)
     assert water["dispensed"] == 80
 
     # 4. Turn on light
-    turn_on_tool = mcp._tool_manager._tools["turn_on"]
+    turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
     tool_result = await turn_on_tool.run(arguments={"minutes": 90})
     light = json.loads(tool_result.content[0].text)
     assert light["status"] == "on"
 
     # 5. Take a photo
-    capture_tool = mcp._tool_manager._tools["capture"]
+    capture_tool = mcp._tool_manager._tools["capture_photo"]
     tool_result = await capture_tool.run(arguments={})
     photo = json.loads(tool_result.content[0].text)
     assert "url" in photo
 
     # 6. Check usage statistics
-    usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+    usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
     tool_result = await usage_tool.run(arguments={})
     usage = json.loads(tool_result.content[0].text)
     assert usage["used_ml"] == 80
@@ -516,7 +516,7 @@ async def test_full_cycle_integration():
 async def test_action_limits_with_time():
     """Test that time-based limits work correctly with freezegun"""
     # Write status first
-    write_status_tool = mcp._tool_manager._tools["write_status"]
+    write_status_tool = mcp._tool_manager._tools["write_plant_status"]
     await write_status_tool.run(arguments={
         "sensor_reading": 2000,
         "water_24h": 0,
@@ -528,12 +528,12 @@ async def test_action_limits_with_time():
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
         # Dispense water up to limit
-        dispense_tool = mcp._tool_manager._tools["dispense"]
+        dispense_tool = mcp._tool_manager._tools["dispense_water"]
         for _ in range(5):
             await dispense_tool.run(arguments={"ml": 100})
 
         # Should be at limit now
-        usage_tool = mcp._tool_manager._tools["get_usage_24h"]
+        usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
         tool_result = await usage_tool.run(arguments={})
         usage = json.loads(tool_result.content[0].text)
         assert usage["used_ml"] == 500

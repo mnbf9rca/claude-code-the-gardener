@@ -64,7 +64,7 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         return reading
 
     @mcp.tool()
-    async def get_sensor_history(
+    async def get_moisture_history(
         hours: int = Field(24, description="Number of hours of history to return")
     ) -> list[Dict[str, Any]]:
         """

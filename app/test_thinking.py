@@ -125,7 +125,7 @@ async def test_get_recent_default(setup_thinking_state):
     """Test getting recent thoughts with default limit"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_thoughts"]
 
     # Log 5 thoughts
     for i in range(5):
@@ -154,7 +154,7 @@ async def test_get_recent_custom_limit(setup_thinking_state):
     """Test getting recent thoughts with custom limit"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_thoughts"]
 
     # Log 10 thoughts
     for i in range(10):
@@ -181,7 +181,7 @@ async def test_get_recent_pagination(setup_thinking_state):
     """Test pagination with offset"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_thoughts"]
 
     # Log 10 thoughts
     for i in range(10):
@@ -209,7 +209,7 @@ async def test_get_range(setup_thinking_state):
     """Test getting thoughts within a time range"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    get_range_tool = mcp._tool_manager._tools["get_range"]
+    get_range_tool = mcp._tool_manager._tools["get_thoughts_in_range"]
 
     base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -245,7 +245,7 @@ async def test_search_keyword(setup_thinking_state):
     """Test searching for keywords in thoughts"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_thoughts"]
 
     # Log thoughts with different keywords
     await log_thought_tool.run(arguments={
@@ -288,7 +288,7 @@ async def test_search_case_insensitive(setup_thinking_state):
     """Test that search is case-insensitive"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_thoughts"]
 
     await log_thought_tool.run(arguments={
         "observation": "MOISTURE level is LOW",
@@ -311,7 +311,7 @@ async def test_search_time_window(setup_thinking_state):
     """Test search respects time window"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_thoughts"]
 
     base_time = datetime.now()
 
@@ -381,7 +381,7 @@ async def test_state_recovery(setup_thinking_state):
     """Test that state is recovered from disk on restart"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_thoughts"]
 
     # Log some thoughts
     for i in range(3):
@@ -442,7 +442,7 @@ async def test_memory_pruning(setup_thinking_state):
 async def test_get_recent_empty(setup_thinking_state):
     """Test getting recent thoughts when none exist"""
     mcp = setup_thinking_state
-    get_recent_tool = mcp._tool_manager._tools["get_recent"]
+    get_recent_tool = mcp._tool_manager._tools["get_recent_thoughts"]
 
     tool_result = await get_recent_tool.run(arguments={})
     result = json.loads(tool_result.content[0].text)
@@ -456,7 +456,7 @@ async def test_search_no_results(setup_thinking_state):
     """Test search when no results match"""
     mcp = setup_thinking_state
     log_thought_tool = mcp._tool_manager._tools["log_thought"]
-    search_tool = mcp._tool_manager._tools["search"]
+    search_tool = mcp._tool_manager._tools["search_thoughts"]
 
     await log_thought_tool.run(arguments={
         "observation": "Test observation",

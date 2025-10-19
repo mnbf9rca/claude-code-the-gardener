@@ -28,7 +28,7 @@ async def test_write_status_first_time():
     ps_module.setup_plant_status_tools(test_mcp)
 
     # Get the write_status tool
-    write_tool = test_mcp._tool_manager._tools["write_status"]
+    write_tool = test_mcp._tool_manager._tools["write_plant_status"]
 
     # Write status
     result = await write_tool.run(arguments={
@@ -52,7 +52,7 @@ async def test_write_status_duplicate_prevention():
     """Test that duplicate status writes in same cycle are prevented"""
     test_mcp = FastMCP("Test")
     ps_module.setup_plant_status_tools(test_mcp)
-    write_tool = test_mcp._tool_manager._tools["write_status"]
+    write_tool = test_mcp._tool_manager._tools["write_plant_status"]
 
     # First write
     await write_tool.run(arguments={
@@ -85,7 +85,7 @@ async def test_status_history_limit():
     """Test that status history is limited to prevent memory issues when using the tool"""
     test_mcp = FastMCP("Test")
     ps_module.setup_plant_status_tools(test_mcp)
-    write_tool = test_mcp._tool_manager._tools["write_status"]
+    write_tool = test_mcp._tool_manager._tools["write_plant_status"]
 
     # The limit is enforced in the write_status tool, not on the array directly
     # Add 1000 entries directly first
@@ -122,14 +122,14 @@ async def test_get_current_status():
     test_mcp = FastMCP("Test")
     ps_module.setup_plant_status_tools(test_mcp)
 
-    get_current_tool = test_mcp._tool_manager._tools["get_current_status"]
+    get_current_tool = test_mcp._tool_manager._tools["get_current_plant_status"]
 
     # Should return None when not written
     result = await get_current_tool.run(arguments={})
     assert result.content == []  # Empty content for None
 
     # Write status
-    write_tool = test_mcp._tool_manager._tools["write_status"]
+    write_tool = test_mcp._tool_manager._tools["write_plant_status"]
     await write_tool.run(arguments={
         "sensor_reading": 2000,
         "water_24h": 50.0,
@@ -158,7 +158,7 @@ async def test_get_status_history_with_limit():
             "plant_state": "healthy",
         })
 
-    history_tool = test_mcp._tool_manager._tools["get_status_history"]
+    history_tool = test_mcp._tool_manager._tools["get_plant_status_history"]
 
     # Test with limit 5
     result = await history_tool.run(arguments={"limit": 5})
@@ -174,7 +174,7 @@ async def test_plant_state_values():
     """Test that only valid plant states are accepted"""
     test_mcp = FastMCP("Test")
     ps_module.setup_plant_status_tools(test_mcp)
-    write_tool = test_mcp._tool_manager._tools["write_status"]
+    write_tool = test_mcp._tool_manager._tools["write_plant_status"]
 
     valid_states = ["healthy", "stressed", "concerning", "critical", "unknown"]
 

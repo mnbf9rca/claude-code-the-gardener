@@ -30,7 +30,7 @@ def setup_plant_status_tools(mcp: FastMCP):
     """Set up plant status tools on the MCP server"""
 
     @mcp.tool()
-    async def write_status(
+    async def write_plant_status(
         sensor_reading: int = Field(..., description="Current moisture sensor reading"),
         water_24h: float = Field(..., description="Water dispensed in last 24 hours (ml)"),
         light_today: float = Field(..., description="Light exposure today (minutes)"),
@@ -86,13 +86,13 @@ def setup_plant_status_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
-    async def get_current_status() -> Dict[str, Any] | None:
+    async def get_current_plant_status() -> Dict[str, Any] | None:
         """Get the current plant status if one has been written this cycle"""
         if current_cycle_status["written"] and current_status:
             return current_status
         return None
 
     @mcp.tool()
-    async def get_status_history(limit: int = Field(10, description="Number of records to return")) -> List[Dict[str, Any]]:
+    async def get_plant_status_history(limit: int = Field(10, description="Number of records to return")) -> List[Dict[str, Any]]:
         """Get recent plant status history"""
         return status_history[-limit:] if status_history else []

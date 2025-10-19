@@ -26,15 +26,15 @@ Returns:
 
 ### Query Tools
 
-- `get_recent(n, offset)` - Returns last N thought entries with pagination
+- `get_recent_thoughts(n, offset)` - Returns last N thought entries with pagination
   - `n` (int): Number of recent thoughts (default 3, max 50)
   - `offset` (int): Number of entries to skip from the end for pagination (default 0)
   - Returns: `{"count": N, "thoughts": [...]}`
 
-- `get_range(start_time, end_time)` - Entries within time window (ISO8601 format)
+- `get_thoughts_in_range(start_time, end_time)` - Entries within time window (ISO8601 format)
   - Returns: `{"count": N, "thoughts": [...]}`
 
-- `search(keyword, hours)` - Search observations, hypotheses, and reasoning fields
+- `search_thoughts(keyword, hours)` - Search observations, hypotheses, and reasoning fields
   - `keyword` (string): Keyword to search for (case-insensitive)
   - `hours` (int): How many hours back to search (default 24)
   - Returns: `{"count": N, "thoughts": [...]}`
@@ -64,12 +64,12 @@ Returns:
 
 ### Query Tools
 
-- `get_recent(n, offset)` - Returns last N action entries with pagination
+- `get_recent_actions(n, offset)` - Returns last N action entries with pagination
   - `n` (int): Number of recent actions (default 5, max 50)
   - `offset` (int): Number of entries to skip from the end for pagination (default 0)
   - Returns: `{"count": N, "actions": [...]}`
 
-- `search(keyword, hours)` - Text search in action details
+- `search_actions(keyword, hours)` - Text search in action details
   - `keyword` (string): Keyword to search for (case-insensitive)
   - `hours` (int): How many hours back to search (default 24)
   - Returns: `{"count": N, "actions": [...]}`
@@ -79,13 +79,13 @@ Returns:
 - Full history persisted to disk in JSONL format
 - Auto-loads on first tool invocation
 
-**Note:** For specialized queries like water usage or light timing, use the respective tool's query methods (e.g., `get_usage_24h()` on water_pump, `get_status()` on light).
+**Note:** For specialized queries like water usage or light timing, use the respective tool's query methods (e.g., `get_water_usage_24h()` on water_pump, `get_light_status()` on light).
 
 ## Plant Status Service
 
 ### Write Tools
 
-- `write_status(status_object)` - **Must be called first each cycle.** Returns `{"proceed": true}` or `{"proceed": false, "reason": "text"}`.
+- `write_plant_status(status_object)` - **Must be called first each cycle.** Returns `{"proceed": true}` or `{"proceed": false, "reason": "text"}`.
 
 ```json
 {
@@ -106,33 +106,33 @@ Returns:
 
 ### Query Tools
 
-- `read()` - Returns `{"value": 1847, "timestamp": "ISO8601"}`
+- `read_moisture()` - Returns `{"value": 1847, "timestamp": "ISO8601"}`
 
 ## Water Pump Service
 
 ### Write Tools
 
-- `dispense(ml)` - Dispense water. Accepts integer 10-100. Returns `{"dispensed": 30, "remaining_24h": 470, "timestamp": "ISO8601"}`. Error if exceeds 500ml daily limit.
+- `dispense_water(ml)` - Dispense water. Accepts integer 10-100. Returns `{"dispensed": 30, "remaining_24h": 470, "timestamp": "ISO8601"}`. Error if exceeds 500ml daily limit.
 
 ### Query Tools
 
-- `get_usage_24h()` - Returns `{"used_ml": 150, "remaining_ml": 350, "events": 3}`
+- `get_water_usage_24h()` - Returns `{"used_ml": 150, "remaining_ml": 350, "events": 3}`
 
 ## Light Service
 
 ### Write Tools
 
-- `turn_on(minutes)` - Activate grow light. Accepts integer 30-120. Returns `{"status": "on", "duration_minutes": 90, "off_at": "ISO8601"}`. Error if minimum 30min off-time not elapsed.
+- `turn_on_light(minutes)` - Activate grow light. Accepts integer 30-120. Returns `{"status": "on", "duration_minutes": 90, "off_at": "ISO8601"}`. Error if minimum 30min off-time not elapsed.
 
 ### Query Tools
 
-- `get_status()` - Returns `{"status": "on|off", "last_on": "ISO8601", "last_off": "ISO8601", "can_activate": true, "minutes_until_available": 15}`
+- `get_light_status()` - Returns `{"status": "on|off", "last_on": "ISO8601", "last_off": "ISO8601", "can_activate": true, "minutes_until_available": 15}`
 
 ## Camera Service
 
 ### Write Tools
 
-- `capture()` - Take photo. Returns `{"url": "http://192.168.1.x/photos/timestamp.jpg", "timestamp": "ISO8601"}`
+- `capture_photo()` - Take photo. Returns `{"url": "http://192.168.1.x/photos/timestamp.jpg", "timestamp": "ISO8601"}`
 
 ## UTC Time Service
 
@@ -141,9 +141,3 @@ Returns:
 - `get_current_time()` - Get current UTC time. Returns `{"timestamp": "ISO8601 UTC"}`
 
 Use this tool to query the current date and time for temporal reasoning. All timestamps throughout the system use UTC to avoid timezone issues.
-
-## Web Search Service
-
-### Query Tools
-
-- `search(query)` - Standard web search. Use for plant care research, symptom diagnosis, calibration data.
