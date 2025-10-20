@@ -50,6 +50,27 @@ def client(test_app):
     return TestClient(test_app)
 
 
+def add_test_messages(count: int, direction: str = 'to_human'):
+    """
+    Helper function to add test messages without loops in test code.
+
+    Args:
+        count: Number of messages to add
+        direction: 'to_human' or 'from_human'
+    """
+    history = (human_messages_module.messages_to_human
+               if direction == 'to_human'
+               else human_messages_module.messages_from_human)
+
+    for i in range(count):
+        history.append({
+            "message_id": f"msg_test_{i}",
+            "timestamp": f"2025-10-20T{10+i:02d}:00:00+00:00",
+            "content": f"Message {i}",
+            "in_reply_to": None
+        })
+
+
 def test_get_messages_ui_empty(client, clean_message_history):
     """Test that UI loads with no messages"""
     response = client.get("/messages")
@@ -112,13 +133,7 @@ def test_get_messages_ui_shows_reply_reference(client, clean_message_history):
 def test_get_messages_ui_message_count(client, clean_message_history):
     """Test that UI shows correct message count"""
     # Add 3 messages
-    for i in range(3):
-        human_messages_module.messages_to_human.append({
-            "message_id": f"msg_test_{i}",
-            "timestamp": f"2025-10-20T{10+i:02d}:00:00+00:00",
-            "content": f"Message {i}",
-            "in_reply_to": None
-        })
+    add_test_messages(3, 'to_human')
 
     response = client.get("/messages")
 
@@ -171,13 +186,7 @@ def test_get_messages_api_with_messages(client, clean_message_history):
 def test_get_messages_api_with_limit(client, clean_message_history):
     """Test API respects limit parameter"""
     # Add 5 messages
-    for i in range(5):
-        human_messages_module.messages_to_human.append({
-            "message_id": f"msg_test_{i}",
-            "timestamp": f"2025-10-20T{10+i:02d}:00:00+00:00",
-            "content": f"Message {i}",
-            "in_reply_to": None
-        })
+    add_test_messages(5, 'to_human')
 
     response = client.get("/api/messages?limit=3")
 

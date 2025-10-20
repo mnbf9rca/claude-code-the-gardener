@@ -9,6 +9,7 @@ Usage:
     From the app directory:
         uv run python scripts/check_smtp.py
 """
+
 import sys
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 from tools.human_messages import _send_email_notification
+
 
 def main():
     """Send a test email notification"""
@@ -35,7 +37,11 @@ def main():
     # TLS configuration
     smtp_port_int = int(smtp_port)
     smtp_use_tls_default = "true" if smtp_port_int == 587 else "false"
-    smtp_use_tls = os.getenv("SMTP_USE_TLS", smtp_use_tls_default).lower() in ("true", "1", "yes")
+    smtp_use_tls = os.getenv("SMTP_USE_TLS", smtp_use_tls_default).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
     print("=" * 60)
     print("🧪 SMTP Email Notification Test")
@@ -54,9 +60,9 @@ def main():
     # Check authentication
     smtp_auth_enabled = bool(smtp_user and smtp_password)
     if smtp_auth_enabled:
-        print(f"  Auth: Enabled")
+        print("  Auth: Enabled")
     else:
-        print(f"  Auth: Disabled (no credentials provided)")
+        print("  Auth: Disabled (no credentials provided)")
 
     # Host, from, and recipient are required
     if not smtp_host or not smtp_to or not smtp_from:
@@ -91,13 +97,9 @@ Test Details:
 You can safely ignore this message.
 """
 
-    success = _send_email_notification(
-        message_id=test_message_id,
-        content=test_content,
-        in_reply_to=None
-    )
-
-    if success:
+    if _send_email_notification(
+        message_id=test_message_id, content=test_content, in_reply_to=None
+    ):
         print("✅ Email sent successfully!")
         print(f"\nCheck your inbox at: {smtp_to}")
         print("\nNote: It may take a few seconds to arrive.")
@@ -113,6 +115,7 @@ You can safely ignore this message.
         print("  - App-specific password required (Gmail, Yahoo, etc.)")
         print("\nCheck the log output above for specific error details.")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -8,6 +8,7 @@ from starlette.requests import Request
 from starlette.routing import Route
 from datetime import datetime, timezone
 from typing import Dict, Any, List
+import json
 import tools.human_messages as human_messages
 from tools.human_messages import _generate_message_id, MAX_MESSAGE_LENGTH
 from utils.logging_config import get_logger
@@ -139,10 +140,18 @@ async def post_reply(request: Request) -> JSONResponse:
             'timestamp': timestamp
         })
 
-    except Exception as e:
+    except (json.JSONDecodeError, ValueError, KeyError, AttributeError) as e:
+        # Handle expected errors from parsing/validation
         logger.error(f"Error processing reply: {e}")
         return JSONResponse(
-            {'error': str(e)},
+            {'error': f'Invalid request: {str(e)}'},
+            status_code=400
+        )
+    except OSError as e:
+        # Handle filesystem errors when writing to history
+        logger.error(f"Error storing reply: {e}")
+        return JSONResponse(
+            {'error': 'Failed to store message'},
             status_code=500
         )
 
@@ -565,10 +574,14 @@ async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
                 timestamp_str = msg['timestamp']
 
             # Build message HTML
-            # Escape content for display and JavaScript
-            msg_content_escaped = msg['content'].replace("'", "\\'").replace("\n", "\\n")[:50]
+            # Create safe preview for JavaScript (truncate and use JSON.dumps for proper escaping)
+            msg_content_preview = msg['content'][:50]
             if len(msg['content']) > 50:
-                msg_content_escaped += "..."
+                msg_content_preview += "..."
+
+            # JSON-encode values for safe JavaScript embedding
+            msg_id_json = json.dumps(msg['message_id'])
+            msg_preview_json = json.dumps(msg_content_preview)
 
             # Add reply indicator if this message is replying to another
             reply_indicator = ""
@@ -587,7 +600,7 @@ async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
                     <div class="message-content">{msg['content']}</div>
                     <div class="message-footer">
                         <strong>ID:</strong> <code>{msg['message_id']}</code><br>
-                        <button type="button" class="reply-btn" onclick="setReplyTo('{msg['message_id']}', '{msg_content_escaped}')">Reply to this message</button>
+                        <button type="button" class="reply-btn" onclick="setReplyTo({msg_id_json}, {msg_preview_json})">Reply to this message</button>
                     </div>
                 </div>"""
 

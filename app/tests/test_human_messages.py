@@ -1,6 +1,7 @@
 """
 Tests for Human Messages Tool
 """
+
 import pytest
 import json
 import logging
@@ -12,7 +13,7 @@ from tools.human_messages import (
     setup_human_messages_tools,
     _generate_message_id,
     _send_email_notification,
-    MAX_MESSAGE_LENGTH
+    MAX_MESSAGE_LENGTH,
 )
 import tools.human_messages as human_messages_module
 from fastmcp import FastMCP
@@ -30,12 +31,10 @@ def clean_message_history(tmp_path):
 
     # Create new history instances with temp files
     human_messages_module.messages_to_human = JsonlHistory(
-        file_path=tmp_path / "messages_to_human.jsonl",
-        max_memory_entries=1000
+        file_path=tmp_path / "messages_to_human.jsonl", max_memory_entries=1000
     )
     human_messages_module.messages_from_human = JsonlHistory(
-        file_path=tmp_path / "messages_from_human.jsonl",
-        max_memory_entries=1000
+        file_path=tmp_path / "messages_from_human.jsonl", max_memory_entries=1000
     )
 
     yield
@@ -53,6 +52,25 @@ def test_mcp():
     return mcp
 
 
+def _validate_message_id_format(msg_id: str):
+    """Helper to validate message ID format"""
+    assert msg_id.startswith("msg_")
+    parts = msg_id.split("_")
+    assert len(parts) == 4  # msg, date, time, milliseconds
+
+    # Check date part is 8 digits
+    assert len(parts[1]) == 8
+    assert parts[1].isdigit()
+
+    # Check time part is 6 digits
+    assert len(parts[2]) == 6
+    assert parts[2].isdigit()
+
+    # Check milliseconds part is 3 digits
+    assert len(parts[3]) == 3
+    assert parts[3].isdigit()
+
+
 def test_generate_message_id():
     """Test message ID generation"""
     # Test with frozen time
@@ -61,26 +79,13 @@ def test_generate_message_id():
 
         # Check format: msg_YYYYMMDD_HHMMSS_mmm
         assert msg_id == "msg_20251020_143045_123"
-        assert msg_id.startswith("msg_")
-        parts = msg_id.split("_")
-        assert len(parts) == 4  # msg, date, time, milliseconds
-
-        # Check date part is 8 digits
-        assert len(parts[1]) == 8
-        assert parts[1].isdigit()
-
-        # Check time part is 6 digits
-        assert len(parts[2]) == 6
-        assert parts[2].isdigit()
-
-        # Check milliseconds part is 3 digits
-        assert len(parts[3]) == 3
-        assert parts[3].isdigit()
+        _validate_message_id_format(msg_id)
 
     # Generate with different time to ensure they're different
     with freeze_time("2025-10-20 14:30:45.789012"):
         msg_id2 = _generate_message_id()
         assert msg_id2 == "msg_20251020_143045_789"
+        _validate_message_id_format(msg_id2)
         assert msg_id != msg_id2
 
 
@@ -92,7 +97,9 @@ async def test_send_message_to_human_basic(test_mcp, clean_message_history):
     tool = test_mcp._tool_manager._tools["send_message_to_human"]
 
     # Send a message
-    tool_result = await tool.run(arguments={"message": "Hello human, the plant needs water!"})
+    tool_result = await tool.run(
+        arguments={"message": "Hello human, the plant needs water!"}
+    )
     result_dict = json.loads(tool_result.content[0].text)
 
     # Check response
@@ -117,27 +124,34 @@ async def test_send_message_with_reply_to(test_mcp, clean_message_history):
 
     # First, simulate a message from human to agent
     human_msg_id = "msg_20251020_120000_001"
-    human_messages_module.messages_from_human.append({
-        "message_id": human_msg_id,
-        "timestamp": "2025-10-20T12:00:00+00:00",
-        "content": "Should I water the plant today?",
-        "in_reply_to": None
-    })
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": human_msg_id,
+            "timestamp": "2025-10-20T12:00:00+00:00",
+            "content": "Should I water the plant today?",
+            "in_reply_to": None,
+        }
+    )
 
     tool = test_mcp._tool_manager._tools["send_message_to_human"]
 
     # Agent replies to the human's question
-    tool_result = await tool.run(arguments={
-        "message": "Regarding your question about watering... Yes, the soil moisture is low.",
-        "in_reply_to": human_msg_id
-    })
+    tool_result = await tool.run(
+        arguments={
+            "message": "Regarding your question about watering... Yes, the soil moisture is low.",
+            "in_reply_to": human_msg_id,
+        }
+    )
     result_dict = json.loads(tool_result.content[0].text)
 
     # Check message was stored with reply reference to the human's message
     messages = human_messages_module.messages_to_human.get_all()
     assert len(messages) == 1
     assert messages[0]["in_reply_to"] == human_msg_id
-    assert messages[0]["content"] == "Regarding your question about watering... Yes, the soil moisture is low."
+    assert (
+        messages[0]["content"]
+        == "Regarding your question about watering... Yes, the soil moisture is low."
+    )
 
     # Verify we can trace the conversation thread
     human_messages = human_messages_module.messages_from_human.get_all()
@@ -192,7 +206,7 @@ async def test_send_email_notification_not_configured(caplog):
     """Test that email notification fails gracefully when not configured"""
 
     with caplog.at_level(logging.DEBUG):
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             # Call with missing SMTP config
             _send_email_notification("msg_test_001", "Test message")
 
@@ -204,18 +218,18 @@ async def test_send_email_notification_not_configured(caplog):
 async def test_send_email_notification_configured():
     """Test email notification when SMTP is configured"""
     env_vars = {
-        'SMTP_HOST': 'smtp.example.com',
-        'SMTP_PORT': '587',
-        'SMTP_USER': 'test@example.com',
-        'SMTP_PASSWORD': 'password',
-        'SMTP_FROM': 'test@example.com',
-        'SMTP_TO': 'user@example.com',
-        'MCP_HOST': 'localhost',
-        'MCP_PORT': '8000'
+        "SMTP_HOST": "smtp.example.com",
+        "SMTP_PORT": "587",
+        "SMTP_USER": "test@example.com",
+        "SMTP_PASSWORD": "password",
+        "SMTP_FROM": "test@example.com",
+        "SMTP_TO": "user@example.com",
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "8000",
     }
 
-    with patch.dict('os.environ', env_vars):
-        with patch('smtplib.SMTP') as mock_smtp:
+    with patch.dict("os.environ", env_vars):
+        with patch("smtplib.SMTP") as mock_smtp:
             # Configure mock
             mock_server = MagicMock()
             mock_smtp.return_value.__enter__.return_value = mock_server
@@ -224,9 +238,9 @@ async def test_send_email_notification_configured():
             _send_email_notification("msg_test_001", "Test message content")
 
             # Verify SMTP was called with timeout
-            mock_smtp.assert_called_once_with('smtp.example.com', 587, timeout=10)
+            mock_smtp.assert_called_once_with("smtp.example.com", 587, timeout=10)
             mock_server.starttls.assert_called_once()
-            mock_server.login.assert_called_once_with('test@example.com', 'password')
+            mock_server.login.assert_called_once_with("test@example.com", "password")
             mock_server.send_message.assert_called_once()
 
 
@@ -234,16 +248,16 @@ async def test_send_email_notification_configured():
 async def test_send_email_notification_failure(caplog):
     """Test that email failures don't break message sending"""
     env_vars = {
-        'SMTP_HOST': 'smtp.example.com',
-        'SMTP_PORT': '587',
-        'SMTP_USER': 'test@example.com',
-        'SMTP_PASSWORD': 'password',
-        'SMTP_FROM': 'test@example.com',
-        'SMTP_TO': 'user@example.com'
+        "SMTP_HOST": "smtp.example.com",
+        "SMTP_PORT": "587",
+        "SMTP_USER": "test@example.com",
+        "SMTP_PASSWORD": "password",
+        "SMTP_FROM": "test@example.com",
+        "SMTP_TO": "user@example.com",
     }
 
-    with patch.dict('os.environ', env_vars):
-        with patch('smtplib.SMTP', side_effect=Exception("SMTP error")):
+    with patch.dict("os.environ", env_vars):
+        with patch("smtplib.SMTP", side_effect=Exception("SMTP error")):
             # Should not raise exception
             _send_email_notification("msg_test_001", "Test message")
 
@@ -255,16 +269,16 @@ async def test_send_email_notification_failure(caplog):
 async def test_send_email_notification_without_auth():
     """Test email notification without authentication (unauthenticated SMTP on port 25)"""
     env_vars = {
-        'SMTP_HOST': 'localhost',
-        'SMTP_PORT': '25',
-        'SMTP_FROM': 'plant-care@localhost',
-        'SMTP_TO': 'user@example.com',
-        'MCP_HOST': 'localhost',
-        'MCP_PORT': '8000'
+        "SMTP_HOST": "localhost",
+        "SMTP_PORT": "25",
+        "SMTP_FROM": "plant-care@localhost",
+        "SMTP_TO": "user@example.com",
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "8000",
     }
 
-    with patch.dict('os.environ', env_vars):
-        with patch('smtplib.SMTP') as mock_smtp:
+    with patch.dict("os.environ", env_vars):
+        with patch("smtplib.SMTP") as mock_smtp:
             # Configure mock
             mock_server = MagicMock()
             mock_smtp.return_value.__enter__.return_value = mock_server
@@ -273,7 +287,7 @@ async def test_send_email_notification_without_auth():
             _send_email_notification("msg_test_001", "Test message content")
 
             # Verify SMTP was called with timeout
-            mock_smtp.assert_called_once_with('localhost', 25, timeout=10)
+            mock_smtp.assert_called_once_with("localhost", 25, timeout=10)
             # Port 25 defaults to no TLS, so starttls should NOT be called
             mock_server.starttls.assert_not_called()
             # Should NOT call login when no auth credentials provided
@@ -285,17 +299,17 @@ async def test_send_email_notification_without_auth():
 async def test_send_email_notification_port_25_with_tls_enabled():
     """Test email notification on port 25 with TLS explicitly enabled"""
     env_vars = {
-        'SMTP_HOST': 'localhost',
-        'SMTP_PORT': '25',
-        'SMTP_FROM': 'plant-care@localhost',
-        'SMTP_TO': 'user@example.com',
-        'SMTP_USE_TLS': 'true',  # Explicitly enable TLS on port 25
-        'MCP_HOST': 'localhost',
-        'MCP_PORT': '8000'
+        "SMTP_HOST": "localhost",
+        "SMTP_PORT": "25",
+        "SMTP_FROM": "plant-care@localhost",
+        "SMTP_TO": "user@example.com",
+        "SMTP_USE_TLS": "true",  # Explicitly enable TLS on port 25
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "8000",
     }
 
-    with patch.dict('os.environ', env_vars):
-        with patch('smtplib.SMTP') as mock_smtp:
+    with patch.dict("os.environ", env_vars):
+        with patch("smtplib.SMTP") as mock_smtp:
             # Configure mock
             mock_server = MagicMock()
             mock_smtp.return_value.__enter__.return_value = mock_server
@@ -304,7 +318,7 @@ async def test_send_email_notification_port_25_with_tls_enabled():
             _send_email_notification("msg_test_001", "Test message content")
 
             # Verify SMTP was called with timeout
-            mock_smtp.assert_called_once_with('localhost', 25, timeout=10)
+            mock_smtp.assert_called_once_with("localhost", 25, timeout=10)
             # TLS explicitly enabled, so starttls SHOULD be called
             mock_server.starttls.assert_called_once()
             mock_server.login.assert_not_called()
@@ -329,18 +343,22 @@ async def test_list_messages_from_human_basic(test_mcp, clean_message_history):
     """Test listing messages from human"""
 
     # Add some test messages
-    human_messages_module.messages_from_human.append({
-        "message_id": "msg_20251020_100000_001",
-        "timestamp": "2025-10-20T10:00:00+00:00",
-        "content": "First message",
-        "in_reply_to": None
-    })
-    human_messages_module.messages_from_human.append({
-        "message_id": "msg_20251020_110000_001",
-        "timestamp": "2025-10-20T11:00:00+00:00",
-        "content": "Second message",
-        "in_reply_to": "msg_20251020_095500_001"
-    })
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_20251020_100000_001",
+            "timestamp": "2025-10-20T10:00:00+00:00",
+            "content": "First message",
+            "in_reply_to": None,
+        }
+    )
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_20251020_110000_001",
+            "timestamp": "2025-10-20T11:00:00+00:00",
+            "content": "Second message",
+            "in_reply_to": "msg_20251020_095500_001",
+        }
+    )
 
     tool = test_mcp._tool_manager._tools["list_messages_from_human"]
 
@@ -361,12 +379,14 @@ async def test_list_messages_pagination(test_mcp, clean_message_history):
 
     # Add 5 test messages
     for i in range(5):
-        human_messages_module.messages_from_human.append({
-            "message_id": f"msg_20251020_{10 + i:02d}0000_001",
-            "timestamp": f"2025-10-20T{10 + i:02d}:00:00+00:00",
-            "content": f"Message {i+1}",
-            "in_reply_to": None
-        })
+        human_messages_module.messages_from_human.append(
+            {
+                "message_id": f"msg_20251020_{10 + i:02d}0000_001",
+                "timestamp": f"2025-10-20T{10 + i:02d}:00:00+00:00",
+                "content": f"Message {i + 1}",
+                "in_reply_to": None,
+            }
+        )
 
     tool = test_mcp._tool_manager._tools["list_messages_from_human"]
 
@@ -389,12 +409,14 @@ async def test_list_messages_pagination(test_mcp, clean_message_history):
 async def test_list_messages_without_content(test_mcp, clean_message_history):
     """Test listing messages without content"""
 
-    human_messages_module.messages_from_human.append({
-        "message_id": "msg_20251020_100000_001",
-        "timestamp": "2025-10-20T10:00:00+00:00",
-        "content": "Secret message",
-        "in_reply_to": None
-    })
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_20251020_100000_001",
+            "timestamp": "2025-10-20T10:00:00+00:00",
+            "content": "Secret message",
+            "in_reply_to": None,
+        }
+    )
 
     tool = test_mcp._tool_manager._tools["list_messages_from_human"]
 
@@ -413,15 +435,18 @@ def test_message_persistence(tmp_path, clean_message_history):
 
     # Create new history with temp file
     from utils.jsonl_history import JsonlHistory
+
     test_history = JsonlHistory(file_path=test_file, max_memory_entries=100)
 
     # Add message
-    test_history.append({
-        "message_id": "msg_20251020_100000_001",
-        "timestamp": "2025-10-20T10:00:00+00:00",
-        "content": "Test message",
-        "in_reply_to": None
-    })
+    test_history.append(
+        {
+            "message_id": "msg_20251020_100000_001",
+            "timestamp": "2025-10-20T10:00:00+00:00",
+            "content": "Test message",
+            "in_reply_to": None,
+        }
+    )
 
     # Verify file was created
     assert test_file.exists()
