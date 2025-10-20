@@ -12,6 +12,7 @@ from tools.thinking import setup_thinking_tools
 from tools.action_log import setup_action_log_tools
 from tools.utcnow import setup_utcnow_tools
 from tools.notes import setup_notes_tools
+from tools.human_messages import setup_human_messages_tools
 from utils.logging_config import get_logger
 
 # Get logger
@@ -30,6 +31,7 @@ setup_thinking_tools(mcp)
 setup_action_log_tools(mcp)
 setup_utcnow_tools(mcp)
 setup_notes_tools(mcp)
+setup_human_messages_tools(mcp)
 
 if __name__ == "__main__":
     # For local testing
