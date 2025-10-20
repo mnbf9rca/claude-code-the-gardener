@@ -145,6 +145,20 @@
 - **Test fixture updates**: When changing time handling, test fixtures need corresponding updates
 - **KISS for hobby projects**: HTTP photo URLs work fine; no need for CDN or complex image serving
 
+## Phase 6: Notes Tools (COMPLETED ✅)
+
+### Core Implementation
+- [x] Notes Tool (`app/tools/notes.py`)
+  - [x] `save_notes(content, mode)` with replace/append modes
+  - [x] `fetch_notes()` to retrieve current note
+  - [x] Timestamped audit archives in `app/data/notes_archive/`
+  - [x] 13 comprehensive tests
+- [x] Updated `server.py` to register notes tools
+
+### Storage
+- Current note: `app/data/notes.md` (plain file, not JSONL)
+- Archives: `app/data/notes_archive/YYYY-MM-DD_HH-MM-SS_UTC.md`
+
 ## Key Design Decisions
 - No database initially - in-memory dictionaries
 - Mock hardware - realistic fake data
