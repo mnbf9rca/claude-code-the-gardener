@@ -41,12 +41,16 @@ pytest from discovering and running it during automated test suites.
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 
-# Set up test environment - EDIT THESE TO TEST DIFFERENT CONFIGURATIONS
+# Add parent (app) directory to path so we can import server and utils
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Set up test environment with defaults if not already set
 os.environ["CAMERA_ENABLED"] = "true"
-os.environ["CAMERA_DEVICE_INDEX"] = "0"  # Try 0, 1, or 2 if camera not found
-os.environ["CAMERA_SAVE_PATH"] = "./test_photos"  # Directory for test captures
+os.environ.setdefault("CAMERA_DEVICE_INDEX", "0")  # Override: CAMERA_DEVICE_INDEX=1 uv run python camera_manual_check.py
+os.environ.setdefault("CAMERA_SAVE_PATH", "./test_photos")  # Override: CAMERA_SAVE_PATH=/your/path uv run python camera_manual_check.py
 
 from server import mcp
 from utils.shared_state import reset_cycle, current_cycle_status
@@ -88,7 +92,7 @@ async def check_status():
 
 async def check_capture():
     """Test photo capture and display results"""
-    if not (capture_tool := mcp._tool_manager._tools.get("capture")):
+    if not (capture_tool := mcp._tool_manager._tools.get("capture_photo")):
         return
 
     print("\n2. Testing photo capture...")
@@ -98,14 +102,25 @@ async def check_capture():
 
         print(f"   Success: {photo['success']}")
 
-        if photo['success']:
-            print(f"   URL/Path: {photo['url']}")
-            print(f"\n✅ Camera capture successful!")
-            print(f"   Photo saved to: {photo['url']}")
+        if photo and photo['success']:
+            photo_url = photo['url']
+            print(f"   HTTP URL: {photo_url}")
 
-            if Path(photo['url']).exists():
-                file_size = Path(photo['url']).stat().st_size / 1024
+            # Extract filename from URL and get local path from camera config
+
+            filename = photo_url.split('/')[-1]
+
+            save_path = os.environ.get("CAMERA_SAVE_PATH")
+            local_path = Path(save_path) / filename
+
+            print(f"   Local path: {local_path}")
+            print("\n✅ Camera capture successful!")
+
+            if local_path.exists():
+                file_size = local_path.stat().st_size / 1024
                 print(f"   File size: {file_size:.1f} KB")
+            else:
+                print(f"   ⚠️  Warning: File not found at {local_path}")
         else:
             print(f"\n⚠️  Capture failed: {photo.get('error', 'Unknown error')}")
 
@@ -166,9 +181,12 @@ if __name__ == "__main__":
     Entry point for manual camera hardware verification.
     This script is excluded from pytest discovery by design.
     """
+
     print("Starting camera hardware diagnostic...")
     print("Make sure your USB camera is connected.")
     print(f"Current device index: {os.environ.get('CAMERA_DEVICE_INDEX', '0')}")
-    print("If camera not found, try editing CAMERA_DEVICE_INDEX in this file.\n")
+    print("If camera not found, try editing CAMERA_DEVICE_INDEX: CAMERA_DEVICE_INDEX=1 uv run python camera_manual_check.py")
+    print(f"\nUsing output directory: {os.environ.get('CAMERA_SAVE_PATH', './test_photos')}")
+    print("To set output directory: CAMERA_SAVE_PATH=/your/custom/path uv run python camera_manual_check.py")
 
     asyncio.run(check_camera_hardware())

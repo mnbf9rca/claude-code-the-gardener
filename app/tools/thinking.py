@@ -6,8 +6,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from pathlib import Path
 from utils.jsonl_history import JsonlHistory
+from utils.paths import get_app_dir
 
 # Constants
 DEFAULT_RECENT_LIMIT = 3  # Default number of recent entries
@@ -16,7 +16,7 @@ DEFAULT_SEARCH_HOURS = 24  # Default search window in hours
 MAX_MEMORY_ENTRIES = 1000  # Maximum entries to keep in memory
 
 # State persistence (JSONL format for append-only writes)
-STATE_FILE = Path(__file__).parent.parent / "data" / "thinking.jsonl"
+STATE_FILE = get_app_dir("data") / "thinking.jsonl"
 
 # History manager
 thought_history = JsonlHistory(file_path=STATE_FILE, max_memory_entries=MAX_MEMORY_ENTRIES)

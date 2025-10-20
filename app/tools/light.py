@@ -9,12 +9,12 @@ from fastmcp import FastMCP
 from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
 from utils.logging_config import get_logger
+from utils.paths import get_app_dir
 import httpx
 import os
 import json
 import asyncio
 import atexit
-from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -37,7 +37,7 @@ LIGHT_ENTITY_ID = os.getenv("LIGHT_ENTITY_ID", "switch.smart_plug_mini")
 http_client: Optional[httpx.AsyncClient] = None
 
 # State persistence - separate files for state vs history
-STATE_FILE = Path(__file__).parent.parent / "data" / "light_state.json"
+STATE_FILE = get_app_dir("data") / "light_state.json"
 # Note: HISTORY_FILE removed - path is now encapsulated in light_history instance
 
 # Background task for scheduled turn-off
@@ -90,7 +90,7 @@ light_state = {
 
 # Storage for light activation history (JSONL format for append-only writes)
 light_history = JsonlHistory(
-    file_path=Path(__file__).parent.parent / "data" / "light_history.jsonl",
+    file_path=get_app_dir("data") / "light_history.jsonl",
     max_memory_entries=1000
 )
 

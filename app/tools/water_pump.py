@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from utils.shared_state import current_cycle_status
-from pathlib import Path
 from utils.jsonl_history import JsonlHistory
+from utils.paths import get_app_dir
 
 # Constants
 MAX_ML_PER_24H = 500  # Maximum water allowed in 24 hours
@@ -15,7 +15,7 @@ MIN_ML_PER_DISPENSE = 10  # Minimum amount per dispense
 MAX_ML_PER_DISPENSE = 100  # Maximum amount per dispense
 
 # State persistence (JSONL format for append-only writes)
-STATE_FILE = Path(__file__).parent.parent / "data" / "water_pump_history.jsonl"
+STATE_FILE = get_app_dir("data") / "water_pump_history.jsonl"
 
 # History manager
 water_history = JsonlHistory(file_path=STATE_FILE, max_memory_entries=1000)

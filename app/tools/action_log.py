@@ -6,8 +6,8 @@ from typing import Dict, Any, List, Literal
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from pathlib import Path
 from utils.jsonl_history import JsonlHistory
+from utils.paths import get_app_dir
 
 # Constants
 DEFAULT_RECENT_LIMIT = 5  # Default number of recent entries
@@ -19,7 +19,7 @@ MAX_MEMORY_ENTRIES = 1000  # Maximum entries to keep in memory
 ActionType = Literal["water", "light", "observe", "alert"]
 
 # State persistence (JSONL format for append-only writes)
-STATE_FILE = Path(__file__).parent.parent / "data" / "action_log.jsonl"
+STATE_FILE = get_app_dir("data") / "action_log.jsonl"
 
 # History manager
 action_history = JsonlHistory(file_path=STATE_FILE, max_memory_entries=MAX_MEMORY_ENTRIES)
