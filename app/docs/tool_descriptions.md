@@ -36,8 +36,22 @@ Returns:
 ```json
 {
   "timestamp": "ISO8601",
-  "success": true,
   "note_length_chars": 1234
+}
+```
+
+- `send_message_to_human(message, in_reply_to = None)` - Send a message to the human caretaker for review or action. This is for important alerts or requests for input.
+
+Parameters:
+
+- `message` (string): The message content. Include any relevant context, severity, and recommended actions. Accepts freetext, markdown etc. up to 50,000 characters.
+- `in_reply_to` (string): Optional message ID this is in reply to.
+
+Returns:
+```json
+{
+  "timestamp": "ISO8601",
+  "message_id": "1234"
 }
 ```
 
@@ -62,6 +76,30 @@ Returns:
 - Auto-loads on first tool invocation
 
 - `fetch_notes()` - Retrieve the current note content (e.g. markdown, etc.). Returns an empty string if no note exists.
+
+- `list_messages_from_human(limit=10, offset=0, include_content=True)` - Lists all messages sent from the human caretaker to the agent, sorted newest first. Returns an empty list if no messages exist.
+
+Parameters:
+
+- `limit` (int): Maximum number of messages to return (default 10, max 50)
+- `offset` (int): Number of messages to skip for pagination (default 0)
+- `include_content` (bool): If true, include the content of the messages in the response (default true)
+
+
+Returns:
+
+```json
+{
+  "messages": [
+    {
+      "message_id": "1234",
+      "in_reply_to": "5678" or None,
+      "timestamp": "ISO8601",
+      "content": "string"
+    }
+  ]
+}
+```
 
 ## Action Log Service
 

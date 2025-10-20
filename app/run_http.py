@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import uvicorn
 from starlette.staticfiles import StaticFiles
 from server import mcp
+from web_routes import add_message_routes
 from utils.logging_config import get_logger
 
 # Load environment variables
@@ -42,6 +43,7 @@ def main():
     logger.info("=" * 60)
     logger.info(f"Server starting on http://{HOST}:{PORT}")
     logger.info(f"MCP endpoint: http://{HOST}:{PORT}/mcp")
+    logger.info(f"Messages UI: http://{HOST}:{PORT}/messages")
     logger.info(f"Photos endpoint: http://{HOST}:{PORT}/photos/")
     logger.info("Press Ctrl+C to stop")
     logger.info("=" * 60)
@@ -53,6 +55,10 @@ def main():
     # Mount static files to the Starlette app
     app.mount("/photos", StaticFiles(directory=str(PHOTOS_DIR)), name="photos")
     logger.info(f"Static files mounted: {PHOTOS_DIR}")
+
+    # Add message routes (web UI and API)
+    add_message_routes(app)
+    logger.info("Message routes added")
 
     # Run uvicorn directly with the configured app
     uvicorn.run(app, host=HOST, port=PORT)
