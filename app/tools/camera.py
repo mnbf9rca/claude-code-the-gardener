@@ -40,6 +40,9 @@ MCP_PUBLIC_HOST = os.getenv("MCP_PUBLIC_HOST", "localhost")
 MCP_PORT = os.getenv("MCP_PORT", "8000")
 SERVER_URL = f"http://{MCP_PUBLIC_HOST}:{MCP_PORT}"
 
+# Photo history configuration
+PHOTO_HISTORY_LIMIT = 100  # Maximum number of photos to keep in memory
+
 # Camera state
 camera: Optional[cv2.VideoCapture] = None
 camera_available: bool = False
@@ -82,7 +85,7 @@ def load_photo_history_from_disk() -> List[Dict[str, str]]:
     """
     history = []
     save_path = CAMERA_CONFIG["save_path"]
-    max_photos = 100  # Match PHOTO_HISTORY_LIMIT
+    max_photos = PHOTO_HISTORY_LIMIT
 
     if save_path.exists() and save_path.is_dir():
         # Find all jpg files matching our naming pattern
@@ -200,10 +203,11 @@ def _read_camera_frame(camera, result_container: Dict[str, Any]):
         result_container['error'] = str(e)
 
 
-def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
+def capture_real_photo() -> Tuple[str, str]:
     """
     Capture a real photo using the USB camera with timeout protection.
-    Returns: (success, file_path, timestamp_iso, error_message)
+    Returns: (file_path, timestamp_iso)
+    Raises: ValueError if camera is unavailable or capture fails
     """
     global camera, camera_available, camera_error
 
@@ -212,7 +216,7 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         camera_available, camera, camera_error = initialize_camera()
 
     if not camera_available or camera is None:
-        return False, None, None, camera_error or "Camera not available"
+        raise ValueError(camera_error or "Camera not available")
 
     try:
         # Ensure save directory exists
@@ -234,12 +238,12 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         if read_thread.is_alive():
             error_msg = f"Camera read timed out after {timeout_seconds} seconds"
             logging.error(error_msg)
-            return False, None, None, error_msg
+            raise ValueError(error_msg)
 
         if 'error' in result_container:
             error_msg = f"Camera read error: {result_container['error']}"
             logging.error(error_msg)
-            return False, None, None, error_msg
+            raise ValueError(error_msg)
 
         ret = result_container.get('ret', False)
         frame = result_container.get('frame')
@@ -247,7 +251,7 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         if not ret or frame is None:
             error_msg = "Failed to capture frame"
             logging.error(error_msg)
-            return False, None, None, error_msg
+            raise ValueError(error_msg)
 
         # Generate timestamp once for both filename and response (ensures consistency)
         now = datetime.now(timezone.utc)
@@ -264,12 +268,12 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         img.save(filepath, "JPEG", quality=CAMERA_CONFIG["image_quality"])
 
         logging.info(f"Photo captured: {filepath}")
-        return True, str(filepath), timestamp_iso, None
+        return str(filepath), timestamp_iso
 
     except Exception as e:
         error_msg = f"Error capturing photo: {str(e)}"
         logging.error(error_msg)
-        return False, None, None, error_msg
+        raise ValueError(error_msg)
 
 
 def cleanup_camera():
@@ -302,17 +306,18 @@ def setup_camera_tools(mcp: FastMCP):
             ValueError: If camera is unavailable or capture fails
         """
         # Try to capture real photo (timestamp generated inside for consistency)
-        success, photo_path, timestamp, error_msg = capture_real_photo()
-
-        if not success or not photo_path or not timestamp:
+        # Raises ValueError on failure
+        try:
+            photo_path, timestamp = capture_real_photo()
+        except ValueError as e:
             # Camera unavailable or capture failed
             # Log failed capture
             log_tool_usage("capture", {
                 "success": False,
-                "error": error_msg or "Camera unavailable"
+                "error": str(e)
             })
-            # Raise exception to signal failure to MCP server
-            raise ValueError(error_msg or "Camera unavailable")
+            # Re-raise to signal failure to MCP server
+            raise
 
         # Real photo captured successfully
         # Convert file path to HTTP URL
@@ -326,7 +331,7 @@ def setup_camera_tools(mcp: FastMCP):
         photo_history.append(photo_entry)
 
         # Keep history limited to prevent memory issues
-        if len(photo_history) > 100:
+        if len(photo_history) > PHOTO_HISTORY_LIMIT:
             photo_history.pop(0)
 
         # Log successful capture

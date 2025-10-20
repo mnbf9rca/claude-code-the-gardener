@@ -434,6 +434,31 @@ async def test_camera_integration():
 
 
 @pytest.mark.asyncio
+async def test_camera_integration_failure(monkeypatch):
+    """Test camera integration with camera unavailable (raises ValueError)"""
+    import tools.camera as camera_module
+
+    # Mock capture_real_photo to raise ValueError (simulating camera failure)
+    # This avoids mutating global state
+    def mock_capture_real_photo():
+        raise ValueError("Camera device not found")
+
+    monkeypatch.setattr(camera_module, "capture_real_photo", mock_capture_real_photo)
+
+    capture_tool = mcp._tool_manager._tools["capture_photo"]
+
+    # Should raise ValueError when camera is unavailable
+    with pytest.raises(ValueError) as exc_info:
+        await capture_tool.run(arguments={})
+
+    # Verify error message contains expected information
+    error_msg = str(exc_info.value).lower()
+    assert "camera" in error_msg or "not found" in error_msg
+
+    print("✓ Camera properly raises ValueError when unavailable")
+
+
+@pytest.mark.asyncio
 async def test_full_cycle_integration():
     """Test a complete plant care cycle with all tools"""
     # 1. Write initial status

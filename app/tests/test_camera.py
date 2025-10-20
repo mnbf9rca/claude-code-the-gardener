@@ -151,8 +151,8 @@ class TestCameraWithoutDevice:
         setup_camera_tools(mcp)
         capture_tool = mcp._tool_manager._tools["capture_photo"]
 
-        # Try to capture - should raise exception
-        with pytest.raises(Exception) as exc_info:
+        # Try to capture - should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
             await capture_tool.run(arguments={})
 
         # Should contain error about camera being disabled
@@ -177,8 +177,8 @@ class TestCameraWithoutDevice:
         setup_camera_tools(mcp)
         capture_tool = mcp._tool_manager._tools["capture_photo"]
 
-        # Try to capture - should raise exception
-        with pytest.raises(Exception) as exc_info:
+        # Try to capture - should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
             await capture_tool.run(arguments={})
 
         # Should contain error message (camera not available or cannot open)
@@ -224,8 +224,8 @@ class TestCameraWithoutDevice:
         setup_camera_tools(mcp)
         capture_tool = mcp._tool_manager._tools["capture_photo"]
 
-        # Try to capture - should raise exception
-        with pytest.raises(Exception) as exc_info:
+        # Try to capture - should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
             await capture_tool.run(arguments={})
 
         # Should contain error message (camera not available or cannot open)
