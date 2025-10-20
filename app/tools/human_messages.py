@@ -49,7 +49,7 @@ def _generate_message_id() -> str:
     return now.strftime("msg_%Y%m%d_%H%M%S_") + f"{now.microsecond // 1000:03d}"
 
 
-def _send_email_notification(message_id: str, content: str, in_reply_to: Optional[str] = None):
+def _send_email_notification(message_id: str, content: str, in_reply_to: Optional[str] = None) -> bool:
     """
     Send email notification to human when agent sends a message.
     Gracefully degrades if SMTP is not configured.
@@ -58,25 +58,37 @@ def _send_email_notification(message_id: str, content: str, in_reply_to: Optiona
         message_id: The message ID
         content: The message content
         in_reply_to: Optional message ID this is in reply to
+
+    Returns:
+        True if email was sent successfully, False otherwise
     """
-    # Check if SMTP is configured
+    # Check if SMTP is configured (host, from, and recipient are required)
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER")
     smtp_password = os.getenv("SMTP_PASSWORD")
     smtp_to = os.getenv("SMTP_TO")
+    smtp_from = os.getenv("SMTP_FROM")  # Required - must be explicitly set
 
-    if not all([smtp_host, smtp_user, smtp_password, smtp_to]):
-        logger.debug("SMTP not fully configured, skipping email notification")
-        return
+    # TLS configuration - default based on port
+    # Port 587: STARTTLS (default true)
+    # Port 25: Plain SMTP (default false)
+    # Port 465: Would need SMTP_SSL (not currently supported)
+    smtp_port_int = int(smtp_port)
+    smtp_use_tls_default = "true" if smtp_port_int == 587 else "false"
+    smtp_use_tls = os.getenv("SMTP_USE_TLS", smtp_use_tls_default).lower() in ("true", "1", "yes")
+
+    if not smtp_host or not smtp_to or not smtp_from:
+        logger.debug("SMTP not configured (missing host, from, or recipient), skipping email notification")
+        return False
 
     # Type checker: these are guaranteed to be strings after the check above
     assert smtp_host is not None
-    assert smtp_user is not None
-    assert smtp_password is not None
     assert smtp_to is not None
+    assert smtp_from is not None
 
-    smtp_from = os.getenv("SMTP_FROM", smtp_user)
+    # Authentication is optional - both user and password must be present for auth
+    smtp_auth_enabled = bool(smtp_user and smtp_password)
 
     try:
         # Create message
@@ -122,16 +134,22 @@ View and reply at: http://{os.getenv('MCP_HOST', 'localhost')}:{os.getenv('MCP_P
 
         # Send email with timeout to avoid hanging
         smtp_timeout = 10  # seconds
-        with smtplib.SMTP(smtp_host, int(smtp_port), timeout=smtp_timeout) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
+        with smtplib.SMTP(smtp_host, smtp_port_int, timeout=smtp_timeout) as server:
+            # Only use STARTTLS if configured
+            if smtp_use_tls:
+                server.starttls()
+            # Only authenticate if credentials are provided
+            if smtp_auth_enabled:
+                server.login(smtp_user, smtp_password)  # type: ignore
             server.send_message(msg)
 
         logger.info(f"Email notification sent for message {message_id}")
+        return True
 
     except Exception as e:
         # Don't fail the message sending if email fails
         logger.warning(f"Failed to send email notification: {e}")
+        return False
 
 
 class SendMessageResponse(BaseModel):

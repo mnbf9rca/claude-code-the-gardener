@@ -197,7 +197,7 @@ async def test_send_email_notification_not_configured(caplog):
             _send_email_notification("msg_test_001", "Test message")
 
             # Should log debug message about missing config
-            assert "SMTP not fully configured" in caplog.text
+            assert "SMTP not configured" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -208,6 +208,7 @@ async def test_send_email_notification_configured():
         'SMTP_PORT': '587',
         'SMTP_USER': 'test@example.com',
         'SMTP_PASSWORD': 'password',
+        'SMTP_FROM': 'test@example.com',
         'SMTP_TO': 'user@example.com',
         'MCP_HOST': 'localhost',
         'MCP_PORT': '8000'
@@ -237,6 +238,7 @@ async def test_send_email_notification_failure(caplog):
         'SMTP_PORT': '587',
         'SMTP_USER': 'test@example.com',
         'SMTP_PASSWORD': 'password',
+        'SMTP_FROM': 'test@example.com',
         'SMTP_TO': 'user@example.com'
     }
 
@@ -247,6 +249,66 @@ async def test_send_email_notification_failure(caplog):
 
             # Should log warning
             assert "Failed to send email notification" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_send_email_notification_without_auth():
+    """Test email notification without authentication (unauthenticated SMTP on port 25)"""
+    env_vars = {
+        'SMTP_HOST': 'localhost',
+        'SMTP_PORT': '25',
+        'SMTP_FROM': 'plant-care@localhost',
+        'SMTP_TO': 'user@example.com',
+        'MCP_HOST': 'localhost',
+        'MCP_PORT': '8000'
+    }
+
+    with patch.dict('os.environ', env_vars):
+        with patch('smtplib.SMTP') as mock_smtp:
+            # Configure mock
+            mock_server = MagicMock()
+            mock_smtp.return_value.__enter__.return_value = mock_server
+
+            # Send notification
+            _send_email_notification("msg_test_001", "Test message content")
+
+            # Verify SMTP was called with timeout
+            mock_smtp.assert_called_once_with('localhost', 25, timeout=10)
+            # Port 25 defaults to no TLS, so starttls should NOT be called
+            mock_server.starttls.assert_not_called()
+            # Should NOT call login when no auth credentials provided
+            mock_server.login.assert_not_called()
+            mock_server.send_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_send_email_notification_port_25_with_tls_enabled():
+    """Test email notification on port 25 with TLS explicitly enabled"""
+    env_vars = {
+        'SMTP_HOST': 'localhost',
+        'SMTP_PORT': '25',
+        'SMTP_FROM': 'plant-care@localhost',
+        'SMTP_TO': 'user@example.com',
+        'SMTP_USE_TLS': 'true',  # Explicitly enable TLS on port 25
+        'MCP_HOST': 'localhost',
+        'MCP_PORT': '8000'
+    }
+
+    with patch.dict('os.environ', env_vars):
+        with patch('smtplib.SMTP') as mock_smtp:
+            # Configure mock
+            mock_server = MagicMock()
+            mock_smtp.return_value.__enter__.return_value = mock_server
+
+            # Send notification
+            _send_email_notification("msg_test_001", "Test message content")
+
+            # Verify SMTP was called with timeout
+            mock_smtp.assert_called_once_with('localhost', 25, timeout=10)
+            # TLS explicitly enabled, so starttls SHOULD be called
+            mock_server.starttls.assert_called_once()
+            mock_server.login.assert_not_called()
+            mock_server.send_message.assert_called_once()
 
 
 @pytest.mark.asyncio
