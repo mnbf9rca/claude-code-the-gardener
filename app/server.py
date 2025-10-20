@@ -11,6 +11,7 @@ from tools.camera import setup_camera_tools
 from tools.thinking import setup_thinking_tools
 from tools.action_log import setup_action_log_tools
 from tools.utcnow import setup_utcnow_tools
+from tools.notes import setup_notes_tools
 from utils.logging_config import get_logger
 
 # Get logger
@@ -28,6 +29,7 @@ setup_camera_tools(mcp)
 setup_thinking_tools(mcp)
 setup_action_log_tools(mcp)
 setup_utcnow_tools(mcp)
+setup_notes_tools(mcp)
 
 if __name__ == "__main__":
     # For local testing

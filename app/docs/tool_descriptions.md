@@ -9,6 +9,7 @@ This document describes the current thinking for the tools needed for the plant 
 - `log_thought(observation, hypothesis, candidate_actions, reasoning, uncertainties, tags)` - Record reasoning and planning. Helps build a history of reasoning for review and learning.
 
 Parameters:
+
 - `observation` (string): What was observed about the plant
 - `hypothesis` (string): Your hypothesis about what's happening
 - `candidate_actions` (list): List of candidate actions with order, action type, and optional value
@@ -21,6 +22,22 @@ Returns:
 {
   "timestamp": "ISO8601",
   "success": true
+}
+```
+
+- `save_notes(content, mode) - store a single unstructured note for later review, reuse, tracking across sessions. Although not disclosed to the agent, every time this is called a new file is created on disk with a timestamped filename for auditability and review.
+
+Parameters:
+
+- `content` (string): The note content (markdown supported). There is no size limit but extremely large notes may impact performance.
+- `mode` (string): `replace` (default) to replace existing note, `append` to add to the existing note.
+
+Returns:
+```json
+{
+  "timestamp": "ISO8601",
+  "success": true,
+  "note_length_chars": 1234
 }
 ```
 
@@ -43,6 +60,8 @@ Returns:
 - Keeps last 1000 thoughts in memory
 - Full history persisted to disk in JSONL format
 - Auto-loads on first tool invocation
+
+- `fetch_notes()` - Retrieve the current note content (e.g. markdown, etc.). Returns an empty string if no note exists.
 
 ## Action Log Service
 
