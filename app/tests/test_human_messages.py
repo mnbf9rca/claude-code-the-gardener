@@ -162,6 +162,32 @@ async def test_send_message_too_long(test_mcp, clean_message_history):
 
 
 @pytest.mark.asyncio
+async def test_send_message_empty_content(test_mcp, clean_message_history):
+    """Test that empty messages are rejected"""
+    tool = test_mcp._tool_manager._tools["send_message_to_human"]
+
+    # Should raise ValueError for empty message
+    with pytest.raises(ValueError, match="Message content is required"):
+        await tool.run(arguments={"message": ""})
+
+    # Verify no message was stored
+    assert len(human_messages_module.messages_to_human.get_all()) == 0
+
+
+@pytest.mark.asyncio
+async def test_send_message_whitespace_only(test_mcp, clean_message_history):
+    """Test that whitespace-only messages are rejected"""
+    tool = test_mcp._tool_manager._tools["send_message_to_human"]
+
+    # Should raise ValueError for whitespace-only message
+    with pytest.raises(ValueError, match="whitespace-only"):
+        await tool.run(arguments={"message": "   \n\t  "})
+
+    # Verify no message was stored
+    assert len(human_messages_module.messages_to_human.get_all()) == 0
+
+
+@pytest.mark.asyncio
 async def test_send_email_notification_not_configured(caplog):
     """Test that email notification fails gracefully when not configured"""
 
@@ -196,8 +222,8 @@ async def test_send_email_notification_configured():
             # Send notification
             _send_email_notification("msg_test_001", "Test message content")
 
-            # Verify SMTP was called
-            mock_smtp.assert_called_once_with('smtp.example.com', 587)
+            # Verify SMTP was called with timeout
+            mock_smtp.assert_called_once_with('smtp.example.com', 587, timeout=10)
             mock_server.starttls.assert_called_once()
             mock_server.login.assert_called_once_with('test@example.com', 'password')
             mock_server.send_message.assert_called_once()

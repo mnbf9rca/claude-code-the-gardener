@@ -120,8 +120,9 @@ View and reply at: http://{os.getenv('MCP_HOST', 'localhost')}:{os.getenv('MCP_P
         msg.attach(part1)
         msg.attach(part2)
 
-        # Send email
-        with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
+        # Send email with timeout to avoid hanging
+        smtp_timeout = 10  # seconds
+        with smtplib.SMTP(smtp_host, int(smtp_port), timeout=smtp_timeout) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
@@ -173,7 +174,9 @@ def setup_human_messages_tools(mcp: FastMCP):
         Returns:
             Response with timestamp and unique message_id
         """
-        # Validate message length
+        # Validate message content
+        if not message or not message.strip():
+            raise ValueError("Message content is required and cannot be empty or whitespace-only")
         if len(message) > MAX_MESSAGE_LENGTH:
             raise ValueError(f"Message exceeds maximum length of {MAX_MESSAGE_LENGTH} characters")
 
@@ -223,8 +226,7 @@ def setup_human_messages_tools(mcp: FastMCP):
             List of messages with metadata and optionally content
         """
         # Get recent messages (reversed to get newest first)
-        all_messages = messages_from_human.get_all()
-        all_messages.reverse()  # Newest first
+        all_messages = messages_from_human.get_all()[::-1]  # Newest first
 
         # Apply pagination
         paginated = all_messages[offset:offset + limit]

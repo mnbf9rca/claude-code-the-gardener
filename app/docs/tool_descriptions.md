@@ -44,7 +44,7 @@ Returns:
 
 Parameters:
 
-- `message` (string): The message content. Include any relevant context, severity, and recommended actions. Accepts freetext, markdown etc. up to 50,000 characters.
+- `message` (string): The message content. Include any relevant context, severity, and recommended actions. Accepts free text, markdown etc. up to 50,000 characters.
 - `in_reply_to` (string): Optional message ID this is in reply to.
 
 Returns:

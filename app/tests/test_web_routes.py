@@ -187,6 +187,55 @@ def test_get_messages_api_with_limit(client, clean_message_history):
     assert len(data["messages"]) == 3
 
 
+def test_get_messages_api_with_zero_limit(client, clean_message_history):
+    """Test API with zero limit returns empty list"""
+    # Add 2 messages
+    human_messages_module.messages_to_human.append({
+        "message_id": "msg_zero_0",
+        "timestamp": "2025-10-20T10:00:00+00:00",
+        "content": "Zero Message 0",
+        "in_reply_to": None
+    })
+    human_messages_module.messages_to_human.append({
+        "message_id": "msg_zero_1",
+        "timestamp": "2025-10-20T11:00:00+00:00",
+        "content": "Zero Message 1",
+        "in_reply_to": None
+    })
+
+    response = client.get("/api/messages?limit=0")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 0
+    assert len(data["messages"]) == 0
+
+
+def test_get_messages_api_with_negative_limit(client, clean_message_history):
+    """Test API with negative limit returns validation error"""
+    # Add 2 messages
+    human_messages_module.messages_to_human.append({
+        "message_id": "msg_neg_0",
+        "timestamp": "2025-10-20T10:00:00+00:00",
+        "content": "Negative Message 0",
+        "in_reply_to": None
+    })
+
+    response = client.get("/api/messages?limit=-5")
+    assert response.status_code == 400
+    data = response.json()
+    assert "error" in data
+    assert "non-negative" in data["error"].lower()
+
+
+def test_get_messages_api_with_invalid_limit(client, clean_message_history):
+    """Test API with non-integer limit returns validation error"""
+    response = client.get("/api/messages?limit=abc")
+    assert response.status_code == 400
+    data = response.json()
+    assert "error" in data
+    assert "integer" in data["error"].lower()
+
+
 def test_post_reply_success_json(client, clean_message_history):
     """Test posting a reply via JSON"""
     response = client.post(

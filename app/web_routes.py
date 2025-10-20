@@ -50,10 +50,21 @@ async def get_messages_api(request: Request) -> JSONResponse:
     Returns all messages as JSON
 
     Query parameters:
-        - limit: Maximum number of messages (default: 50)
+        - limit: Maximum number of messages (default: 50, must be positive)
     """
-    # Get limit from query params
-    limit = int(request.query_params.get('limit', 50))
+    # Get and validate limit from query params
+    try:
+        limit = int(request.query_params.get('limit', 50))
+        if limit < 0:
+            return JSONResponse(
+                {'error': 'Limit must be a non-negative integer'},
+                status_code=400
+            )
+    except ValueError:
+        return JSONResponse(
+            {'error': 'Limit must be a valid integer'},
+            status_code=400
+        )
 
     # Get all messages
     all_messages = _get_all_messages()
@@ -695,6 +706,6 @@ def add_message_routes(app: Starlette):
 
     # Add routes to app
     for route in routes:
-        app.routes.append(route)
+        app.router.routes.append(route)
 
     logger.info("Message routes added to Starlette app")
