@@ -7,13 +7,13 @@ import os
 import logging
 import atexit
 import threading
-from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Tuple, Dict, List, Any
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
+from utils.paths import get_app_dir
 from dotenv import load_dotenv
 
 # Required imports - no conditional loading
@@ -27,7 +27,7 @@ load_dotenv()
 CAMERA_CONFIG: Dict[str, Any] = {
     "enabled": os.getenv("CAMERA_ENABLED", "true").lower() == "true",
     "device_index": int(os.getenv("CAMERA_DEVICE_INDEX", "0")),
-    "save_path": Path(os.getenv("CAMERA_SAVE_PATH", "./photos")),
+    "save_path": get_app_dir("photos"),
     "image_width": int(os.getenv("CAMERA_IMAGE_WIDTH", "1920")),
     "image_height": int(os.getenv("CAMERA_IMAGE_HEIGHT", "1080")),
     "image_quality": int(os.getenv("CAMERA_IMAGE_QUALITY", "85")),
@@ -46,7 +46,7 @@ camera_error: Optional[str] = None
 
 # State persistence - audit log for camera usage (write-only)
 usage_history = JsonlHistory(
-    file_path=Path(__file__).parent.parent / "data" / "camera_usage.jsonl",
+    file_path=get_app_dir("data") / "camera_usage.jsonl",
     max_memory_entries=100  # Small cache since we don't query it
 )
 
