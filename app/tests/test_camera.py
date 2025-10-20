@@ -64,7 +64,6 @@ class TestCameraWithRealDevice:
         result = extract_json_from_result(tool_result)
 
         # Verify successful capture
-        assert result["success"] is True
         assert "url" in result
         assert "timestamp" in result
         assert result["url"].endswith(".jpg")
@@ -152,14 +151,12 @@ class TestCameraWithoutDevice:
         setup_camera_tools(mcp)
         capture_tool = mcp._tool_manager._tools["capture_photo"]
 
-        # Try to capture
-        tool_result = await capture_tool.run(arguments={})
-        result = extract_json_from_result(tool_result)
+        # Try to capture - should raise exception
+        with pytest.raises(Exception) as exc_info:
+            await capture_tool.run(arguments={})
 
-        # Should return error
-        assert result["success"] is False
-        assert "error" in result
-        assert "disabled" in result["error"].lower()
+        # Should contain error about camera being disabled
+        assert "disabled" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_capture_with_invalid_device_index(
@@ -180,13 +177,13 @@ class TestCameraWithoutDevice:
         setup_camera_tools(mcp)
         capture_tool = mcp._tool_manager._tools["capture_photo"]
 
-        # Try to capture
-        tool_result = await capture_tool.run(arguments={})
-        result = extract_json_from_result(tool_result)
+        # Try to capture - should raise exception
+        with pytest.raises(Exception) as exc_info:
+            await capture_tool.run(arguments={})
 
-        # Should return error
-        assert result["success"] is False
-        assert "error" in result
+        # Should contain error message (camera not available or cannot open)
+        error_msg = str(exc_info.value).lower()
+        assert "camera" in error_msg or "open" in error_msg
 
     @pytest.mark.asyncio
     async def test_capture_with_non_integer_device_index(
@@ -227,39 +224,13 @@ class TestCameraWithoutDevice:
         setup_camera_tools(mcp)
         capture_tool = mcp._tool_manager._tools["capture_photo"]
 
-        # Try to capture
-        tool_result = await capture_tool.run(arguments={})
-        result = extract_json_from_result(tool_result)
+        # Try to capture - should raise exception
+        with pytest.raises(Exception) as exc_info:
+            await capture_tool.run(arguments={})
 
-        # Should return error
-        assert result["success"] is False
-        assert "error" in result
-
-    @pytest.mark.asyncio
-    async def test_gatekeeper_enforcement(
-        self, camera_config, test_photos_dir, reset_camera_module, reset_cycle_state
-    ):
-        """Test that capture requires write_status to be called first.
-
-        Note: Fixture parameters are used by pytest's dependency injection.
-        """
-        from utils.shared_state import current_cycle_status
-
-        # Ensure status not written
-        current_cycle_status["written"] = False
-
-        mcp = FastMCP("test")
-        setup_camera_tools(mcp)
-        capture_tool = mcp._tool_manager._tools["capture_photo"]
-
-        # Try to capture
-        tool_result = await capture_tool.run(arguments={})
-        result = extract_json_from_result(tool_result)
-
-        # Should return error about gatekeeper
-        assert result["success"] is False
-        assert "error" in result
-        assert "write_status" in result["error"]
+        # Should contain error message (camera not available or cannot open)
+        error_msg = str(exc_info.value).lower()
+        assert "camera" in error_msg or "open" in error_msg
 
     @pytest.mark.asyncio
     async def test_get_recent_photos_empty(

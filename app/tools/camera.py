@@ -7,11 +7,12 @@ import os
 import logging
 import atexit
 import threading
+import heapq
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Tuple, Dict, List, Any
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
 from utils.paths import get_app_dir
 from dotenv import load_dotenv
@@ -79,8 +80,6 @@ def load_photo_history_from_disk() -> List[Dict[str, str]]:
     Load existing photos from the save directory to reconstruct history.
     Optimized for large directories by limiting files processed.
     """
-    import heapq
-
     history = []
     save_path = CAMERA_CONFIG["save_path"]
     max_photos = 100  # Match PHOTO_HISTORY_LIMIT
@@ -143,10 +142,8 @@ photo_history: List[Dict[str, str]] = load_photo_history_from_disk()
 
 class CaptureResponse(BaseModel):
     """Response from capturing a photo"""
-    success: bool = Field(..., description="Whether capture was successful")
-    url: Optional[str] = Field(None, description="URL or path to the captured image")
-    timestamp: Optional[str] = Field(None, description="When the photo was captured")
-    error: Optional[str] = Field(None, description="Error message if capture failed")
+    url: str = Field(..., description="URL to the captured image")
+    timestamp: str = Field(..., description="When the photo was captured (ISO 8601 UTC)")
 
 
 def initialize_camera() -> Tuple[bool, Optional[cv2.VideoCapture], Optional[str]]:
@@ -237,20 +234,20 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         if read_thread.is_alive():
             error_msg = f"Camera read timed out after {timeout_seconds} seconds"
             logging.error(error_msg)
-            return False, None, error_msg
+            return False, None, None, error_msg
 
         if 'error' in result_container:
             error_msg = f"Camera read error: {result_container['error']}"
             logging.error(error_msg)
-            return False, None, error_msg
+            return False, None, None, error_msg
 
         ret = result_container.get('ret', False)
-        frame = result_container.get('frame', None)
+        frame = result_container.get('frame')
 
         if not ret or frame is None:
             error_msg = "Failed to capture frame"
             logging.error(error_msg)
-            return False, None, error_msg
+            return False, None, None, error_msg
 
         # Generate timestamp once for both filename and response (ensures consistency)
         now = datetime.now(timezone.utc)
@@ -294,64 +291,55 @@ def setup_camera_tools(mcp: FastMCP):
     async def capture_photo() -> CaptureResponse:
         """
         Take a photo of the plant.
-        Uses real USB camera if available, otherwise returns error.
+        Uses real USB camera if available, otherwise raises an error.
 
         Configuration via environment variables:
         - CAMERA_ENABLED: true/false to enable real camera
         - CAMERA_DEVICE_INDEX: 0, 1, 2, etc. for camera selection
         - CAMERA_SAVE_PATH: Directory to save photos
-        """
-        # Check if plant status has been written first
-        if not current_cycle_status["written"]:
-            return CaptureResponse(
-                success=False,
-                error="Must call write_status first before capturing photo"
-            )
 
+        Raises:
+            ValueError: If camera is unavailable or capture fails
+        """
         # Try to capture real photo (timestamp generated inside for consistency)
         success, photo_path, timestamp, error_msg = capture_real_photo()
 
-        if success and photo_path and timestamp:
-            # Real photo captured successfully
-            # Convert file path to HTTP URL
-            from pathlib import Path
-            filename = Path(photo_path).name
-            photo_url = f"{SERVER_URL}/photos/{filename}"
-
-            photo_entry = {
-                "url": photo_url,
-                "timestamp": timestamp,
-            }
-            photo_history.append(photo_entry)
-
-            # Keep history limited to prevent memory issues
-            if len(photo_history) > 100:
-                photo_history.pop(0)
-
-            # Log successful capture
-            log_tool_usage("capture", {
-                "success": True,
-                "photo_path": photo_path,
-                "photo_url": photo_url
-            })
-
-            return CaptureResponse(
-                success=True,
-                url=photo_url,
-                timestamp=timestamp
-            )
-        else:
+        if not success or not photo_path or not timestamp:
             # Camera unavailable or capture failed
             # Log failed capture
             log_tool_usage("capture", {
                 "success": False,
                 "error": error_msg or "Camera unavailable"
             })
+            # Raise exception to signal failure to MCP server
+            raise ValueError(error_msg or "Camera unavailable")
 
-            return CaptureResponse(
-                success=False,
-                error=error_msg or "Camera unavailable"
-            )
+        # Real photo captured successfully
+        # Convert file path to HTTP URL
+        filename = Path(photo_path).name
+        photo_url = f"{SERVER_URL}/photos/{filename}"
+
+        photo_entry = {
+            "url": photo_url,
+            "timestamp": timestamp,
+        }
+        photo_history.append(photo_entry)
+
+        # Keep history limited to prevent memory issues
+        if len(photo_history) > 100:
+            photo_history.pop(0)
+
+        # Log successful capture
+        log_tool_usage("capture", {
+            "success": True,
+            "photo_path": photo_path,
+            "photo_url": photo_url
+        })
+
+        return CaptureResponse(
+            url=photo_url,
+            timestamp=timestamp
+        )
 
     @mcp.tool()
     async def get_recent_photos(
