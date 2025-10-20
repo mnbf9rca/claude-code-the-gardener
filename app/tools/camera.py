@@ -7,11 +7,12 @@ import os
 import logging
 import atexit
 import threading
+import heapq
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Tuple, Dict, List, Any
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
 from utils.paths import get_app_dir
 from dotenv import load_dotenv
@@ -38,6 +39,9 @@ CAMERA_CONFIG: Dict[str, Any] = {
 MCP_PUBLIC_HOST = os.getenv("MCP_PUBLIC_HOST", "localhost")
 MCP_PORT = os.getenv("MCP_PORT", "8000")
 SERVER_URL = f"http://{MCP_PUBLIC_HOST}:{MCP_PORT}"
+
+# Photo history configuration
+PHOTO_HISTORY_LIMIT = 100  # Maximum number of photos to keep in memory
 
 # Camera state
 camera: Optional[cv2.VideoCapture] = None
@@ -79,11 +83,9 @@ def load_photo_history_from_disk() -> List[Dict[str, str]]:
     Load existing photos from the save directory to reconstruct history.
     Optimized for large directories by limiting files processed.
     """
-    import heapq
-
     history = []
     save_path = CAMERA_CONFIG["save_path"]
-    max_photos = 100  # Match PHOTO_HISTORY_LIMIT
+    max_photos = PHOTO_HISTORY_LIMIT
 
     if save_path.exists() and save_path.is_dir():
         # Find all jpg files matching our naming pattern
@@ -143,10 +145,8 @@ photo_history: List[Dict[str, str]] = load_photo_history_from_disk()
 
 class CaptureResponse(BaseModel):
     """Response from capturing a photo"""
-    success: bool = Field(..., description="Whether capture was successful")
-    url: Optional[str] = Field(None, description="URL or path to the captured image")
-    timestamp: Optional[str] = Field(None, description="When the photo was captured")
-    error: Optional[str] = Field(None, description="Error message if capture failed")
+    url: str = Field(..., description="URL to the captured image")
+    timestamp: str = Field(..., description="When the photo was captured (ISO 8601 UTC)")
 
 
 def initialize_camera() -> Tuple[bool, Optional[cv2.VideoCapture], Optional[str]]:
@@ -203,10 +203,11 @@ def _read_camera_frame(camera, result_container: Dict[str, Any]):
         result_container['error'] = str(e)
 
 
-def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
+def capture_real_photo() -> Tuple[str, str]:
     """
     Capture a real photo using the USB camera with timeout protection.
-    Returns: (success, file_path, timestamp_iso, error_message)
+    Returns: (file_path, timestamp_iso)
+    Raises: ValueError if camera is unavailable or capture fails
     """
     global camera, camera_available, camera_error
 
@@ -215,7 +216,7 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         camera_available, camera, camera_error = initialize_camera()
 
     if not camera_available or camera is None:
-        return False, None, None, camera_error or "Camera not available"
+        raise ValueError(camera_error or "Camera not available")
 
     try:
         # Ensure save directory exists
@@ -237,20 +238,20 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         if read_thread.is_alive():
             error_msg = f"Camera read timed out after {timeout_seconds} seconds"
             logging.error(error_msg)
-            return False, None, error_msg
+            raise ValueError(error_msg)
 
         if 'error' in result_container:
             error_msg = f"Camera read error: {result_container['error']}"
             logging.error(error_msg)
-            return False, None, error_msg
+            raise ValueError(error_msg)
 
         ret = result_container.get('ret', False)
-        frame = result_container.get('frame', None)
+        frame = result_container.get('frame')
 
         if not ret or frame is None:
             error_msg = "Failed to capture frame"
             logging.error(error_msg)
-            return False, None, error_msg
+            raise ValueError(error_msg)
 
         # Generate timestamp once for both filename and response (ensures consistency)
         now = datetime.now(timezone.utc)
@@ -267,12 +268,12 @@ def capture_real_photo() -> Tuple[bool, Optional[str], Optional[str], Optional[s
         img.save(filepath, "JPEG", quality=CAMERA_CONFIG["image_quality"])
 
         logging.info(f"Photo captured: {filepath}")
-        return True, str(filepath), timestamp_iso, None
+        return str(filepath), timestamp_iso
 
     except Exception as e:
         error_msg = f"Error capturing photo: {str(e)}"
         logging.error(error_msg)
-        return False, None, None, error_msg
+        raise ValueError(error_msg)
 
 
 def cleanup_camera():
@@ -294,64 +295,56 @@ def setup_camera_tools(mcp: FastMCP):
     async def capture_photo() -> CaptureResponse:
         """
         Take a photo of the plant.
-        Uses real USB camera if available, otherwise returns error.
+        Uses real USB camera if available, otherwise raises an error.
 
         Configuration via environment variables:
         - CAMERA_ENABLED: true/false to enable real camera
         - CAMERA_DEVICE_INDEX: 0, 1, 2, etc. for camera selection
         - CAMERA_SAVE_PATH: Directory to save photos
+
+        Raises:
+            ValueError: If camera is unavailable or capture fails
         """
-        # Check if plant status has been written first
-        if not current_cycle_status["written"]:
-            return CaptureResponse(
-                success=False,
-                error="Must call write_status first before capturing photo"
-            )
-
         # Try to capture real photo (timestamp generated inside for consistency)
-        success, photo_path, timestamp, error_msg = capture_real_photo()
-
-        if success and photo_path and timestamp:
-            # Real photo captured successfully
-            # Convert file path to HTTP URL
-            from pathlib import Path
-            filename = Path(photo_path).name
-            photo_url = f"{SERVER_URL}/photos/{filename}"
-
-            photo_entry = {
-                "url": photo_url,
-                "timestamp": timestamp,
-            }
-            photo_history.append(photo_entry)
-
-            # Keep history limited to prevent memory issues
-            if len(photo_history) > 100:
-                photo_history.pop(0)
-
-            # Log successful capture
-            log_tool_usage("capture", {
-                "success": True,
-                "photo_path": photo_path,
-                "photo_url": photo_url
-            })
-
-            return CaptureResponse(
-                success=True,
-                url=photo_url,
-                timestamp=timestamp
-            )
-        else:
+        # Raises ValueError on failure
+        try:
+            photo_path, timestamp = capture_real_photo()
+        except ValueError as e:
             # Camera unavailable or capture failed
             # Log failed capture
             log_tool_usage("capture", {
                 "success": False,
-                "error": error_msg or "Camera unavailable"
+                "error": str(e)
             })
+            # Re-raise to signal failure to MCP server
+            raise
 
-            return CaptureResponse(
-                success=False,
-                error=error_msg or "Camera unavailable"
-            )
+        # Real photo captured successfully
+        # Convert file path to HTTP URL
+        filename = Path(photo_path).name
+        photo_url = f"{SERVER_URL}/photos/{filename}"
+
+        photo_entry = {
+            "url": photo_url,
+            "timestamp": timestamp,
+        }
+        photo_history.append(photo_entry)
+
+        # Keep history limited to prevent memory issues
+        if len(photo_history) > PHOTO_HISTORY_LIMIT:
+            photo_history.pop(0)
+
+        # Log successful capture
+        log_tool_usage("capture", {
+            "success": True,
+            "photo_path": photo_path,
+            "photo_url": photo_url
+        })
+
+        return CaptureResponse(
+            url=photo_url,
+            timestamp=timestamp
+        )
 
     @mcp.tool()
     async def get_recent_photos(
