@@ -6,36 +6,34 @@ from freezegun import freeze_time
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
 from web_routes import add_message_routes
-from tools.human_messages import (
-    messages_to_human,
-    messages_from_human,
-    MESSAGES_TO_HUMAN_FILE,
-    MESSAGES_FROM_HUMAN_FILE
-)
+import tools.human_messages as human_messages_module
 
 
 @pytest.fixture(autouse=True)
-def clean_message_history():
-    """Clean message history before and after each test"""
-    # Clear in-memory state
-    messages_to_human.clear()
-    messages_from_human.clear()
+def clean_message_history(tmp_path):
+    """Reset message history state before each test"""
+    # Use temp directory for state files (don't touch production state!)
+    from utils.jsonl_history import JsonlHistory
 
-    # Delete actual JSONL files
-    if MESSAGES_TO_HUMAN_FILE.exists():
-        MESSAGES_TO_HUMAN_FILE.unlink()
-    if MESSAGES_FROM_HUMAN_FILE.exists():
-        MESSAGES_FROM_HUMAN_FILE.unlink()
+    # Save original histories
+    original_to_human = human_messages_module.messages_to_human
+    original_from_human = human_messages_module.messages_from_human
+
+    # Create new history instances with temp files
+    human_messages_module.messages_to_human = JsonlHistory(
+        file_path=tmp_path / "messages_to_human.jsonl",
+        max_memory_entries=1000
+    )
+    human_messages_module.messages_from_human = JsonlHistory(
+        file_path=tmp_path / "messages_from_human.jsonl",
+        max_memory_entries=1000
+    )
 
     yield
 
-    # Cleanup after test
-    messages_to_human.clear()
-    messages_from_human.clear()
-    if MESSAGES_TO_HUMAN_FILE.exists():
-        MESSAGES_TO_HUMAN_FILE.unlink()
-    if MESSAGES_FROM_HUMAN_FILE.exists():
-        MESSAGES_FROM_HUMAN_FILE.unlink()
+    # Restore original histories
+    human_messages_module.messages_to_human = original_to_human
+    human_messages_module.messages_from_human = original_from_human
 
 
 @pytest.fixture
@@ -65,13 +63,13 @@ def test_get_messages_ui_empty(client, clean_message_history):
 def test_get_messages_ui_with_messages(client, clean_message_history):
     """Test that UI displays messages"""
     # Add test messages
-    messages_to_human.append({
+    human_messages_module.messages_to_human.append({
         "message_id": "msg_20251020_100000_001",
         "timestamp": "2025-10-20T10:00:00+00:00",
         "content": "Plant needs water!",
         "in_reply_to": None
     })
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": "msg_20251020_110000_001",
         "timestamp": "2025-10-20T11:00:00+00:00",
         "content": "I'll water it now",
@@ -91,13 +89,13 @@ def test_get_messages_ui_with_messages(client, clean_message_history):
 
 def test_get_messages_ui_shows_reply_reference(client, clean_message_history):
     """Test that UI shows in_reply_to references"""
-    messages_to_human.append({
+    human_messages_module.messages_to_human.append({
         "message_id": "msg_20251020_100000_001",
         "timestamp": "2025-10-20T10:00:00+00:00",
         "content": "Question for you",
         "in_reply_to": None
     })
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": "msg_20251020_110000_001",
         "timestamp": "2025-10-20T11:00:00+00:00",
         "content": "Here's the answer",
@@ -115,7 +113,7 @@ def test_get_messages_ui_message_count(client, clean_message_history):
     """Test that UI shows correct message count"""
     # Add 3 messages
     for i in range(3):
-        messages_to_human.append({
+        human_messages_module.messages_to_human.append({
             "message_id": f"msg_test_{i}",
             "timestamp": f"2025-10-20T{10+i:02d}:00:00+00:00",
             "content": f"Message {i}",
@@ -141,13 +139,13 @@ def test_get_messages_api_empty(client, clean_message_history):
 def test_get_messages_api_with_messages(client, clean_message_history):
     """Test API returns messages as JSON"""
     # Add test messages
-    messages_to_human.append({
+    human_messages_module.messages_to_human.append({
         "message_id": "msg_20251020_100000_001",
         "timestamp": "2025-10-20T10:00:00+00:00",
         "content": "Agent message",
         "in_reply_to": None
     })
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": "msg_20251020_110000_001",
         "timestamp": "2025-10-20T11:00:00+00:00",
         "content": "Human reply",
@@ -174,7 +172,7 @@ def test_get_messages_api_with_limit(client, clean_message_history):
     """Test API respects limit parameter"""
     # Add 5 messages
     for i in range(5):
-        messages_to_human.append({
+        human_messages_module.messages_to_human.append({
             "message_id": f"msg_test_{i}",
             "timestamp": f"2025-10-20T{10+i:02d}:00:00+00:00",
             "content": f"Message {i}",
@@ -207,7 +205,7 @@ def test_post_reply_success_json(client, clean_message_history):
     assert data["message_id"].startswith("msg_")
 
     # Verify message was stored
-    messages = messages_from_human.get_all()
+    messages = human_messages_module.messages_from_human.get_all()
     assert len(messages) == 1
     assert messages[0]["content"] == "This is my reply"
     assert messages[0]["in_reply_to"] == "msg_20251020_100000_001"
@@ -228,7 +226,7 @@ def test_post_reply_success_form(client, clean_message_history):
     assert data["success"] is True
 
     # Verify message was stored
-    messages = messages_from_human.get_all()
+    messages = human_messages_module.messages_from_human.get_all()
     assert len(messages) == 1
     assert messages[0]["content"] == "Form reply"
     assert messages[0]["in_reply_to"] is None  # Empty string converted to None
@@ -246,7 +244,7 @@ def test_post_reply_without_in_reply_to(client, clean_message_history):
     assert data["success"] is True
 
     # Verify message was stored
-    messages = messages_from_human.get_all()
+    messages = human_messages_module.messages_from_human.get_all()
     assert len(messages) == 1
     assert messages[0]["in_reply_to"] is None
 
@@ -264,7 +262,7 @@ def test_post_reply_empty_content(client, clean_message_history):
     assert "required" in data["error"].lower()
 
     # Verify no message was stored
-    assert len(messages_from_human.get_all()) == 0
+    assert len(human_messages_module.messages_from_human.get_all()) == 0
 
 
 def test_post_reply_whitespace_only(client, clean_message_history):
@@ -279,7 +277,7 @@ def test_post_reply_whitespace_only(client, clean_message_history):
     assert "error" in data
 
     # Verify no message was stored
-    assert len(messages_from_human.get_all()) == 0
+    assert len(human_messages_module.messages_from_human.get_all()) == 0
 
 
 def test_post_reply_too_long(client, clean_message_history):
@@ -297,7 +295,7 @@ def test_post_reply_too_long(client, clean_message_history):
     assert "exceeds maximum length" in data["error"]
 
     # Verify no message was stored
-    assert len(messages_from_human.get_all()) == 0
+    assert len(human_messages_module.messages_from_human.get_all()) == 0
 
 
 def test_post_reply_multiple_messages(client, clean_message_history):
@@ -319,7 +317,7 @@ def test_post_reply_multiple_messages(client, clean_message_history):
         assert response2.status_code == 200
 
     # Verify both were stored
-    messages = messages_from_human.get_all()
+    messages = human_messages_module.messages_from_human.get_all()
     assert len(messages) == 2
     assert messages[0]["content"] == "First reply"
     assert messages[1]["content"] == "Second reply"
@@ -355,19 +353,19 @@ def test_ui_contains_javascript(client, clean_message_history):
 def test_messages_sorted_newest_first(client, clean_message_history):
     """Test that messages are always sorted newest first"""
     # Add messages in random order
-    messages_to_human.append({
+    human_messages_module.messages_to_human.append({
         "message_id": "msg_20251020_100000_001",
         "timestamp": "2025-10-20T10:00:00+00:00",
         "content": "First",
         "in_reply_to": None
     })
-    messages_to_human.append({
+    human_messages_module.messages_to_human.append({
         "message_id": "msg_20251020_120000_001",
         "timestamp": "2025-10-20T12:00:00+00:00",
         "content": "Third",
         "in_reply_to": None
     })
-    messages_to_human.append({
+    human_messages_module.messages_to_human.append({
         "message_id": "msg_20251020_110000_001",
         "timestamp": "2025-10-20T11:00:00+00:00",
         "content": "Second",
@@ -388,3 +386,55 @@ def test_messages_sorted_newest_first(client, clean_message_history):
     pos_second = response_ui.text.find("Second")
     pos_first = response_ui.text.find("First")
     assert pos_third < pos_second < pos_first  # Newest first in HTML
+
+
+def test_ui_contains_reply_buttons(client, clean_message_history):
+    """Test that UI contains reply buttons on each message"""
+    # Add test messages
+    human_messages_module.messages_to_human.append({
+        "message_id": "msg_20251020_100000_001",
+        "timestamp": "2025-10-20T10:00:00+00:00",
+        "content": "Test message from agent",
+        "in_reply_to": None
+    })
+    human_messages_module.messages_from_human.append({
+        "message_id": "msg_20251020_110000_001",
+        "timestamp": "2025-10-20T11:00:00+00:00",
+        "content": "Test message from human",
+        "in_reply_to": None
+    })
+
+    response = client.get("/messages")
+
+    assert response.status_code == 200
+    # Check for reply button functionality
+    assert "Reply to this message" in response.text
+    assert "setReplyTo" in response.text
+    assert "cancelReply" in response.text
+    # Check for reply-to UI elements
+    assert "replyToBox" in response.text
+    assert "reply-to-box" in response.text
+    # Check for manual reply-to input
+    assert "manualReplyTo" in response.text
+    assert "manually enter message ID" in response.text
+
+
+def test_post_reply_with_manual_message_id(client, clean_message_history):
+    """Test posting a reply with manually entered message ID"""
+    response = client.post(
+        "/api/messages/reply",
+        data={
+            "content": "Manual reply test",
+            "in_reply_to": "msg_20251020_100000_001"
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+
+    # Verify message was stored with correct in_reply_to
+    messages = human_messages_module.messages_from_human.get_all()
+    assert len(messages) == 1
+    assert messages[0]["content"] == "Manual reply test"
+    assert messages[0]["in_reply_to"] == "msg_20251020_100000_001"

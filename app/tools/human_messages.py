@@ -32,6 +32,10 @@ MESSAGES_FROM_HUMAN_FILE = get_app_dir("data") / "messages_from_human.jsonl"
 messages_to_human = JsonlHistory(file_path=MESSAGES_TO_HUMAN_FILE, max_memory_entries=MAX_MEMORY_ENTRIES)
 messages_from_human = JsonlHistory(file_path=MESSAGES_FROM_HUMAN_FILE, max_memory_entries=MAX_MEMORY_ENTRIES)
 
+# Load existing messages from disk
+messages_to_human.load()
+messages_from_human.load()
+
 
 def _generate_message_id() -> str:
     """

@@ -8,12 +8,8 @@ from starlette.requests import Request
 from starlette.routing import Route
 from datetime import datetime, timezone
 from typing import Dict, Any, List
-from tools.human_messages import (
-    messages_to_human,
-    messages_from_human,
-    _generate_message_id,
-    MAX_MESSAGE_LENGTH
-)
+import tools.human_messages as human_messages
+from tools.human_messages import _generate_message_id, MAX_MESSAGE_LENGTH
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -26,9 +22,13 @@ def _get_all_messages() -> List[Dict[str, Any]]:
     Returns:
         List of messages with added 'direction' field ('to_human' or 'from_human')
     """
+    # Reload from disk to pick up any manual edits
+    human_messages.messages_to_human.load()
+    human_messages.messages_from_human.load()
+
     # Get all messages
-    to_human = messages_to_human.get_all()
-    from_human = messages_from_human.get_all()
+    to_human = human_messages.messages_to_human.get_all()
+    from_human = human_messages.messages_from_human.get_all()
 
     # Add direction field
     for msg in to_human:
@@ -114,11 +114,11 @@ async def post_reply(request: Request) -> JSONResponse:
             "message_id": message_id,
             "timestamp": timestamp,
             "content": content,
-            "in_reply_to": in_reply_to if in_reply_to else None
+            "in_reply_to": in_reply_to or None
         }
 
         # Store to history
-        messages_from_human.append(message_entry)
+        human_messages.messages_from_human.append(message_entry)
 
         logger.info(f"Reply from human received: {message_id}")
 
@@ -136,9 +136,9 @@ async def post_reply(request: Request) -> JSONResponse:
         )
 
 
-async def get_messages_ui(request: Request) -> HTMLResponse:
+async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
     """
-    GET /
+    GET /messages
     Serve simple HTML UI for viewing and replying to messages
     """
     # Get all messages
@@ -239,6 +239,59 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
             box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
         }}
 
+        .form-group input {{
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 1rem;
+        }}
+
+        .form-group input:focus {{
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }}
+
+        .reply-to-box {{
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            display: none;
+        }}
+
+        .reply-to-box.active {{
+            display: block;
+        }}
+
+        .reply-to-text {{
+            font-size: 0.9rem;
+            color: #495057;
+            margin-bottom: 5px;
+        }}
+
+        .reply-to-text strong {{
+            color: #667eea;
+        }}
+
+        .cancel-reply {{
+            background: #6c757d;
+            color: white;
+            padding: 4px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-left: 10px;
+        }}
+
+        .cancel-reply:hover {{
+            background: #5a6268;
+        }}
+
         button {{
             background: #4CAF50;
             color: white;
@@ -265,6 +318,17 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
         }}
 
         .refresh-btn:hover {{
+            background: #5568d3;
+        }}
+
+        .reply-btn {{
+            background: #667eea;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            margin-top: 8px;
+        }}
+
+        .reply-btn:hover {{
             background: #5568d3;
         }}
 
@@ -338,12 +402,40 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
             line-height: 1.6;
         }}
 
+        .reply-indicator {{
+            background: #fff3cd;
+            border-left: 3px solid #ffc107;
+            padding: 8px 12px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+            color: #856404;
+            border-radius: 4px;
+        }}
+
+        .reply-indicator code {{
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }}
+
         .message-footer {{
             margin-top: 12px;
             padding-top: 12px;
             border-top: 1px solid #e9ecef;
             font-size: 0.85rem;
             color: #6c757d;
+        }}
+
+        .message-footer code {{
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #495057;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
         }}
 
         .reply-link {{
@@ -418,10 +510,23 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
                 <h2>Send Message to Agent</h2>
                 <div id="successMessage" class="success-message"></div>
                 <div id="errorMessage" class="error-message"></div>
+
+                <div id="replyToBox" class="reply-to-box">
+                    <div class="reply-to-text">
+                        <strong>Replying to:</strong> <span id="replyToPreview"></span>
+                    </div>
+                    <button type="button" class="cancel-reply" onclick="cancelReply()">Cancel Reply</button>
+                </div>
+
                 <form id="replyForm">
+                    <input type="hidden" id="inReplyTo" name="in_reply_to" value="">
                     <div class="form-group">
                         <label for="content">Message:</label>
                         <textarea id="content" name="content" required placeholder="Type your message here..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="manualReplyTo">Or manually enter message ID to reply to (optional):</label>
+                        <input type="text" id="manualReplyTo" name="manual_reply_to" placeholder="msg_20251020_123456_789">
                     </div>
                     <button type="submit">Send Message</button>
                     <button type="button" class="refresh-btn" onclick="window.location.reload()">Refresh Page</button>
@@ -449,20 +554,29 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
                 timestamp_str = msg['timestamp']
 
             # Build message HTML
+            # Escape content for display and JavaScript
+            msg_content_escaped = msg['content'].replace("'", "\\'").replace("\n", "\\n")[:50]
+            if len(msg['content']) > 50:
+                msg_content_escaped += "..."
+
+            # Add reply indicator if this message is replying to another
+            reply_indicator = ""
+            if msg.get('in_reply_to'):
+                reply_indicator = f"""
+                    <div class="reply-indicator">
+                        ↩️ In reply to: <code>{msg['in_reply_to']}</code>
+                    </div>"""
+
             html += f"""
                 <div class="message {direction_class}">
                     <div class="message-header">
                         <span class="message-label">{direction_label}</span>
                         <span class="message-meta">{timestamp_str}</span>
-                    </div>
+                    </div>{reply_indicator}
                     <div class="message-content">{msg['content']}</div>
                     <div class="message-footer">
-                        <strong>ID:</strong> {msg['message_id']}"""
-
-            if msg.get('in_reply_to'):
-                html += f""" | <strong>In reply to:</strong> {msg['in_reply_to']}"""
-
-            html += """
+                        <strong>ID:</strong> <code>{msg['message_id']}</code><br>
+                        <button type="button" class="reply-btn" onclick="setReplyTo('{msg['message_id']}', '{msg_content_escaped}')">Reply to this message</button>
                     </div>
                 </div>"""
 
@@ -472,6 +586,33 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
     </div>
 
     <script>
+        // Set reply-to when clicking a reply button
+        function setReplyTo(messageId, messagePreview) {
+            const replyToBox = document.getElementById('replyToBox');
+            const replyToPreview = document.getElementById('replyToPreview');
+            const inReplyToField = document.getElementById('inReplyTo');
+
+            replyToBox.classList.add('active');
+            replyToPreview.textContent = messageId + ' - "' + messagePreview + '"';
+            inReplyToField.value = messageId;
+
+            // Clear manual input if present
+            document.getElementById('manualReplyTo').value = '';
+
+            // Scroll to form and focus
+            document.getElementById('content').focus();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Cancel reply
+        function cancelReply() {
+            const replyToBox = document.getElementById('replyToBox');
+            const inReplyToField = document.getElementById('inReplyTo');
+
+            replyToBox.classList.remove('active');
+            inReplyToField.value = '';
+        }
+
         // Handle form submission
         document.getElementById('replyForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -479,6 +620,9 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
             const content = document.getElementById('content').value.trim();
             const successMsg = document.getElementById('successMessage');
             const errorMsg = document.getElementById('errorMessage');
+
+            // Get in_reply_to value (prioritize hidden field from Reply button, then manual input)
+            const inReplyTo = document.getElementById('inReplyTo').value || document.getElementById('manualReplyTo').value.trim() || null;
 
             // Hide previous messages
             successMsg.style.display = 'none';
@@ -491,12 +635,17 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
             }
 
             try {
+                const payload = { content };
+                if (inReplyTo) {
+                    payload.in_reply_to = inReplyTo;
+                }
+
                 const response = await fetch('/api/messages/reply', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ content })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
@@ -505,6 +654,8 @@ async def get_messages_ui(request: Request) -> HTMLResponse:
                     successMsg.textContent = 'Message sent successfully! Refreshing...';
                     successMsg.style.display = 'block';
                     document.getElementById('content').value = '';
+                    document.getElementById('manualReplyTo').value = '';
+                    cancelReply();
 
                     // Refresh page after 1 second
                     setTimeout(() => {

@@ -10,39 +10,39 @@ from unittest.mock import patch, MagicMock
 from freezegun import freeze_time
 from tools.human_messages import (
     setup_human_messages_tools,
-    messages_to_human,
-    messages_from_human,
     _generate_message_id,
     _send_email_notification,
-    MAX_MESSAGE_LENGTH,
-    MESSAGES_TO_HUMAN_FILE,
-    MESSAGES_FROM_HUMAN_FILE
+    MAX_MESSAGE_LENGTH
 )
+import tools.human_messages as human_messages_module
 from fastmcp import FastMCP
 
 
 @pytest.fixture(autouse=True)
-def clean_message_history():
-    """Clean message history before and after each test"""
-    # Clear in-memory state
-    messages_to_human.clear()
-    messages_from_human.clear()
+def clean_message_history(tmp_path):
+    """Reset message history state before each test"""
+    # Use temp directory for state files (don't touch production state!)
+    from utils.jsonl_history import JsonlHistory
 
-    # Delete actual JSONL files
-    if MESSAGES_TO_HUMAN_FILE.exists():
-        MESSAGES_TO_HUMAN_FILE.unlink()
-    if MESSAGES_FROM_HUMAN_FILE.exists():
-        MESSAGES_FROM_HUMAN_FILE.unlink()
+    # Save original histories
+    original_to_human = human_messages_module.messages_to_human
+    original_from_human = human_messages_module.messages_from_human
+
+    # Create new history instances with temp files
+    human_messages_module.messages_to_human = JsonlHistory(
+        file_path=tmp_path / "messages_to_human.jsonl",
+        max_memory_entries=1000
+    )
+    human_messages_module.messages_from_human = JsonlHistory(
+        file_path=tmp_path / "messages_from_human.jsonl",
+        max_memory_entries=1000
+    )
 
     yield
 
-    # Cleanup after test
-    messages_to_human.clear()
-    messages_from_human.clear()
-    if MESSAGES_TO_HUMAN_FILE.exists():
-        MESSAGES_TO_HUMAN_FILE.unlink()
-    if MESSAGES_FROM_HUMAN_FILE.exists():
-        MESSAGES_FROM_HUMAN_FILE.unlink()
+    # Restore original histories
+    human_messages_module.messages_to_human = original_to_human
+    human_messages_module.messages_from_human = original_from_human
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ async def test_send_message_to_human_basic(test_mcp, clean_message_history):
     assert dt.tzinfo is not None
 
     # Check message was stored
-    messages = messages_to_human.get_all()
+    messages = human_messages_module.messages_to_human.get_all()
     assert len(messages) == 1
     assert messages[0]["content"] == "Hello human, the plant needs water!"
     assert messages[0]["message_id"] == result_dict["message_id"]
@@ -117,7 +117,7 @@ async def test_send_message_with_reply_to(test_mcp, clean_message_history):
 
     # First, simulate a message from human to agent
     human_msg_id = "msg_20251020_120000_001"
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": human_msg_id,
         "timestamp": "2025-10-20T12:00:00+00:00",
         "content": "Should I water the plant today?",
@@ -134,13 +134,13 @@ async def test_send_message_with_reply_to(test_mcp, clean_message_history):
     result_dict = json.loads(tool_result.content[0].text)
 
     # Check message was stored with reply reference to the human's message
-    messages = messages_to_human.get_all()
+    messages = human_messages_module.messages_to_human.get_all()
     assert len(messages) == 1
     assert messages[0]["in_reply_to"] == human_msg_id
     assert messages[0]["content"] == "Regarding your question about watering... Yes, the soil moisture is low."
 
     # Verify we can trace the conversation thread
-    human_messages = messages_from_human.get_all()
+    human_messages = human_messages_module.messages_from_human.get_all()
     assert len(human_messages) == 1
     assert human_messages[0]["message_id"] == human_msg_id
 
@@ -158,7 +158,7 @@ async def test_send_message_too_long(test_mcp, clean_message_history):
         await tool.run(arguments={"message": long_message})
 
     # Verify no message was stored
-    assert len(messages_to_human.get_all()) == 0
+    assert len(human_messages_module.messages_to_human.get_all()) == 0
 
 
 @pytest.mark.asyncio
@@ -241,13 +241,13 @@ async def test_list_messages_from_human_basic(test_mcp, clean_message_history):
     """Test listing messages from human"""
 
     # Add some test messages
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": "msg_20251020_100000_001",
         "timestamp": "2025-10-20T10:00:00+00:00",
         "content": "First message",
         "in_reply_to": None
     })
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": "msg_20251020_110000_001",
         "timestamp": "2025-10-20T11:00:00+00:00",
         "content": "Second message",
@@ -273,7 +273,7 @@ async def test_list_messages_pagination(test_mcp, clean_message_history):
 
     # Add 5 test messages
     for i in range(5):
-        messages_from_human.append({
+        human_messages_module.messages_from_human.append({
             "message_id": f"msg_20251020_{10 + i:02d}0000_001",
             "timestamp": f"2025-10-20T{10 + i:02d}:00:00+00:00",
             "content": f"Message {i+1}",
@@ -301,7 +301,7 @@ async def test_list_messages_pagination(test_mcp, clean_message_history):
 async def test_list_messages_without_content(test_mcp, clean_message_history):
     """Test listing messages without content"""
 
-    messages_from_human.append({
+    human_messages_module.messages_from_human.append({
         "message_id": "msg_20251020_100000_001",
         "timestamp": "2025-10-20T10:00:00+00:00",
         "content": "Secret message",
