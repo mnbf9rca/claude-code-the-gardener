@@ -15,7 +15,7 @@ growth/changes
 Your goal: Keep the plant thriving while continuously improving your care strategy through experimentation and learning.
 ```
 
-## conversation with calude about prompt design
+## conversation with Claude about prompt design
 
 Option A: Process Checklist (previous)
 

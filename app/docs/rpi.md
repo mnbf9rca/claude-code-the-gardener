@@ -92,7 +92,7 @@ DIAGNOSTIC CHECK COMPLETE
 2025-10-19 21:34:23 - root - INFO - Camera released
 ```
 
-You can check for the file with e.g. `ls ls test_photos/plant_20251019_203423_405.jpg` (in this case), or copy it locally with e.g. `scp rob@192.168.17.145:/home/rob/claude-code-the-gardener/app/test_photos/plant_20251019_203423_405.jpg ~/Downloads/` (substitute in your own username and IP address).
+You can check for the file with e.g. `ls test_photos/plant_20251019_203423_405.jpg` (in this case), or copy it locally with e.g. `scp rob@192.168.17.145:/home/rob/claude-code-the-gardener/app/test_photos/plant_20251019_203423_405.jpg ~/Downloads/` (substitute in your own username and IP address).
 
 Then set your .env file. Copy the example and edit:
 
@@ -234,7 +234,7 @@ and if we ask it the time:
 we can see all of this in the streamed log output of the rpi server:
 
 ```shell
-rob@raspberrypi:ü/claude-code-the-gardener/app $  uv run python run_http.py
+rob@raspberrypi:~/claude-code-the-gardener/app $  uv run python run_http.py
 2025-10-19 22:04:00 - root - INFO - Loaded 0 photos from disk into history
 2025-10-19 22:04:01 - __main__ - INFO - ============================================================
 2025-10-19 22:04:01 - __main__ - INFO - 🌱 Plant Care MCP Server - HTTP Mode
