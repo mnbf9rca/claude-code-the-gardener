@@ -17,17 +17,17 @@ Automated deployment for Claude Code agent running on Raspberry Pi.
 Create `.env.agent` from the example template **before running installation**:
 
 ```bash
-cd agent/deploy
-cp .env.agent.example .env.agent
-nano .env.agent  # Edit with your API key and healthcheck URL
+cd agent
+cp .env.agent.example deploy/.env.agent
+nano deploy/.env.agent  # Edit with your API key and healthcheck URL
 ```
 
-**Note:** The installation script will fail if `.env.agent` is missing.
+**Note:** The installation script will fail if `deploy/.env.agent` is missing.
 
 ### 2. Run Installation Script
 
 ```bash
-sudo bash agent/deploy/install.sh
+sudo bash agent/install-agent.sh
 ```
 
 The script validates all required files exist, then:
@@ -81,22 +81,18 @@ Visit your healthchecks.io dashboard to see execution history and alerts.
 To update the agent prompt, MCP configuration, or other settings:
 
 1. Edit files in the repository (`agent/deploy/`)
-2. Re-run the installation script: `sudo bash agent/deploy/install.sh`
+2. Re-run the installation script: `sudo bash agent/install-agent.sh`
 3. Restart the service: `sudo systemctl restart gardener-agent`
 
-**Note:** The installation script will NOT overwrite an existing `.env.agent` by default to prevent accidentally replacing your API key. To force update all files including `.env.agent`:
-
-```bash
-sudo bash agent/deploy/install.sh --force
-```
-
-This will backup the existing `.env.agent` to `.env.agent.bak` before overwriting.
+**Note:** The installation script overwrites all configuration files, including `.env.agent`, so make sure your changes are saved in `agent/deploy/` before re-running.
 
 ## Architecture
 
 - **gardener** user: Runs Claude Code agent, isolated with no repo access
-- **Working directory**: `/home/gardener/`
-- **Session data**: `/home/gardener/.claude/`
+- **Working directory**: `/home/gardener/workspace/` (isolated from config files)
+- **Session data**: `/home/gardener/workspace/.claude/`
+- **Logs**: `/home/gardener/logs/`
+- **Config files**: `/home/gardener/` (root-owned, read-only)
 - **Execution interval**: 10 minutes between runs
 - **Health monitoring**: Pings healthchecks.io before/after each execution
 
@@ -132,11 +128,47 @@ The gardener user:
 - Cannot access the repository
 - Cannot modify its own configuration files (all configs are root-owned and read-only)
 - Cannot edit its own prompt or MCP server list
+- Runs in isolated workspace directory (`/home/gardener/workspace/`)
+- Config files in parent directory are readable but protected from modification
+- Default operations happen in workspace, making accidental config access unlikely
 - Can only interact with the plant via MCP HTTP API
-- Can only write to its own logs and Claude session data
+- Can only write to workspace (`/home/gardener/workspace/`) and logs (`/home/gardener/logs/`)
 - Runs with systemd security hardening (NoNewPrivileges, PrivateTmp)
 
+**Directory structure:**
+```
+/home/gardener/
+├── .env.agent           # API key (root:gardener 640) - readable but not writable
+├── prompt.txt           # Agent instructions (root:root 644) - readable
+├── .mcp.json            # MCP config (root:root 644) - readable
+├── run-agent.sh         # Execution script (root:root 755)
+├── logs/                # Log files (gardener:gardener) - writable
+└── workspace/           # Claude runs HERE (gardener:gardener) - writable
+    └── .claude/         # Session data (gardener:gardener) - writable
+        └── settings.json
+```
+
 ## Uninstalling
+
+### Option 1: Remove Service Only (Keep User & Data)
+
+Use this if you want to temporarily disable the agent but preserve logs and configuration:
+
+```bash
+# Stop and disable service
+sudo systemctl stop gardener-agent
+sudo systemctl disable gardener-agent
+
+# Remove service file
+sudo rm /etc/systemd/system/gardener-agent.service
+sudo systemctl daemon-reload
+```
+
+The gardener user and all data in `/home/gardener/` remain intact. To restart later, just re-run `sudo bash agent/install-agent.sh`.
+
+### Option 2: Complete Removal
+
+Remove everything including user, logs, and Claude session data:
 
 ```bash
 # Stop and disable service
@@ -147,6 +179,31 @@ sudo systemctl disable gardener-agent
 sudo rm /etc/systemd/system/gardener-agent.service
 sudo systemctl daemon-reload
 
-# Optional: Remove gardener user and data
+# Remove gardener user and home directory
+# This deletes: logs, .claude session data, all config files
 sudo userdel -r gardener
 ```
+
+**Warning:** This permanently deletes all logs and Claude's conversation history.
+
+### Option 3: Remove User But Preserve Logs
+
+If you want to keep logs for analysis but remove the user:
+
+```bash
+# Stop and disable service
+sudo systemctl stop gardener-agent
+sudo systemctl disable gardener-agent
+
+# Remove service file
+sudo rm /etc/systemd/system/gardener-agent.service
+sudo systemctl daemon-reload
+
+# Backup logs
+sudo mv /home/gardener/logs /var/log/gardener-agent-backup
+
+# Remove user and home directory
+sudo userdel -r gardener
+```
+
+Logs will be preserved in `/var/log/gardener-agent-backup/`.

@@ -4,6 +4,16 @@ set -euo pipefail
 # Continuous loop agent runner for gardener user
 # Executes Claude Code agent every 10 minutes with health monitoring
 
+# Load environment variables from .env.agent
+ENV_FILE="$HOME/.env.agent"
+if [ -f "$ENV_FILE" ]; then
+    set -a  # Export all variables
+    source "$ENV_FILE"
+    set +a
+fi
+
+CLAUDE_BIN="$HOME/.local/bin/claude"
+WORKSPACE_DIR="$HOME/workspace"
 LOCK_FILE="$HOME/.gardener-agent.lock"
 LOG_DIR="${LOG_DIR:-$HOME/logs}"
 PROMPT_FILE="$HOME/prompt.txt"
@@ -72,8 +82,9 @@ while true; do
 
     PROMPT=$(cat "$PROMPT_FILE")
 
-    # Execute Claude Code agent
-    if claude --continue --verbose --output-format json -p "$PROMPT" >> "$LOG_FILE" 2>&1; then
+    # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
+    # Runs in isolated workspace so Claude cannot access config files in $HOME
+    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --continue --verbose --output-format json -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
         healthcheck ""  # Success endpoint (no suffix)
     else
