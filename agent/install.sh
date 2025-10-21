@@ -2,33 +2,7 @@
 set -euo pipefail
 
 # Idempotent installation script for Claude Code gardener agent
-# Run as admin user with sudo: sudo bash agent/install.sh [--force]
-#
-# Options:
-#   --force    Overwrite existing .env.agent (backup to .env.agent.bak)
-
-# Parse command line arguments
-FORCE_UPDATE=0
-for arg in "$@"; do
-    case "$arg" in
-        --force)
-            FORCE_UPDATE=1
-            ;;
-        -h|--help)
-            echo "Usage: sudo bash agent/install.sh [--force]"
-            echo ""
-            echo "Options:"
-            echo "  --force    Overwrite existing .env.agent (backup to .env.agent.bak)"
-            echo "  -h, --help Show this help message"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $arg"
-            echo "Run with --help for usage information"
-            exit 1
-            ;;
-    esac
-done
+# Run as admin user with sudo: sudo bash agent/install.sh
 
 echo "=== Claude Code Gardener Agent Installation ==="
 
@@ -101,6 +75,13 @@ else
         echo "⚠ Warning: $GARDENER_HOME already exists but user does not"
         echo "  The directory may have incorrect permissions"
         echo "  Consider removing it: sudo rm -rf $GARDENER_HOME"
+        echo ""
+        echo "*****************************************************************************************"
+        echo "*                                                                                       *"
+        echo "*   ⚠ Warning: deleting these folders will remove any existing configuration and data!  *"
+        echo "*   For example agent logs or ~/.claude/projects/ may contain detailed transcripts.     *"
+        echo "*                                                                                       *"
+        echo "*****************************************************************************************"
         exit 1
     fi
     echo "Creating user $GARDENER_USER..."
@@ -160,24 +141,12 @@ install -m 644 -o root -g root \
     "$DEPLOY_DIR/settings.local" "$GARDENER_CLAUDE_DIR/settings.local"
 echo "✓ Copied settings.local"
 
-# 5. Copy .env.agent (don't overwrite existing unless --force, read-only for gardener)
-if [ ! -f "$GARDENER_HOME/.env.agent" ]; then
-    install -m 600 -o root -g root \
-        "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
-    echo "✓ Copied .env.agent"
-elif [ "$FORCE_UPDATE" -eq 1 ]; then
-    cp -p "$GARDENER_HOME/.env.agent" "$GARDENER_HOME/.env.agent.bak"
-    install -m 600 -o root -g root \
-        "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
-    echo "✓ Overwrote .env.agent (backup saved as .env.agent.bak)"
-else
-    echo "! .env.agent already exists in $GARDENER_HOME, skipping copy"
-    echo "  ⚠ WARNING: You may be using a stale environment configuration"
-    echo "  Please review $GARDENER_HOME/.env.agent and update if needed"
-    echo "  To force update and backup the old file, re-run with: sudo bash $0 --force"
-fi
+# Copy .env.agent (read-only for gardener)
+install -m 600 -o root -g root \
+    "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
+echo "✓ Copied .env.agent"
 
-# 6. Install systemd service
+# 5. Install systemd service
 echo "Installing systemd service..."
 cat > "$SERVICE_FILE" << EOF
 [Unit]
