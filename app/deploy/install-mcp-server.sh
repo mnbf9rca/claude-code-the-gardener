@@ -272,8 +272,8 @@ echo ""
 
 # Check actual service status (more reliable than tracking state during script)
 SERVICE_STATUS=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
-# Trim any whitespace
-SERVICE_STATUS=$(echo "$SERVICE_STATUS" | tr -d '[:space:]')
+# Trim leading and trailing whitespace only
+SERVICE_STATUS=$(echo "$SERVICE_STATUS" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
 if [ "$SERVICE_STATUS" = "active" ]; then
     echo "Service Status: RUNNING"
