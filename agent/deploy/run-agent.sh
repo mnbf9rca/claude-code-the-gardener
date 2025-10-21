@@ -73,8 +73,9 @@ while true; do
 
     PROMPT=$(cat "$PROMPT_FILE")
 
-    # Execute Claude Code agent
-    if "$CLAUDE_BIN" --continue --verbose --output-format json -p "$PROMPT" >> "$LOG_FILE" 2>&1; then
+    # Execute Claude Code agent from home directory (tee to both terminal and log file)
+    # Must run from home directory since gardener user may not have access to other paths
+    if (cd "$HOME" && "$CLAUDE_BIN" --continue --verbose --output-format json -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
         healthcheck ""  # Success endpoint (no suffix)
     else
