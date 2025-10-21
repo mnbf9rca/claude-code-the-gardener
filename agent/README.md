@@ -27,7 +27,7 @@ nano deploy/.env.agent  # Edit with your API key and healthcheck URL
 ### 2. Run Installation Script
 
 ```bash
-sudo bash agent/install.sh
+sudo bash agent/install-agent.sh
 ```
 
 The script validates all required files exist, then:
@@ -81,7 +81,7 @@ Visit your healthchecks.io dashboard to see execution history and alerts.
 To update the agent prompt, MCP configuration, or other settings:
 
 1. Edit files in the repository (`agent/deploy/`)
-2. Re-run the installation script: `sudo bash agent/install.sh`
+2. Re-run the installation script: `sudo bash agent/install-agent.sh`
 3. Restart the service: `sudo systemctl restart gardener-agent`
 
 **Note:** The installation script overwrites all configuration files, including `.env.agent`, so make sure your changes are saved in `agent/deploy/` before re-running.
@@ -146,7 +146,7 @@ sudo rm /etc/systemd/system/gardener-agent.service
 sudo systemctl daemon-reload
 ```
 
-The gardener user and all data in `/home/gardener/` remain intact. To restart later, just re-run `sudo bash agent/install.sh`.
+The gardener user and all data in `/home/gardener/` remain intact. To restart later, just re-run `sudo bash agent/install-agent.sh`.
 
 ### Option 2: Complete Removal
 

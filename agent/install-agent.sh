@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Idempotent installation script for Claude Code gardener agent
-# Run as admin user with sudo: sudo bash agent/install.sh
+# Run as admin user with sudo: sudo bash agent/install-agent.sh
 
 echo "=== Claude Code Gardener Agent Installation ==="
 
