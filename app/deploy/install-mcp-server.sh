@@ -21,8 +21,6 @@ REPO_ROOT="$(cd "$APP_DIR/.." && pwd)"
 MCP_USER="mcpserver"
 MCP_HOME="/home/$MCP_USER"
 MCP_APP_DIR="$MCP_HOME/plant-care-app"
-MCP_DATA_DIR="$MCP_HOME/data"
-MCP_PHOTOS_DIR="$MCP_HOME/photos"
 SERVICE_NAME="plant-care-mcp.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
 
@@ -210,28 +208,19 @@ fi
 
 echo "✓ Python dependencies installed"
 
-# 7. Create data and photos directories
-echo "Creating data directories..."
-mkdir -p "$MCP_DATA_DIR"
-mkdir -p "$MCP_PHOTOS_DIR"
-chown "$MCP_USER:$MCP_USER" "$MCP_DATA_DIR"
-chown "$MCP_USER:$MCP_USER" "$MCP_PHOTOS_DIR"
-echo "✓ Created $MCP_DATA_DIR"
-echo "✓ Created $MCP_PHOTOS_DIR"
-
-# 8. Copy .env configuration
+# 7. Copy .env configuration
 echo "Copying environment configuration..."
 install -m 640 -o root -g "$MCP_USER" \
     "$APP_DIR/.env" "$MCP_HOME/.env"
 echo "✓ Copied .env to $MCP_HOME/.env"
 
-# 9. Check if service is currently running (before any changes)
+# 8. Check if service is currently running (before any changes)
 SERVICE_WAS_ACTIVE=false
 if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     SERVICE_WAS_ACTIVE=true
 fi
 
-# 10. Install systemd service
+# 9. Install systemd service
 echo "Installing systemd service..."
 SERVICE_FILE_UPDATED=false
 if [ -f "$SERVICE_FILE" ]; then
@@ -253,7 +242,7 @@ else
     echo "✓ Systemd service installed"
 fi
 
-# 11. Restart service if it was running or if we updated files
+# 10. Restart service if it was running or if we updated files
 if [ "$SERVICE_WAS_ACTIVE" = true ] || [ "$SERVICE_FILE_UPDATED" = true ]; then
     echo "  Restarting service with updated configuration..."
     systemctl restart "$SERVICE_NAME"
@@ -263,7 +252,7 @@ else
     SERVICE_IS_RUNNING=false
 fi
 
-# 12. Summary
+# 11. Summary
 echo ""
 echo "=== Installation Complete ==="
 echo ""
@@ -273,10 +262,7 @@ echo "Deployment Information:"
 cat "$MCP_APP_DIR/.deployment-info" | sed 's/^/  /'
 echo ""
 
-echo "Directories:"
-echo "  App: $MCP_APP_DIR"
-echo "  Data: $MCP_DATA_DIR"
-echo "  Photos: $MCP_PHOTOS_DIR"
+echo "App Directory: $MCP_APP_DIR"
 echo ""
 
 # Check actual service status (more reliable than tracking state during script)
