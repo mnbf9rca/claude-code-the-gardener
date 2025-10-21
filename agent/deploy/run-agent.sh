@@ -17,6 +17,7 @@ WORKSPACE_DIR="$HOME/workspace"
 LOCK_FILE="$HOME/.gardener-agent.lock"
 LOG_DIR="${LOG_DIR:-$HOME/logs}"
 PROMPT_FILE="$HOME/prompt.txt"
+MCP_CONFIG_FILE="$HOME/.mcp.json"
 
 # Ensure log directory exists and is writable
 if ! mkdir -p "$LOG_DIR" 2>/dev/null; then
@@ -31,6 +32,17 @@ fi
 
 if ! [ -w "$LOG_DIR" ]; then
     echo "[$(date -Iseconds)] ERROR: Log directory not writable: $LOG_DIR" >&2
+    exit 1
+fi
+
+# Validate MCP configuration file exists and is readable
+if [ ! -f "$MCP_CONFIG_FILE" ]; then
+    echo "[$(date -Iseconds)] ERROR: MCP configuration file not found: $MCP_CONFIG_FILE" >&2
+    exit 1
+fi
+
+if [ ! -r "$MCP_CONFIG_FILE" ]; then
+    echo "[$(date -Iseconds)] ERROR: MCP configuration file not readable: $MCP_CONFIG_FILE" >&2
     exit 1
 fi
 
@@ -84,7 +96,7 @@ while true; do
 
     # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
     # Runs in isolated workspace so Claude cannot access config files in $HOME
-    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --continue --verbose --output-format json -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
+    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --continue --verbose --output-format json --mcp-config "$MCP_CONFIG_FILE" -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
         healthcheck ""  # Success endpoint (no suffix)
     else

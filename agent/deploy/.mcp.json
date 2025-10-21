@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "plant-tools": {
-      "url": "http://localhost:8000/mcp",
-      "transport": "http"
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
     }
   }
 }
