@@ -1,0 +1,221 @@
+#!/bin/bash
+set -euo pipefail
+
+# Idempotent installation script for Claude Code gardener agent
+# Run as admin user with sudo: sudo bash agent/deploy/install.sh [--force]
+#
+# Options:
+#   --force    Overwrite existing .env.agent (backup to .env.agent.bak)
+
+# Parse command line arguments
+FORCE_UPDATE=0
+for arg in "$@"; do
+    case "$arg" in
+        --force)
+            FORCE_UPDATE=1
+            ;;
+        -h|--help)
+            echo "Usage: sudo bash agent/deploy/install.sh [--force]"
+            echo ""
+            echo "Options:"
+            echo "  --force    Overwrite existing .env.agent (backup to .env.agent.bak)"
+            echo "  -h, --help Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Run with --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+echo "=== Claude Code Gardener Agent Installation ==="
+
+# Ensure running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "ERROR: This script must be run with sudo"
+    exit 1
+fi
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Configuration
+GARDENER_USER="gardener"
+GARDENER_HOME="/home/gardener"
+GARDENER_CLAUDE_DIR="$GARDENER_HOME/.claude"
+SERVICE_NAME="gardener-agent.service"
+SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
+
+echo "Repository root: $REPO_ROOT"
+echo "Script directory: $SCRIPT_DIR"
+
+# Prerequisite checks - validate before making any changes
+echo ""
+echo "Checking prerequisites..."
+
+# Check for required configuration files
+MISSING_FILES=()
+if [ ! -f "$SCRIPT_DIR/.env.agent" ]; then
+    MISSING_FILES+=(".env.agent")
+fi
+if [ ! -f "$SCRIPT_DIR/prompt.txt" ]; then
+    MISSING_FILES+=("prompt.txt")
+fi
+if [ ! -f "$SCRIPT_DIR/.mcp.json" ]; then
+    MISSING_FILES+=(".mcp.json")
+fi
+if [ ! -f "$SCRIPT_DIR/settings.local" ]; then
+    MISSING_FILES+=("settings.local")
+fi
+if [ ! -f "$SCRIPT_DIR/run-agent.sh" ]; then
+    MISSING_FILES+=("run-agent.sh")
+fi
+
+if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+    echo "ERROR: Missing required files in $SCRIPT_DIR:"
+    for file in "${MISSING_FILES[@]}"; do
+        echo "  - $file"
+    done
+    echo ""
+    echo "Please ensure all required files exist before running installation."
+    if [[ " ${MISSING_FILES[@]} " =~ " .env.agent " ]]; then
+        echo "  Create .env.agent from .env.agent.example template"
+    fi
+    exit 1
+fi
+
+echo "✓ All required files present"
+echo ""
+
+# 1. Create gardener user if it doesn't exist
+if id "$GARDENER_USER" &>/dev/null; then
+    echo "✓ User $GARDENER_USER already exists"
+else
+    if [ -d "$GARDENER_HOME" ]; then
+        echo "⚠ Warning: $GARDENER_HOME already exists but user does not"
+        echo "  The directory may have incorrect permissions"
+        echo "  Consider removing it: sudo rm -rf $GARDENER_HOME"
+        exit 1
+    fi
+    echo "Creating user $GARDENER_USER..."
+    useradd --system --create-home --shell /usr/sbin/nologin "$GARDENER_USER"
+    echo "✓ User $GARDENER_USER created"
+fi
+
+# 2. Create necessary directories
+echo "Creating directories..."
+mkdir -p "$GARDENER_CLAUDE_DIR"
+mkdir -p "$GARDENER_HOME/logs"
+chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_CLAUDE_DIR"
+chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_HOME/logs"
+echo "✓ Directories created"
+
+# 3. Install Claude Code CLI as gardener user
+if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
+    CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
+    echo "✓ Claude Code CLI already installed (version: $CLAUDE_VERSION)"
+else
+    echo "Installing Claude Code CLI as $GARDENER_USER..."
+    if sudo -u "$GARDENER_USER" bash -c 'curl -fsSL https://install.anthropic.com/claude | sh'; then
+        # Validate installation
+        if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
+            CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
+            echo "✓ Claude Code CLI installed successfully (version: $CLAUDE_VERSION)"
+        else
+            echo "✗ ERROR: Claude Code CLI installation failed - command not found" >&2
+            exit 1
+        fi
+    else
+        echo "✗ ERROR: Claude Code CLI installation script failed" >&2
+        exit 1
+    fi
+fi
+
+# 4. Copy configuration files to gardener home (read-only for gardener)
+echo "Copying configuration files..."
+
+# Copy run-agent.sh (executable, but read-only for gardener)
+install -m 755 -o root -g root \
+    "$SCRIPT_DIR/run-agent.sh" "$GARDENER_HOME/run-agent.sh"
+echo "✓ Copied run-agent.sh"
+
+# Copy prompt.txt (read-only for gardener)
+install -m 644 -o root -g root \
+    "$SCRIPT_DIR/prompt.txt" "$GARDENER_HOME/prompt.txt"
+echo "✓ Copied prompt.txt"
+
+# Copy .mcp.json (read-only for gardener)
+install -m 644 -o root -g root \
+    "$SCRIPT_DIR/.mcp.json" "$GARDENER_HOME/.mcp.json"
+echo "✓ Copied .mcp.json"
+
+# Copy settings.local to .claude directory (read-only for gardener)
+install -m 644 -o root -g root \
+    "$SCRIPT_DIR/settings.local" "$GARDENER_CLAUDE_DIR/settings.local"
+echo "✓ Copied settings.local"
+
+# 5. Copy .env.agent (don't overwrite existing unless --force, read-only for gardener)
+if [ ! -f "$GARDENER_HOME/.env.agent" ]; then
+    install -m 600 -o root -g root \
+        "$SCRIPT_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
+    echo "✓ Copied .env.agent"
+elif [ "$FORCE_UPDATE" -eq 1 ]; then
+    cp -p "$GARDENER_HOME/.env.agent" "$GARDENER_HOME/.env.agent.bak"
+    install -m 600 -o root -g root \
+        "$SCRIPT_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
+    echo "✓ Overwrote .env.agent (backup saved as .env.agent.bak)"
+else
+    echo "! .env.agent already exists in $GARDENER_HOME, skipping copy"
+    echo "  ⚠ WARNING: You may be using a stale environment configuration"
+    echo "  Please review $GARDENER_HOME/.env.agent and update if needed"
+    echo "  To force update and backup the old file, re-run with: sudo bash $0 --force"
+fi
+
+# 6. Install systemd service
+echo "Installing systemd service..."
+cat > "$SERVICE_FILE" << EOF
+[Unit]
+Description=Claude Code Gardener Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$GARDENER_USER
+Group=$GARDENER_USER
+WorkingDirectory=$GARDENER_HOME
+EnvironmentFile=$GARDENER_HOME/.env.agent
+ExecStart=$GARDENER_HOME/run-agent.sh
+Restart=always
+RestartSec=30
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+chmod 644 "$SERVICE_FILE"
+systemctl daemon-reload
+echo "✓ Systemd service installed"
+
+# 7. Summary
+echo ""
+echo "=== Installation Complete ==="
+echo ""
+echo "Next steps:"
+echo "  1. Test manually: sudo -u $GARDENER_USER $GARDENER_HOME/run-agent.sh"
+echo "     (Press Ctrl+C after observing one cycle)"
+echo "  2. Enable service: sudo systemctl enable --now $SERVICE_NAME"
+echo "  3. Monitor logs: journalctl -u $SERVICE_NAME -f"
+echo "  4. Check health: https://healthchecks.io/checks/"
+echo ""
+echo "To update configuration later:"
+echo "  - Edit files in $SCRIPT_DIR/"
+echo "  - Re-run this script: sudo bash $0"
+echo "  - Restart service: sudo systemctl restart $SERVICE_NAME"
