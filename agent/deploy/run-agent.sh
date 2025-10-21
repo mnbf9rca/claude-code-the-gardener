@@ -4,6 +4,14 @@ set -euo pipefail
 # Continuous loop agent runner for gardener user
 # Executes Claude Code agent every 10 minutes with health monitoring
 
+# Load environment variables from .env.agent
+ENV_FILE="$HOME/.env.agent"
+if [ -f "$ENV_FILE" ]; then
+    set -a  # Export all variables
+    source "$ENV_FILE"
+    set +a
+fi
+
 CLAUDE_BIN="$HOME/.local/bin/claude"
 LOCK_FILE="$HOME/.gardener-agent.lock"
 LOG_DIR="${LOG_DIR:-$HOME/logs}"
