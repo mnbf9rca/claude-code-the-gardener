@@ -103,7 +103,7 @@ if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
     echo "✓ Claude Code CLI already installed (version: $CLAUDE_VERSION)"
 else
     echo "Installing Claude Code CLI as $GARDENER_USER..."
-    if sudo -u "$GARDENER_USER" bash -c 'curl -fsSL https://install.anthropic.com/claude | sh'; then
+    if sudo -u "$GARDENER_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'; then
         # Validate installation
         if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
             CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
