@@ -105,8 +105,8 @@ else
     echo "Installing Claude Code CLI as $GARDENER_USER..."
     echo ""
 
-    # Run installation with visible output
-    sudo -u "$GARDENER_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+    # Run installation with visible output from gardener's home directory
+    sudo -u "$GARDENER_USER" bash -c "cd $GARDENER_HOME && curl -fsSL https://claude.ai/install.sh | bash"
     INSTALL_EXIT_CODE=$?
 
     echo ""
