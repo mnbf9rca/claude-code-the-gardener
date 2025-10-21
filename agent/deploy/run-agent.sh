@@ -84,7 +84,7 @@ while true; do
 
     # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
     # Runs in isolated workspace so Claude cannot access config files in $HOME
-    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --continue --verbose --output-format json -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
+    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --continue --verbose --output-format json --mcp-config "$HOME/.mcp.json" -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
         healthcheck ""  # Success endpoint (no suffix)
     else
