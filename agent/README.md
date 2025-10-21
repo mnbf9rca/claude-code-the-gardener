@@ -145,6 +145,7 @@ The gardener user:
 ├── logs/                # Log files (gardener:gardener) - writable
 └── workspace/           # Claude runs HERE (gardener:gardener) - writable
     └── .claude/         # Session data (gardener:gardener) - writable
+        └── settings.json
 ```
 
 ## Uninstalling

@@ -44,8 +44,8 @@ fi
 if [ ! -f "$DEPLOY_DIR/.mcp.json" ]; then
     MISSING_FILES+=(".mcp.json")
 fi
-if [ ! -f "$DEPLOY_DIR/settings.local" ]; then
-    MISSING_FILES+=("settings.local")
+if [ ! -f "$DEPLOY_DIR/settings.json" ]; then
+    MISSING_FILES+=("settings.json")
 fi
 if [ ! -f "$DEPLOY_DIR/run-agent.sh" ]; then
     MISSING_FILES+=("run-agent.sh")
@@ -147,10 +147,10 @@ install -m 644 -o root -g root \
     "$DEPLOY_DIR/.mcp.json" "$GARDENER_HOME/.mcp.json"
 echo "✓ Copied .mcp.json"
 
-# Copy settings.local to .claude directory (read-only for gardener)
+# Copy settings.json to .claude directory (read-only for gardener)
 install -m 644 -o root -g root \
-    "$DEPLOY_DIR/settings.local" "$GARDENER_CLAUDE_DIR/settings.local"
-echo "✓ Copied settings.local"
+    "$DEPLOY_DIR/settings.json" "$GARDENER_CLAUDE_DIR/settings.json"
+echo "✓ Copied settings.json"
 
 # Copy .env.agent (readable by gardener via group permissions)
 install -m 640 -o root -g "$GARDENER_USER" \

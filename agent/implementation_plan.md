@@ -14,7 +14,7 @@ Deploy Claude Code agent to run headless on Raspberry Pi as isolated `gardener` 
 Idempotent script run by admin with sudo:
 - Create gardener system user (nologin shell)
 - Install Claude Code CLI as gardener user
-- Copy configs to `/home/gardener/`: prompt.txt, run-agent.sh, .mcp.json, settings.local
+- Copy configs to `/home/gardener/`: prompt.txt, run-agent.sh, .mcp.json, settings.json
 - Install systemd service file
 - Create log directory
 - Set permissions
@@ -30,7 +30,7 @@ Continuous loop script copied to gardener home:
 - **prompt.txt**: Agent prompt for each execution
 - **.mcp.json**: MCP server config (plant-tools HTTP endpoint)
 - **.env.agent.example**: Template for ANTHROPIC_API_KEY and HEALTHCHECK_URL
-- **settings.local**: Claude Code permissions and output style
+- **settings.json**: Claude Code permissions and output style
 - **gardener-agent.service**: Systemd service definition
 
 ## Deployment Steps
