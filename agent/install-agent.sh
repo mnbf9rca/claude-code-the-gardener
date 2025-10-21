@@ -150,8 +150,8 @@ install -m 644 -o root -g root \
     "$DEPLOY_DIR/settings.local" "$GARDENER_CLAUDE_DIR/settings.local"
 echo "✓ Copied settings.local"
 
-# Copy .env.agent (read-only for gardener)
-install -m 600 -o root -g root \
+# Copy .env.agent (readable by gardener via group permissions)
+install -m 640 -o root -g "$GARDENER_USER" \
     "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
 echo "✓ Copied .env.agent"
 
