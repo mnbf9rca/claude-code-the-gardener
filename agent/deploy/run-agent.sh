@@ -4,6 +4,7 @@ set -euo pipefail
 # Continuous loop agent runner for gardener user
 # Executes Claude Code agent every 10 minutes with health monitoring
 
+CLAUDE_BIN="$HOME/.local/bin/claude"
 LOCK_FILE="$HOME/.gardener-agent.lock"
 LOG_DIR="${LOG_DIR:-$HOME/logs}"
 PROMPT_FILE="$HOME/prompt.txt"
@@ -73,7 +74,7 @@ while true; do
     PROMPT=$(cat "$PROMPT_FILE")
 
     # Execute Claude Code agent
-    if claude --continue --verbose --output-format json -p "$PROMPT" >> "$LOG_FILE" 2>&1; then
+    if "$CLAUDE_BIN" --continue --verbose --output-format json -p "$PROMPT" >> "$LOG_FILE" 2>&1; then
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
         healthcheck ""  # Success endpoint (no suffix)
     else

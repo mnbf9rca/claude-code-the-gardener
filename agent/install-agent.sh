@@ -98,8 +98,9 @@ chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_HOME/logs"
 echo "✓ Directories created"
 
 # 3. Install Claude Code CLI as gardener user
-if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
-    CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
+CLAUDE_BIN="$GARDENER_HOME/.local/bin/claude"
+if [ -x "$CLAUDE_BIN" ]; then
+    CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" "$CLAUDE_BIN" --version 2>/dev/null || echo "unknown")
     echo "✓ Claude Code CLI already installed (version: $CLAUDE_VERSION)"
 else
     echo "Installing Claude Code CLI as $GARDENER_USER..."
@@ -117,11 +118,11 @@ else
         exit 1
     fi
 
-    if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
-        CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
+    if [ -x "$CLAUDE_BIN" ]; then
+        CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" "$CLAUDE_BIN" --version 2>/dev/null || echo "unknown")
         echo "✓ Claude Code CLI installed successfully (version: $CLAUDE_VERSION)"
     else
-        echo "✗ ERROR: Claude Code CLI installation failed - command not found" >&2
+        echo "✗ ERROR: Claude Code CLI installation failed - binary not found at $CLAUDE_BIN" >&2
         exit 1
     fi
 fi
