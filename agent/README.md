@@ -84,13 +84,7 @@ To update the agent prompt, MCP configuration, or other settings:
 2. Re-run the installation script: `sudo bash agent/install.sh`
 3. Restart the service: `sudo systemctl restart gardener-agent`
 
-**Note:** The installation script will NOT overwrite an existing `.env.agent` by default to prevent accidentally replacing your API key. To force update all files including `.env.agent`:
-
-```bash
-sudo bash agent/install.sh --force
-```
-
-This will backup the existing `.env.agent` to `.env.agent.bak` before overwriting.
+**Note:** The installation script overwrites all configuration files, including `.env.agent`, so make sure your changes are saved in `agent/deploy/` before re-running.
 
 ## Architecture
 
@@ -138,6 +132,26 @@ The gardener user:
 
 ## Uninstalling
 
+### Option 1: Remove Service Only (Keep User & Data)
+
+Use this if you want to temporarily disable the agent but preserve logs and configuration:
+
+```bash
+# Stop and disable service
+sudo systemctl stop gardener-agent
+sudo systemctl disable gardener-agent
+
+# Remove service file
+sudo rm /etc/systemd/system/gardener-agent.service
+sudo systemctl daemon-reload
+```
+
+The gardener user and all data in `/home/gardener/` remain intact. To restart later, just re-run `sudo bash agent/install.sh`.
+
+### Option 2: Complete Removal
+
+Remove everything including user, logs, and Claude session data:
+
 ```bash
 # Stop and disable service
 sudo systemctl stop gardener-agent
@@ -147,6 +161,31 @@ sudo systemctl disable gardener-agent
 sudo rm /etc/systemd/system/gardener-agent.service
 sudo systemctl daemon-reload
 
-# Optional: Remove gardener user and data
+# Remove gardener user and home directory
+# This deletes: logs, .claude session data, all config files
 sudo userdel -r gardener
 ```
+
+**Warning:** This permanently deletes all logs and Claude's conversation history.
+
+### Option 3: Remove User But Preserve Logs
+
+If you want to keep logs for analysis but remove the user:
+
+```bash
+# Stop and disable service
+sudo systemctl stop gardener-agent
+sudo systemctl disable gardener-agent
+
+# Remove service file
+sudo rm /etc/systemd/system/gardener-agent.service
+sudo systemctl daemon-reload
+
+# Backup logs
+sudo mv /home/gardener/logs /var/log/gardener-agent-backup
+
+# Remove user and home directory
+sudo userdel -r gardener
+```
+
+Logs will be preserved in `/var/log/gardener-agent-backup/`.
