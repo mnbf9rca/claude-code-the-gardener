@@ -103,17 +103,25 @@ if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
     echo "✓ Claude Code CLI already installed (version: $CLAUDE_VERSION)"
 else
     echo "Installing Claude Code CLI as $GARDENER_USER..."
-    if sudo -u "$GARDENER_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'; then
-        # Validate installation
-        if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
-            CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
-            echo "✓ Claude Code CLI installed successfully (version: $CLAUDE_VERSION)"
-        else
-            echo "✗ ERROR: Claude Code CLI installation failed - command not found" >&2
-            exit 1
-        fi
+    echo ""
+
+    # Run installation with visible output
+    sudo -u "$GARDENER_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+    INSTALL_EXIT_CODE=$?
+
+    echo ""
+
+    # Validate installation
+    if [ $INSTALL_EXIT_CODE -ne 0 ]; then
+        echo "✗ ERROR: Claude Code CLI installation script failed with exit code $INSTALL_EXIT_CODE" >&2
+        exit 1
+    fi
+
+    if sudo -u "$GARDENER_USER" command -v claude &>/dev/null; then
+        CLAUDE_VERSION=$(sudo -u "$GARDENER_USER" claude --version 2>/dev/null || echo "unknown")
+        echo "✓ Claude Code CLI installed successfully (version: $CLAUDE_VERSION)"
     else
-        echo "✗ ERROR: Claude Code CLI installation script failed" >&2
+        echo "✗ ERROR: Claude Code CLI installation failed - command not found" >&2
         exit 1
     fi
 fi
