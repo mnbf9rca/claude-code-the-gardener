@@ -89,8 +89,10 @@ To update the agent prompt, MCP configuration, or other settings:
 ## Architecture
 
 - **gardener** user: Runs Claude Code agent, isolated with no repo access
-- **Working directory**: `/home/gardener/`
-- **Session data**: `/home/gardener/.claude/`
+- **Working directory**: `/home/gardener/workspace/` (isolated from config files)
+- **Session data**: `/home/gardener/workspace/.claude/`
+- **Logs**: `/home/gardener/logs/`
+- **Config files**: `/home/gardener/` (root-owned, read-only)
 - **Execution interval**: 10 minutes between runs
 - **Health monitoring**: Pings healthchecks.io before/after each execution
 
@@ -126,9 +128,24 @@ The gardener user:
 - Cannot access the repository
 - Cannot modify its own configuration files (all configs are root-owned and read-only)
 - Cannot edit its own prompt or MCP server list
+- Runs in isolated workspace directory (`/home/gardener/workspace/`)
+- Config files in parent directory are readable but protected from modification
+- Default operations happen in workspace, making accidental config access unlikely
 - Can only interact with the plant via MCP HTTP API
-- Can only write to its own logs and Claude session data
+- Can only write to workspace (`/home/gardener/workspace/`) and logs (`/home/gardener/logs/`)
 - Runs with systemd security hardening (NoNewPrivileges, PrivateTmp)
+
+**Directory structure:**
+```
+/home/gardener/
+├── .env.agent           # API key (root:gardener 640) - readable but not writable
+├── prompt.txt           # Agent instructions (root:root 644) - readable
+├── .mcp.json            # MCP config (root:root 644) - readable
+├── run-agent.sh         # Execution script (root:root 755)
+├── logs/                # Log files (gardener:gardener) - writable
+└── workspace/           # Claude runs HERE (gardener:gardener) - writable
+    └── .claude/         # Session data (gardener:gardener) - writable
+```
 
 ## Uninstalling
 

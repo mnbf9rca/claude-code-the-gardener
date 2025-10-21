@@ -20,7 +20,8 @@ DEPLOY_DIR="$SCRIPT_DIR/deploy"
 # Configuration
 GARDENER_USER="gardener"
 GARDENER_HOME="/home/gardener"
-GARDENER_CLAUDE_DIR="$GARDENER_HOME/.claude"
+GARDENER_WORKSPACE="$GARDENER_HOME/workspace"
+GARDENER_CLAUDE_DIR="$GARDENER_WORKSPACE/.claude"
 SERVICE_NAME="gardener-agent.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
 
@@ -91,10 +92,11 @@ fi
 
 # 2. Create necessary directories
 echo "Creating directories..."
-mkdir -p "$GARDENER_CLAUDE_DIR"
 mkdir -p "$GARDENER_HOME/logs"
-chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_CLAUDE_DIR"
+mkdir -p "$GARDENER_WORKSPACE"
+mkdir -p "$GARDENER_CLAUDE_DIR"
 chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_HOME/logs"
+chown -R "$GARDENER_USER:$GARDENER_USER" "$GARDENER_WORKSPACE"
 echo "✓ Directories created"
 
 # 3. Install Claude Code CLI as gardener user
