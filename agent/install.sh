@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Idempotent installation script for Claude Code gardener agent
-# Run as admin user with sudo: sudo bash agent/deploy/install.sh [--force]
+# Run as admin user with sudo: sudo bash agent/install.sh [--force]
 #
 # Options:
 #   --force    Overwrite existing .env.agent (backup to .env.agent.bak)
@@ -15,7 +15,7 @@ for arg in "$@"; do
             FORCE_UPDATE=1
             ;;
         -h|--help)
-            echo "Usage: sudo bash agent/deploy/install.sh [--force]"
+            echo "Usage: sudo bash agent/install.sh [--force]"
             echo ""
             echo "Options:"
             echo "  --force    Overwrite existing .env.agent (backup to .env.agent.bak)"
@@ -40,7 +40,8 @@ fi
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DEPLOY_DIR="$SCRIPT_DIR/deploy"
 
 # Configuration
 GARDENER_USER="gardener"
@@ -51,6 +52,7 @@ SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
 
 echo "Repository root: $REPO_ROOT"
 echo "Script directory: $SCRIPT_DIR"
+echo "Deploy directory: $DEPLOY_DIR"
 
 # Prerequisite checks - validate before making any changes
 echo ""
@@ -58,24 +60,24 @@ echo "Checking prerequisites..."
 
 # Check for required configuration files
 MISSING_FILES=()
-if [ ! -f "$SCRIPT_DIR/.env.agent" ]; then
+if [ ! -f "$DEPLOY_DIR/.env.agent" ]; then
     MISSING_FILES+=(".env.agent")
 fi
-if [ ! -f "$SCRIPT_DIR/prompt.txt" ]; then
+if [ ! -f "$DEPLOY_DIR/prompt.txt" ]; then
     MISSING_FILES+=("prompt.txt")
 fi
-if [ ! -f "$SCRIPT_DIR/.mcp.json" ]; then
+if [ ! -f "$DEPLOY_DIR/.mcp.json" ]; then
     MISSING_FILES+=(".mcp.json")
 fi
-if [ ! -f "$SCRIPT_DIR/settings.local" ]; then
+if [ ! -f "$DEPLOY_DIR/settings.local" ]; then
     MISSING_FILES+=("settings.local")
 fi
-if [ ! -f "$SCRIPT_DIR/run-agent.sh" ]; then
+if [ ! -f "$DEPLOY_DIR/run-agent.sh" ]; then
     MISSING_FILES+=("run-agent.sh")
 fi
 
 if [ ${#MISSING_FILES[@]} -gt 0 ]; then
-    echo "ERROR: Missing required files in $SCRIPT_DIR:"
+    echo "ERROR: Missing required files in $DEPLOY_DIR:"
     for file in "${MISSING_FILES[@]}"; do
         echo "  - $file"
     done
@@ -83,6 +85,7 @@ if [ ${#MISSING_FILES[@]} -gt 0 ]; then
     echo "Please ensure all required files exist before running installation."
     if [[ " ${MISSING_FILES[@]} " =~ " .env.agent " ]]; then
         echo "  Create .env.agent from .env.agent.example template"
+        echo "  Example: cp $SCRIPT_DIR/.env.agent.example $DEPLOY_DIR/.env.agent"
     fi
     exit 1
 fi
@@ -139,33 +142,33 @@ echo "Copying configuration files..."
 
 # Copy run-agent.sh (executable, but read-only for gardener)
 install -m 755 -o root -g root \
-    "$SCRIPT_DIR/run-agent.sh" "$GARDENER_HOME/run-agent.sh"
+    "$DEPLOY_DIR/run-agent.sh" "$GARDENER_HOME/run-agent.sh"
 echo "✓ Copied run-agent.sh"
 
 # Copy prompt.txt (read-only for gardener)
 install -m 644 -o root -g root \
-    "$SCRIPT_DIR/prompt.txt" "$GARDENER_HOME/prompt.txt"
+    "$DEPLOY_DIR/prompt.txt" "$GARDENER_HOME/prompt.txt"
 echo "✓ Copied prompt.txt"
 
 # Copy .mcp.json (read-only for gardener)
 install -m 644 -o root -g root \
-    "$SCRIPT_DIR/.mcp.json" "$GARDENER_HOME/.mcp.json"
+    "$DEPLOY_DIR/.mcp.json" "$GARDENER_HOME/.mcp.json"
 echo "✓ Copied .mcp.json"
 
 # Copy settings.local to .claude directory (read-only for gardener)
 install -m 644 -o root -g root \
-    "$SCRIPT_DIR/settings.local" "$GARDENER_CLAUDE_DIR/settings.local"
+    "$DEPLOY_DIR/settings.local" "$GARDENER_CLAUDE_DIR/settings.local"
 echo "✓ Copied settings.local"
 
 # 5. Copy .env.agent (don't overwrite existing unless --force, read-only for gardener)
 if [ ! -f "$GARDENER_HOME/.env.agent" ]; then
     install -m 600 -o root -g root \
-        "$SCRIPT_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
+        "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
     echo "✓ Copied .env.agent"
 elif [ "$FORCE_UPDATE" -eq 1 ]; then
     cp -p "$GARDENER_HOME/.env.agent" "$GARDENER_HOME/.env.agent.bak"
     install -m 600 -o root -g root \
-        "$SCRIPT_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
+        "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
     echo "✓ Overwrote .env.agent (backup saved as .env.agent.bak)"
 else
     echo "! .env.agent already exists in $GARDENER_HOME, skipping copy"
@@ -216,6 +219,6 @@ echo "  3. Monitor logs: journalctl -u $SERVICE_NAME -f"
 echo "  4. Check health: https://healthchecks.io/checks/"
 echo ""
 echo "To update configuration later:"
-echo "  - Edit files in $SCRIPT_DIR/"
+echo "  - Edit files in $DEPLOY_DIR/"
 echo "  - Re-run this script: sudo bash $0"
 echo "  - Restart service: sudo systemctl restart $SERVICE_NAME"

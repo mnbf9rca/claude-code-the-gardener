@@ -17,17 +17,17 @@ Automated deployment for Claude Code agent running on Raspberry Pi.
 Create `.env.agent` from the example template **before running installation**:
 
 ```bash
-cd agent/deploy
-cp .env.agent.example .env.agent
-nano .env.agent  # Edit with your API key and healthcheck URL
+cd agent
+cp .env.agent.example deploy/.env.agent
+nano deploy/.env.agent  # Edit with your API key and healthcheck URL
 ```
 
-**Note:** The installation script will fail if `.env.agent` is missing.
+**Note:** The installation script will fail if `deploy/.env.agent` is missing.
 
 ### 2. Run Installation Script
 
 ```bash
-sudo bash agent/deploy/install.sh
+sudo bash agent/install.sh
 ```
 
 The script validates all required files exist, then:
@@ -81,13 +81,13 @@ Visit your healthchecks.io dashboard to see execution history and alerts.
 To update the agent prompt, MCP configuration, or other settings:
 
 1. Edit files in the repository (`agent/deploy/`)
-2. Re-run the installation script: `sudo bash agent/deploy/install.sh`
+2. Re-run the installation script: `sudo bash agent/install.sh`
 3. Restart the service: `sudo systemctl restart gardener-agent`
 
 **Note:** The installation script will NOT overwrite an existing `.env.agent` by default to prevent accidentally replacing your API key. To force update all files including `.env.agent`:
 
 ```bash
-sudo bash agent/deploy/install.sh --force
+sudo bash agent/install.sh --force
 ```
 
 This will backup the existing `.env.agent` to `.env.agent.bak` before overwriting.
