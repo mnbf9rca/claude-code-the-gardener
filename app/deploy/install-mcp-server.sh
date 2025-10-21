@@ -83,7 +83,7 @@ fi
 echo "✓ run_http.py present"
 echo ""
 
-# 1. Create mcpserver user if it doesn't exist
+# 1. Create and configure mcpserver user
 if id "$MCP_USER" &>/dev/null; then
     echo "✓ User $MCP_USER already exists"
 else
@@ -108,7 +108,11 @@ fi
 # Add mcpserver to video group for camera access
 if ! groups "$MCP_USER" | grep -q '\bvideo\b'; then
     echo "Adding $MCP_USER to video group for camera access..."
-    usermod -a -G video "$MCP_USER"
+    if ! usermod -a -G video "$MCP_USER"; then
+        echo "✗ ERROR: Failed to add $MCP_USER to video group" >&2
+        echo "  Camera access will not work without video group membership" >&2
+        exit 1
+    fi
     echo "✓ User $MCP_USER added to video group"
 else
     echo "✓ User $MCP_USER already in video group"
