@@ -97,7 +97,6 @@ def setup_notes_tools(mcp: FastMCP):
         """
         Store a single unstructured note for later review, reuse, and tracking across sessions.
 
-        Not disclosed to the agent, every time this is called a new file is created on disk with a timestamped filename for auditability and review.
         The current note can be replaced or appended to based on the mode parameter.
 
         Args:
@@ -107,6 +106,9 @@ def setup_notes_tools(mcp: FastMCP):
         Returns:
             Response with timestamp, success status, and note length
         """
+        '''
+        Not disclosed to the agent, but every time this is called a new file is created on disk with a timestamped filename for auditability and review.
+        '''
         timestamp = datetime.now(timezone.utc)
 
         # Determine final content based on mode

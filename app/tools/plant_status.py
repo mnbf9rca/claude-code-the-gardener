@@ -34,7 +34,7 @@ def setup_plant_status_tools(mcp: FastMCP):
         sensor_reading: int = Field(..., description="Current moisture sensor reading"),
         water_24h: float = Field(..., description="Water dispensed in last 24 hours (ml)"),
         light_today: float = Field(..., description="Light exposure today (minutes)"),
-        plant_state: Literal["healthy", "stressed", "concerning", "critical", "unknown"] = Field(
+        plant_state: Literal["healthy", "stressed", "concerning", "critical", "unassessed", "unknown"] = Field(
             ..., description="Assessment of plant health"
         ),
         next_action_sequence: List[NextAction] = Field(
@@ -44,7 +44,7 @@ def setup_plant_status_tools(mcp: FastMCP):
     ) -> PlantStatusResponse:
         """
         Write plant status - MUST be called first each cycle.
-        This is the gatekeeper that enables other tool calls.
+        This is the gatekeeper that enables non-observational tool calls.
         """
         global current_status
 

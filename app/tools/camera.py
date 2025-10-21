@@ -296,11 +296,12 @@ def setup_camera_tools(mcp: FastMCP):
         """
         Take a photo of the plant.
         Uses real USB camera if available, otherwise raises an error.
+        Note that you may need to use CURL to fetch the actual images as they are not accessible from the internet.
 
         Configuration via environment variables:
         - CAMERA_ENABLED: true/false to enable real camera
         - CAMERA_DEVICE_INDEX: 0, 1, 2, etc. for camera selection
-        - CAMERA_SAVE_PATH: Directory to save photos
+        - CAMERA_SAVE_PATH: Directory to save photos. Note this path is not accessible to you and is for debugging purposes only.
 
         Raises:
             ValueError: If camera is unavailable or capture fails
@@ -353,6 +354,7 @@ def setup_camera_tools(mcp: FastMCP):
         """
         Get URLs of recently captured photos.
         Returns list of {url, timestamp} dictionaries.
+        Note that you may need to use CURL to fetch the actual images as they are not accessible from the internet.
         """
         # Validate limit is within acceptable range
         if limit < 1:
