@@ -272,6 +272,9 @@ echo ""
 
 # Check actual service status (more reliable than tracking state during script)
 SERVICE_STATUS=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
+# Trim any whitespace
+SERVICE_STATUS=$(echo "$SERVICE_STATUS" | tr -d '[:space:]')
+
 if [ "$SERVICE_STATUS" = "active" ]; then
     echo "Service Status: RUNNING"
     echo ""
@@ -279,21 +282,15 @@ if [ "$SERVICE_STATUS" = "active" ]; then
     echo "  1. Check service status: sudo systemctl status $SERVICE_NAME"
     echo "  2. View logs: journalctl -u $SERVICE_NAME -f"
     echo "  3. Test endpoint: curl http://localhost:8000/mcp"
-elif [ "$SERVICE_STATUS" = "inactive" ]; then
-    echo "Service Status: STOPPED"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Test manually: sudo -u $MCP_USER bash -c 'cd $MCP_APP_DIR && $UV_BIN run python run_http.py'"
-    echo "     (Press Ctrl+C after observing startup)"
-    echo "  2. Enable service: sudo systemctl enable --now $SERVICE_NAME"
-    echo "  3. Monitor logs: journalctl -u $SERVICE_NAME -f"
-    echo "  4. Test endpoint: curl http://localhost:8000/mcp"
 else
-    echo "Service Status: $SERVICE_STATUS"
+    # Service is not active (inactive, failed, or unknown)
+    echo "Service Status: NOT RUNNING ($SERVICE_STATUS)"
     echo ""
     echo "Next steps:"
-    echo "  1. Check service status: sudo systemctl status $SERVICE_NAME"
-    echo "  2. View logs: journalctl -u $SERVICE_NAME -f"
+    echo "  1. Enable and start service: sudo systemctl enable --now $SERVICE_NAME"
+    echo "  2. Check service status: sudo systemctl status $SERVICE_NAME"
+    echo "  3. View logs: journalctl -u $SERVICE_NAME -f"
+    echo "  4. Test endpoint: curl http://localhost:8000/mcp"
 fi
 
 echo ""
