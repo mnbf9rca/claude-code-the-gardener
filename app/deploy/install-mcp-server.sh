@@ -107,6 +107,15 @@ else
     echo "✓ User $MCP_USER created"
 fi
 
+# Add mcpserver to video group for camera access
+if ! groups "$MCP_USER" | grep -q '\bvideo\b'; then
+    echo "Adding $MCP_USER to video group for camera access..."
+    usermod -a -G video "$MCP_USER"
+    echo "✓ User $MCP_USER added to video group"
+else
+    echo "✓ User $MCP_USER already in video group"
+fi
+
 # 2. Install uv package manager for mcpserver user
 UV_BIN="$MCP_HOME/.local/bin/uv"
 if [ -x "$UV_BIN" ]; then
