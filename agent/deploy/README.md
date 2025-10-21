@@ -109,7 +109,7 @@ This will backup the existing `.env.agent` to `.env.agent.bak` before overwritin
 
 **Lock file errors:**
 - Another instance may be running: `ps aux | grep run-agent.sh`
-- Remove stale lock: `sudo rm /tmp/gardener-agent.lock`
+- Remove stale lock: `sudo rm /home/gardener/.gardener-agent.lock`
 
 **Claude authentication errors:**
 - Ensure `ANTHROPIC_API_KEY` is set correctly in `.env.agent`

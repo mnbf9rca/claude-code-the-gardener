@@ -4,7 +4,7 @@ set -euo pipefail
 # Continuous loop agent runner for gardener user
 # Executes Claude Code agent every 10 minutes with health monitoring
 
-LOCK_FILE="/tmp/gardener-agent.lock"
+LOCK_FILE="$HOME/.gardener-agent.lock"
 LOG_DIR="${LOG_DIR:-$HOME/logs}"
 PROMPT_FILE="$HOME/prompt.txt"
 
