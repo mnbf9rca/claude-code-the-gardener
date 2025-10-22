@@ -748,3 +748,54 @@ def test_time_bucketed_sample_end_time_defaults_to_now(temp_history_file):
         # Timestamps should match
         for default_entry, explicit_entry in zip(result_default, result_explicit):
             assert default_entry["timestamp"] == explicit_entry["timestamp"]
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_invalid_aggregation(temp_history_file):
+    """Test that invalid aggregation strategy raises ValueError"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add some data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(10):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 1000 + i
+        })
+
+    # Invalid aggregation should raise ValueError
+    with pytest.raises(ValueError, match="Unknown aggregation strategy"):
+        history.get_time_bucketed_sample(
+            hours=1,
+            samples_per_hour=6,
+            aggregation="invalid"
+        )
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_with_malformed_timestamps(temp_history_file):
+    """Test that malformed timestamps are skipped with logging"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add good data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i * 10)).isoformat(),
+            "value": 1000 + i
+        })
+
+    # Manually add malformed entry to the history
+    history._history.append({"timestamp": "not-a-timestamp", "value": 9999})
+    history._history.append({"bad_key": "no timestamp", "value": 8888})
+
+    # Should skip malformed entries and return only valid ones
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Verify all returned entries have valid values (not the malformed ones)
+    for entry in result:
+        assert entry["value"] != 9999, "Malformed timestamp entry should be skipped"
+        assert entry["value"] != 8888, "Missing timestamp entry should be skipped"
+
+    # Should have results from valid entries
+    assert len(result) > 0

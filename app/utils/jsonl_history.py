@@ -326,6 +326,21 @@ class JsonlHistory:
         if not entries:
             return []
 
+        # Sort entries by timestamp to ensure chronological order
+        # (JSONL load order doesn't guarantee temporal order)
+        entries_with_time = []
+        for entry in entries:
+            try:
+                entry_time = datetime.fromisoformat(entry[timestamp_key])
+                entries_with_time.append((entry_time, entry))
+            except (KeyError, ValueError) as e:
+                logger.warning(
+                    "Skipping entry in get_time_bucketed_sample during sort: %s | Entry: %s",
+                    e, entry
+                )
+
+        entries_with_time.sort(key=lambda x: x[0])
+
         # Calculate bucket size
         bucket_duration = timedelta(hours=1) / samples_per_hour
 
@@ -337,19 +352,11 @@ class JsonlHistory:
             bucket_start = start_time + (bucket_duration * i)
             bucket_end = bucket_start + bucket_duration
 
-            # Find entries in this bucket
-            bucket_entries = []
-            for entry in entries:
-                try:
-                    entry_time = datetime.fromisoformat(entry[timestamp_key])
-                    if bucket_start <= entry_time < bucket_end:
-                        bucket_entries.append(entry)
-                except (KeyError, ValueError) as e:
-                    logger.warning(
-                        "Skipping entry in get_time_bucketed_sample due to timestamp issue: %s | Entry: %s",
-                        e, entry
-                    )
-                    continue
+            # Find entries in this bucket (already sorted and parsed)
+            bucket_entries = [
+                entry for entry_time, entry in entries_with_time
+                if bucket_start <= entry_time < bucket_end
+            ]
 
             # Skip empty buckets
             if not bucket_entries:
@@ -371,8 +378,7 @@ class JsonlHistory:
                 )
                 sampled.append(closest_entry)
             else:
-                # Default to first if unknown aggregation
-                sampled.append(bucket_entries[0])
+                raise ValueError(f"Unknown aggregation strategy: '{aggregation}'. Must be 'first', 'last', or 'middle'.")
 
         return sampled
 
