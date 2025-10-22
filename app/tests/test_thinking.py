@@ -472,3 +472,76 @@ async def test_search_no_results(setup_thinking_state):
 
     assert result["count"] == 0
     assert result["thoughts"] == []
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_thought_history_bucketed_sampling(setup_thinking_state):
+    """Test get_thought_history_bucketed with sampling mode"""
+    mcp = setup_thinking_state
+
+    # Add test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        thinking_module.thought_history.append({
+            "timestamp": (base_time + timedelta(minutes=i*10)).isoformat(),
+            "observation": f"Observation {i}",
+            "hypothesis": f"Hypothesis {i}",
+            "candidate_actions": [],
+            "reasoning": "Testing",
+            "uncertainties": "None",
+            "tags": []
+        })
+
+    # Test sampling mode
+    history_tool = mcp._tool_manager._tools["get_thought_history_bucketed"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "middle"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return sampled entries
+    assert isinstance(history, list)
+    assert len(history) > 0
+    for entry in history:
+        assert "timestamp" in entry
+        assert "observation" in entry
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_thought_history_bucketed_count(setup_thinking_state):
+    """Test get_thought_history_bucketed with count aggregation"""
+    mcp = setup_thinking_state
+
+    # Add test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(3):
+        thinking_module.thought_history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "observation": "Test observation",
+            "hypothesis": "Test hypothesis",
+            "candidate_actions": [],
+            "reasoning": "Testing",
+            "uncertainties": "None",
+            "tags": []
+        })
+
+    # Test count aggregation
+    history_tool = mcp._tool_manager._tools["get_thought_history_bucketed"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "count"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return bucket statistics
+    assert isinstance(history, list)
+    assert len(history) == 1  # All in one bucket
+    assert history[0]["value"] == 3
+    assert history[0]["count"] == 3

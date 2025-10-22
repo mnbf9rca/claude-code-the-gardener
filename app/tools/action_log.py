@@ -2,7 +2,7 @@
 Action Log Tool - Record all actions taken by Claude
 Stores action history for review and analysis.
 """
-from typing import Dict, Any, List, Literal
+from typing import Dict, Any, List, Literal, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -123,4 +123,51 @@ def setup_action_log_tools(mcp: FastMCP):
         return SearchResponse(
             count=len(action_entries),
             actions=action_entries
+        )
+
+    @mcp.tool()
+    async def get_action_history_bucketed(
+        hours: int = Field(24, description="Time window in hours (how far back to query)", ge=1),
+        samples_per_hour: float = Field(6, description="Bucket density (6 = every 10min, 1 = hourly, 0.042 = daily)", gt=0),
+        aggregation: str = Field("middle", description="Strategy: first|last|middle (sampling) or count|sum|mean (aggregation)"),
+        value_field: Optional[str] = Field(None, description="Field to aggregate (required for sum/mean)"),
+        end_time: Optional[str] = Field(None, description="End of time window (ISO8601 UTC). Defaults to now.")
+    ) -> list[dict]:
+        """
+        Get time-bucketed action log history for temporal analysis.
+
+        Supports two query modes:
+        1. Sampling (first/last/middle): Returns sample actions from each bucket
+        2. Aggregation (count/sum/mean): Returns computed statistics per bucket
+
+        Examples:
+            - Count of actions per day (last month):
+              hours=720, samples_per_hour=0.042, aggregation="count"
+            - Count of actions per hour (last week):
+              hours=168, samples_per_hour=1, aggregation="count"
+            - Sample actions every 10 minutes (last 24h):
+              hours=24, samples_per_hour=6, aggregation="middle"
+
+        Returns:
+            For sampling: List of action dicts with full context
+            For aggregation: List of {"bucket_start": str, "bucket_end": str, "value": number, "count": int}
+        """
+        # Parse end_time if provided
+        end_dt = None
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid end_time format. Expected ISO8601 like '2025-01-15T12:00:00Z'. Error: {str(e)}"
+                )
+
+        # Call time-bucketed sample with appropriate parameters
+        return action_history.get_time_bucketed_sample(
+            hours=hours,
+            samples_per_hour=samples_per_hour,
+            timestamp_key="timestamp",
+            aggregation=aggregation,
+            end_time=end_dt,
+            value_field=value_field
         )

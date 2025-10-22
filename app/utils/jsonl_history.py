@@ -284,16 +284,18 @@ class JsonlHistory:
     def get_time_bucketed_sample(
         self,
         hours: int,
-        samples_per_hour: int = 6,
+        samples_per_hour: float = 6,
         timestamp_key: str = "timestamp",
         aggregation: str = "middle",
-        end_time: Optional[datetime] = None
+        end_time: Optional[datetime] = None,
+        value_field: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Sample entries evenly across time, not by index.
+        Sample or aggregate entries evenly across time buckets.
 
         Divides the time window into equal-sized buckets and returns
-        one sample per bucket, ensuring proper temporal distribution.
+        one sample per bucket (for sampling strategies) or aggregated
+        statistics (for aggregation strategies).
         Empty buckets (no readings) are skipped.
 
         Args:
@@ -301,14 +303,35 @@ class JsonlHistory:
             samples_per_hour: Target number of samples per hour (default 6)
             timestamp_key: Dict key containing ISO8601 timestamp
             aggregation: Strategy when multiple entries in bucket
+                Sampling strategies (return original entries):
                 - "first": Earliest entry in bucket
                 - "last": Latest entry in bucket
                 - "middle": Entry closest to bucket midpoint
+                Aggregation strategies (return computed statistics):
+                - "count": Count of entries in bucket
+                - "sum": Sum of value_field across entries in bucket
+                - "mean": Average of value_field across entries in bucket
             end_time: End of time window (defaults to now if None)
+            value_field: Field name to aggregate (required for sum/mean, ignored for others)
 
         Returns:
-            List of sampled entries with proper temporal distribution
+            For sampling strategies (first/last/middle):
+                List of sampled entries (original dict structure)
+            For aggregation strategies (count/sum/mean):
+                List of dicts: [{"bucket_start": str, "bucket_end": str, "value": number, "count": int}, ...]
         """
+        # Validate aggregation strategy
+        valid_strategies = ["first", "last", "middle", "count", "sum", "mean"]
+        if aggregation not in valid_strategies:
+            raise ValueError(
+                f"Unknown aggregation strategy: '{aggregation}'. "
+                f"Must be one of: {', '.join(valid_strategies)}"
+            )
+
+        # Validate value_field for sum/mean
+        if aggregation in ["sum", "mean"] and value_field is None:
+            raise ValueError(f"value_field is required for aggregation='{aggregation}'")
+
         # Default to now if no end_time specified
         if end_time is None:
             end_time = datetime.now(timezone.utc)
@@ -345,8 +368,8 @@ class JsonlHistory:
         bucket_duration = timedelta(hours=1) / samples_per_hour
 
         # Create buckets
-        total_buckets = hours * samples_per_hour
-        sampled = []
+        total_buckets = int(hours * samples_per_hour)
+        results = []
 
         for i in range(total_buckets):
             bucket_start = start_time + (bucket_duration * i)
@@ -364,9 +387,9 @@ class JsonlHistory:
 
             # Apply aggregation strategy
             if aggregation == "first":
-                sampled.append(bucket_entries[0])
+                results.append(bucket_entries[0])
             elif aggregation == "last":
-                sampled.append(bucket_entries[-1])
+                results.append(bucket_entries[-1])
             elif aggregation == "middle":
                 # Find entry closest to bucket midpoint
                 bucket_midpoint = bucket_start + (bucket_duration / 2)
@@ -376,11 +399,56 @@ class JsonlHistory:
                         datetime.fromisoformat(e[timestamp_key]) - bucket_midpoint
                     )
                 )
-                sampled.append(closest_entry)
-            else:
-                raise ValueError(f"Unknown aggregation strategy: '{aggregation}'. Must be 'first', 'last', or 'middle'.")
+                results.append(closest_entry)
+            elif aggregation == "count":
+                # Count entries in bucket
+                results.append({
+                    "bucket_start": bucket_start.isoformat(),
+                    "bucket_end": bucket_end.isoformat(),
+                    "value": len(bucket_entries),
+                    "count": len(bucket_entries)
+                })
+            elif aggregation == "sum":
+                # Sum value_field across entries
+                total = 0
+                valid_count = 0
+                for entry in bucket_entries:
+                    try:
+                        value = entry.get(value_field)
+                        if value is not None and isinstance(value, (int, float)):
+                            total += value
+                            valid_count += 1
+                    except (KeyError, TypeError):
+                        continue
 
-        return sampled
+                results.append({
+                    "bucket_start": bucket_start.isoformat(),
+                    "bucket_end": bucket_end.isoformat(),
+                    "value": total,
+                    "count": valid_count
+                })
+            elif aggregation == "mean":
+                # Average value_field across entries
+                total = 0
+                valid_count = 0
+                for entry in bucket_entries:
+                    try:
+                        value = entry.get(value_field)
+                        if value is not None and isinstance(value, (int, float)):
+                            total += value
+                            valid_count += 1
+                    except (KeyError, TypeError):
+                        continue
+
+                mean_value = total / valid_count if valid_count > 0 else 0
+                results.append({
+                    "bucket_start": bucket_start.isoformat(),
+                    "bucket_end": bucket_end.isoformat(),
+                    "value": mean_value,
+                    "count": valid_count
+                })
+
+        return results
 
     def clear(self):
         """Clear the in-memory cache (for testing)."""

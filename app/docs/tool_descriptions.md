@@ -70,6 +70,14 @@ Returns:
   - `hours` (int): How many hours back to search (default 24)
   - Returns: `{"count": N, "thoughts": [...]}`
 
+- `get_thought_history_bucketed(hours, samples_per_hour, aggregation, value_field, end_time)` - Get time-bucketed thought history for temporal analysis
+  - `hours` (int): Time window in hours (how far back to query, default 24)
+  - `samples_per_hour` (float): Bucket density - 6=every 10min, 1=hourly, 0.042=daily (default 6)
+  - `aggregation` (string): Strategy: `first|last|middle` (sampling) or `count|sum|mean` (aggregation, default "middle")
+  - `value_field` (string): Field to aggregate (required for sum/mean, optional)
+  - `end_time` (string): End of time window in ISO8601 UTC (defaults to now, optional)
+  - Returns: For sampling: List of thought dicts with full context. For aggregation: List of `{"bucket_start": str, "bucket_end": str, "value": number, "count": int}`
+
 **State Management:**
 - Keeps last 1000 thoughts in memory
 - Full history persisted to disk in JSONL format
@@ -131,6 +139,15 @@ Returns:
   - `hours` (int): How many hours back to search (default 24)
   - Returns: `{"count": N, "actions": [...]}`
 
+- `get_action_history_bucketed(hours, samples_per_hour, aggregation, value_field, end_time)` - Get time-bucketed action log history for temporal analysis
+  - `hours` (int): Time window in hours (how far back to query, default 24)
+  - `samples_per_hour` (float): Bucket density - 6=every 10min, 1=hourly, 0.042=daily (default 6)
+  - `aggregation` (string): Strategy: `first|last|middle` (sampling) or `count|sum|mean` (aggregation, default "middle")
+  - `value_field` (string): Field to aggregate (required for sum/mean, optional)
+  - `end_time` (string): End of time window in ISO8601 UTC (defaults to now, optional)
+  - Returns: For sampling: List of action dicts with full context. For aggregation: List of `{"bucket_start": str, "bucket_end": str, "value": number, "count": int}`
+  - Examples: Count of actions per day (last month): `hours=720, samples_per_hour=0.042, aggregation="count"`. Count of actions per hour (last week): `hours=168, samples_per_hour=1, aggregation="count"`
+
 **State Management:**
 - Keeps last 1000 actions in memory
 - Full history persisted to disk in JSONL format
@@ -165,6 +182,14 @@ Returns:
 
 - `read_moisture()` - Returns `{"value": 1847, "timestamp": "ISO8601"}`
 
+- `get_moisture_history(hours, samples_per_hour, aggregation, value_field, end_time)` - Get time-bucketed moisture sensor history for temporal analysis
+  - `hours` (int): Time window in hours (how far back to query, default 24)
+  - `samples_per_hour` (float): Bucket density - 6=every 10min, 1=hourly, 0.042=daily (default 6)
+  - `aggregation` (string): Strategy: `first|last|middle` (sampling) or `count|sum|mean` (aggregation, default "middle")
+  - `value_field` (string): Field to aggregate (required for sum/mean, optional)
+  - `end_time` (string): End of time window in ISO8601 UTC (defaults to now, optional)
+  - Returns: For sampling: List of sensor reading dicts with full context. For aggregation: List of `{"bucket_start": str, "bucket_end": str, "value": number, "count": int}`
+
 ## Water Pump Service
 
 ### Write Tools
@@ -174,6 +199,15 @@ Returns:
 ### Query Tools
 
 - `get_water_usage_24h()` - Returns `{"used_ml": 150, "remaining_ml": 350, "events": 3}`
+
+- `get_water_history(hours, samples_per_hour, aggregation, value_field, end_time)` - Get time-bucketed water dispensing history for temporal analysis
+  - `hours` (int): Time window in hours (how far back to query, default 24)
+  - `samples_per_hour` (float): Bucket density - 6=every 10min, 1=hourly, 0.042=daily (default 6)
+  - `aggregation` (string): Strategy: `first|last|middle` (sampling) or `count|sum|mean` (aggregation, default "middle")
+  - `value_field` (string): Field to aggregate (required for sum/mean, e.g., "ml_dispensed", optional)
+  - `end_time` (string): End of time window in ISO8601 UTC (defaults to now, optional)
+  - Returns: For sampling: List of water dispense event dicts with full context. For aggregation: List of `{"bucket_start": str, "bucket_end": str, "value": number, "count": int}`
+  - Examples: Total ml dispensed per day (last 7 days): `hours=168, samples_per_hour=0.042, aggregation="sum", value_field="ml_dispensed"`
 
 ## Light Service
 
@@ -190,6 +224,17 @@ Returns:
 ### Write Tools
 
 - `capture_photo()` - Take photo. Returns `{"url": "http://192.168.1.x/photos/timestamp.jpg", "timestamp": "ISO8601"}`
+
+### Query Tools
+
+- `get_camera_history_bucketed(hours, samples_per_hour, aggregation, value_field, end_time)` - Get time-bucketed camera usage history for temporal analysis
+  - `hours` (int): Time window in hours (how far back to query, default 24)
+  - `samples_per_hour` (float): Bucket density - 6=every 10min, 1=hourly, 0.042=daily (default 6)
+  - `aggregation` (string): Strategy: `first|last|middle` (sampling) or `count|sum|mean` (aggregation, default "middle")
+  - `value_field` (string): Field to aggregate (required for sum/mean, optional)
+  - `end_time` (string): End of time window in ISO8601 UTC (defaults to now, optional)
+  - Returns: For sampling: List of camera usage dicts with full context. For aggregation: List of `{"bucket_start": str, "bucket_end": str, "value": number, "count": int}`
+  - Examples: Count of photos per day (last month): `hours=720, samples_per_hour=0.042, aggregation="count"`
 
 ## UTC Time Service
 

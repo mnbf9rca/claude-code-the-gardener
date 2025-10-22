@@ -8,7 +8,8 @@
 - **Phase 5: COMPLETED ✅** - UTC timestamps & HTTP image retrieval
 - **Phase 6: COMPLETED ✅** - Notes tools for unstructured data storage
 - **Phase 7: COMPLETED ✅** - ESP32 hardware integration for moisture sensor and pump
-- **153 tests passing** (all timezone issues resolved)
+- **Phase 8: COMPLETED ✅** - JSONL consistency & time-bucketed queries for temporal analysis
+- **269 tests passing** (all features tested)
 - Ready for hardware deployment and testing
 
 ## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
@@ -233,6 +234,63 @@
 - **Error Messages**: Clear HTTP error responses from ESP32 help debug connection issues
 - **KISS Success**: Simple HTTP REST API (no MQTT, no auth) works perfectly for private network hobby project
 
+## Phase 8: JSONL Consistency & Time-Bucketed Queries (COMPLETED ✅)
+
+### Core Implementation
+- [x] Extended JsonlHistory utility (`app/utils/jsonl_history.py`)
+  - [x] Added `count` aggregation strategy - count entries per time bucket
+  - [x] Added `sum` aggregation strategy - sum numeric field values per bucket
+  - [x] Added `mean` aggregation strategy - average numeric field values per bucket
+  - [x] Changed `samples_per_hour` from int to float for fractional rates (e.g., 0.042 for daily buckets)
+  - [x] Added `value_field` parameter for sum/mean operations
+  - [x] Added `end_time` parameter to query historical time periods
+  - [x] 10 comprehensive tests for new aggregation strategies
+- [x] Migrated plant_status.py to JsonlHistory
+  - [x] Replaced in-memory list with JsonlHistory for consistency
+  - [x] JSONL persistence with 1000-entry memory cache
+  - [x] Updated tests with proper file isolation using tmp_path fixtures
+- [x] Added time-bucketed query tools to all history-tracking modules
+  - [x] `get_water_history()` in water_pump.py - analyze water dispensing patterns over time
+  - [x] `get_action_history_bucketed()` in action_log.py - analyze action frequency and patterns
+  - [x] `get_thought_history_bucketed()` in thinking.py - analyze reasoning patterns over time
+  - [x] `get_camera_history_bucketed()` in camera.py - analyze photo capture frequency
+  - [x] Updated `get_moisture_history()` in moisture_sensor.py to expose end_time parameter
+- [x] Testing
+  - [x] 9 smoke tests for new time-bucketed query tools
+  - [x] Fixed float-to-int casting issue in bucket calculation
+  - [x] Fixed test isolation issues with JSONL persistence
+  - [x] **All 269 tests passing**
+- [x] Documentation
+  - [x] Updated tool_descriptions.md with all new query tools
+  - [x] Added usage examples for common temporal analysis queries
+  - [x] Documented dual-mode querying (sampling vs aggregation)
+
+### Use Cases Enabled
+The new time-bucketed query tools enable Claude to perform its own temporal analysis:
+- **Water usage analysis**: "Show ml dispensed per hour for last 7 days" → `get_water_history(hours=168, samples_per_hour=0.042, aggregation="sum", value_field="ml_dispensed")`
+- **Action frequency**: "Show actions per day for last month" → `get_action_history_bucketed(hours=720, samples_per_hour=0.042, aggregation="count")`
+- **Moisture trends**: "Sample moisture every 10 minutes for last 24h" → `get_moisture_history(hours=24, samples_per_hour=6, aggregation="middle")`
+- **Photo activity**: "Count photos per week for last 3 months" → `get_camera_history_bucketed(hours=2160, samples_per_hour=0.006, aggregation="count")`
+
+### Architecture
+- **Dual-mode querying**:
+  - Sampling strategies (`first|last|middle`) return original entries with full context
+  - Aggregation strategies (`count|sum|mean`) return computed statistics per bucket
+- **Flexible time bucketing**: `samples_per_hour` as float supports any bucket size:
+  - 6.0 = every 10 minutes
+  - 1.0 = hourly
+  - 0.042 = daily (~24h buckets)
+  - 0.006 = weekly (~168h buckets)
+- **Historical querying**: `end_time` parameter allows analyzing past periods (not just recent data)
+
+### Lessons Learned
+- **Consistent storage patterns**: Using JsonlHistory across all tools eliminates bugs and reduces maintenance
+- **Agent-driven analysis**: Rather than implementing specific queries, provide flexible tools that let the agent ask its own questions
+- **Float bucket rates**: Supporting fractional `samples_per_hour` enables natural bucket sizes (daily, weekly) without complex configuration
+- **KISS temporal analysis**: Simple time-bucketed sampling/aggregation is sufficient for hobby project plant care analysis
+- **Test isolation with JSONL**: Persistent JSONL files require careful cleanup in test fixtures to prevent contamination
+- **Type casting matters**: Float bucket calculations need explicit int conversion for range() calls
+
 ## Key Design Decisions
 - No database initially - in-memory dictionaries
 - Mock hardware - realistic fake data
@@ -322,7 +380,7 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
 
 ## Ready for Production Deployment
 
-- ✅ All core tools implemented and tested (146 tests)
+- ✅ All core tools implemented and tested (269 tests)
 - ✅ HTTP server with Streamable HTTP transport
 - ✅ Systemd service for Raspberry Pi deployment
 - ✅ Environment-based configuration (.env)
@@ -333,6 +391,7 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
 - ✅ Real hardware integration (camera) validated
 - ✅ Resource management patterns established
 - ✅ Clean, maintainable codebase following KISS and YAGNI
+- ✅ Time-bucketed queries enable agent-driven temporal analysis
 
 ### Next Steps (Post-Deployment)
 - Flash ESP32 firmware to M5Stack CoreS3-SE
