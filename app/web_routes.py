@@ -33,15 +33,12 @@ def _get_all_messages() -> List[Dict[str, Any]]:
     to_human = human_messages.messages_to_human.get_all()
     from_human = human_messages.messages_from_human.get_all()
 
-    # Add direction field
-    for msg in to_human:
-        msg['direction'] = 'to_human'
-
-    for msg in from_human:
-        msg['direction'] = 'from_human'
+    # Add direction field (make copies to avoid modifying originals)
+    to_human_with_dir = [{**msg, 'direction': 'to_human'} for msg in to_human]
+    from_human_with_dir = [{**msg, 'direction': 'from_human'} for msg in from_human]
 
     # Combine and sort by timestamp (newest first)
-    all_messages = to_human + from_human
+    all_messages = to_human_with_dir + from_human_with_dir
     all_messages.sort(key=lambda x: x['timestamp'], reverse=True)
 
     return all_messages
@@ -166,7 +163,7 @@ async def post_reply(request: Request) -> JSONResponse:
             in_reply_to_field = form.get('in_reply_to')
             in_reply_to = in_reply_to_field if isinstance(in_reply_to_field, str) else None
 
-        # Validate content
+        # Validate content (strip() already handled whitespace-only content)
         if not content:
             return JSONResponse(
                 {'error': 'Message content is required'},
@@ -201,7 +198,7 @@ async def post_reply(request: Request) -> JSONResponse:
             'timestamp': timestamp
         })
 
-    except (json.JSONDecodeError, ValueError, KeyError, AttributeError) as e:
+    except (json.JSONDecodeError, ValueError) as e:
         # Handle expected errors from parsing/validation
         logger.error(f"Error processing reply: {e}")
         return JSONResponse(
@@ -213,6 +210,13 @@ async def post_reply(request: Request) -> JSONResponse:
         logger.error(f"Error storing reply: {e}")
         return JSONResponse(
             {'error': 'Failed to store message'},
+            status_code=500
+        )
+    except Exception:
+        # Log unexpected errors with full stack trace
+        logger.exception("Unexpected error processing reply")
+        return JSONResponse(
+            {'error': 'Internal server error'},
             status_code=500
         )
 
@@ -851,6 +855,11 @@ async def get_gallery_ui(request: Request) -> HTMLResponse:
     # Get photos with pagination
     limit = 20
     offset = int(request.query_params.get('offset', 0))
+
+    # Validate offset (prevent negative values)
+    if offset < 0:
+        offset = 0
+
     photos_data = _get_photos_from_directory(limit=limit, offset=offset)
 
     photos = photos_data['photos']
@@ -1205,13 +1214,16 @@ def add_message_routes(app: Starlette):
     """
     Add message and photo routes to the Starlette app.
 
+    Note: This function should only be called once during app initialization
+    to avoid duplicate routes.
+
     Args:
         app: The Starlette application instance
     """
     # Define routes
     # Human-facing UI at /messages and /gallery
     # API endpoints under /api/ for programmatic access
-    routes = [
+    new_routes = [
         # Message routes
         Route('/messages', get_messages_ui, methods=['GET']),
         Route('/api/messages', get_messages_api, methods=['GET']),
@@ -1222,8 +1234,17 @@ def add_message_routes(app: Starlette):
         Route('/api/capture', post_capture_photo, methods=['POST']),
     ]
 
-    # Add routes to app
-    for route in routes:
-        app.router.routes.append(route)
+    # Check for existing route paths to prevent duplicates
+    existing_paths = {getattr(route, 'path', None) for route in app.router.routes}
+    existing_paths.discard(None)  # Remove None values from non-path routes
 
-    logger.info("Message and photo routes added to Starlette app")
+    # Add only new routes
+    routes_added = 0
+    for route in new_routes:
+        if route.path not in existing_paths:
+            app.router.routes.append(route)
+            routes_added += 1
+        else:
+            logger.warning(f"Route {route.path} already exists, skipping")
+
+    logger.info(f"Added {routes_added} message and photo routes to Starlette app")
