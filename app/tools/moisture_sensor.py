@@ -85,17 +85,18 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
     @mcp.tool()
     async def get_moisture_history(
         hours: int = Field(24, description="Number of hours of history to return"),
+        samples_per_hour: float = Field(6, description="Number of samples per hour (6=every 10min, 1=hourly, 0.042=daily)", gt=0),
         end_time: Optional[str] = Field(None, description="End of time window (ISO8601 UTC). Defaults to now if not specified.")
     ) -> list[list[Any]]:
         """
         Get moisture sensor readings from the last N hours.
-        Returns up to 6 samples per hour (e.g., 144 for 24 hours).
         Samples are evenly distributed across time using time-bucketed sampling.
 
         Returns array of [timestamp, value] pairs for plotting/visualization.
 
         Args:
             hours: Number of hours backwards from end_time
+            samples_per_hour: Number of samples to return per hour (controls time resolution)
             end_time: Optional end of time window (ISO8601 UTC format).
                      If not provided, uses current time (queries recent history).
                      If provided, queries historical period (e.g., "2025-01-15T12:00:00Z")
@@ -113,7 +114,7 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         # Use time-bucketed sampling for proper temporal distribution
         sampled_readings = sensor_history.get_time_bucketed_sample(
             hours=hours,
-            samples_per_hour=6,
+            samples_per_hour=samples_per_hour,
             timestamp_key="timestamp",
             aggregation="middle",  # Use reading closest to bucket center
             end_time=end_dt

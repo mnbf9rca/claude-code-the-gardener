@@ -996,6 +996,31 @@ def test_time_bucketed_aggregation_mean_empty_bucket(temp_history_file):
 
 
 @freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_sum_all_entries_missing_field(temp_history_file):
+    """Test sum aggregation when all entries are missing the value_field"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # All entries missing the value_field entirely
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "other": "data"})
+    history.append({"timestamp": (base_time + timedelta(minutes=2)).isoformat(), "other": "more"})
+    history.append({"timestamp": (base_time + timedelta(minutes=4)).isoformat()})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="sum",
+        value_field="ml"
+    )
+
+    # Should have one bucket with sum=0 and count=0 (no valid values)
+    assert len(result) == 1
+    assert result[0]["value"] == 0
+    assert result[0]["count"] == 0
+
+
+@freeze_time("2025-01-24 12:00:00")
 def test_time_bucketed_aggregation_requires_value_field_for_sum(temp_history_file):
     """Test that sum aggregation requires value_field parameter"""
     history = JsonlHistory(file_path=temp_history_file)
@@ -1072,3 +1097,31 @@ def test_time_bucketed_aggregation_validates_strategy(temp_history_file):
             samples_per_hour=6,
             aggregation="invalid_strategy"
         )
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_fractional_samples_per_hour(temp_history_file):
+    """Test aggregation with fractional samples_per_hour for daily buckets"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add data spanning 7 days to test weekly aggregation
+    base_time = datetime(2025, 1, 17, 12, 0, 0, tzinfo=timezone.utc)
+    for day in range(7):
+        history.append({
+            "timestamp": (base_time + timedelta(days=day)).isoformat(),
+            "ml": 10 * (day + 1)
+        })
+
+    # Use 0.006 samples_per_hour for approximately weekly buckets
+    # 168 hours (7 days) * 0.006 = ~1 bucket
+    result = history.get_time_bucketed_sample(
+        hours=168,  # 7 days
+        samples_per_hour=0.006,
+        aggregation="sum",
+        value_field="ml"
+    )
+
+    # Should create 1 bucket containing all entries
+    assert len(result) == 1
+    assert result[0]["value"] == 10 + 20 + 30 + 40 + 50 + 60 + 70  # Sum of all values
+    assert result[0]["count"] == 7
