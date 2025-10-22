@@ -10,19 +10,28 @@ import pytest
 import cv2
 
 
+def _ensure_test_env_var(env_var: str, subdir_name: str) -> None:
+    """
+    Ensure a required environment variable is set for tests.
+
+    Creates a temporary directory if the env var is not already set.
+    This prevents ValueError when modules call get_app_dir() at import time.
+
+    Args:
+        env_var: Environment variable name (e.g., "DATA_DIR")
+        subdir_name: Subdirectory name for test directory (e.g., "plant-care-test-data")
+    """
+    if env_var not in os.environ:
+        test_dir = Path(tempfile.gettempdir()) / subdir_name
+        test_dir.mkdir(exist_ok=True)
+        os.environ[env_var] = str(test_dir)
+
+
 def pytest_configure(config):
     """Configure pytest with custom markers and set required environment variables."""
     # Set required environment variables for tests BEFORE modules are imported
-    # This prevents ValueError when modules call get_app_dir() at import time
-    if "DATA_DIR" not in os.environ:
-        test_data_dir = Path(tempfile.gettempdir()) / "plant-care-test-data"
-        test_data_dir.mkdir(exist_ok=True)
-        os.environ["DATA_DIR"] = str(test_data_dir)
-
-    if "CAMERA_SAVE_PATH" not in os.environ:
-        test_photos_dir = Path(tempfile.gettempdir()) / "plant-care-test-photos"
-        test_photos_dir.mkdir(exist_ok=True)
-        os.environ["CAMERA_SAVE_PATH"] = str(test_photos_dir)
+    _ensure_test_env_var("DATA_DIR", "plant-care-test-data")
+    _ensure_test_env_var("CAMERA_SAVE_PATH", "plant-care-test-photos")
 
     config.addinivalue_line(
         "markers", "httpx_mock: Configure httpx mock behavior"

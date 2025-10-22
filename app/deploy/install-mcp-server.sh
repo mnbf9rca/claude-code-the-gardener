@@ -64,14 +64,22 @@ echo "Validating required environment variables..."
 ENV_ERRORS=0
 
 # Check DATA_DIR
+DATA_DIR_VALUE=$(grep "^DATA_DIR=" "$APP_DIR/.env" | cut -d'=' -f2- | tr -d '[:space:]')
 if ! grep -q "^DATA_DIR=" "$APP_DIR/.env"; then
     echo "✗ ERROR: DATA_DIR not set in .env"
+    ENV_ERRORS=$((ENV_ERRORS + 1))
+elif [ -z "$DATA_DIR_VALUE" ]; then
+    echo "✗ ERROR: DATA_DIR is empty in .env"
     ENV_ERRORS=$((ENV_ERRORS + 1))
 fi
 
 # Check CAMERA_SAVE_PATH
+CAMERA_SAVE_PATH_VALUE=$(grep "^CAMERA_SAVE_PATH=" "$APP_DIR/.env" | cut -d'=' -f2- | tr -d '[:space:]')
 if ! grep -q "^CAMERA_SAVE_PATH=" "$APP_DIR/.env"; then
     echo "✗ ERROR: CAMERA_SAVE_PATH not set in .env"
+    ENV_ERRORS=$((ENV_ERRORS + 1))
+elif [ -z "$CAMERA_SAVE_PATH_VALUE" ]; then
+    echo "✗ ERROR: CAMERA_SAVE_PATH is empty in .env"
     ENV_ERRORS=$((ENV_ERRORS + 1))
 fi
 
@@ -200,7 +208,8 @@ fi
 
 # Use rsync to copy only necessary files, excluding build artifacts and test data
 # This ensures a clean deployment without .venv, __pycache__, test artifacts, etc.
-# Note: data/ and photos/ are configured outside app dir via DATA_DIR and CAMERA_SAVE_PATH
+# Note: data/ and photos/ should be configured outside app dir via DATA_DIR and CAMERA_SAVE_PATH
+# but we exclude them here for safety in case they exist in development environment
 mkdir -p "$MCP_APP_DIR"
 rsync -a \
     --exclude='.venv/' \
@@ -208,6 +217,8 @@ rsync -a \
     --exclude='.pytest_cache/' \
     --exclude='.ruff_cache/' \
     --exclude='.mypy_cache/' \
+    --exclude='data/' \
+    --exclude='photos/' \
     --exclude='test_photos/' \
     --exclude='.env' \
     --exclude='*.pyc' \
