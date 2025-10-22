@@ -1,13 +1,19 @@
 """
-Unit tests for moisture_sensor module
+Unit tests for moisture_sensor module with ESP32 HTTP integration
 
-These test the moisture sensor functions directly without going through MCP server
+These test the moisture sensor functions with mocked HTTP responses
 """
+import os
 import pytest
 import pytest_asyncio
 from fastmcp import FastMCP
-import tools.moisture_sensor as ms_module
 from utils.shared_state import reset_cycle, current_cycle_status
+
+# Set ESP32_HOST before importing module (required)
+os.environ["ESP32_HOST"] = "192.168.1.100"
+os.environ["ESP32_PORT"] = "80"
+
+import tools.moisture_sensor as ms_module
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -15,28 +21,18 @@ async def reset_state():
     """Reset state before each test"""
     reset_cycle()
     ms_module.sensor_history.clear()
-    ms_module.mock_sensor_value = 2000
     yield
 
 
 @pytest.mark.asyncio
-async def test_read_moisture_requires_status():
-    """Test that moisture reading does NOT require status to be written first"""
-    test_mcp = FastMCP("Test")
-    ms_module.setup_moisture_sensor_tools(test_mcp)
-
-    read_tool = test_mcp._tool_manager._tools["read_moisture"]
-
-    # Should fail when status not written
-    result = await read_tool.run(arguments={})
-    assert result.content is not None
-
-
-@pytest.mark.asyncio
-async def test_read_moisture_with_status():
-    """Test reading moisture after status is written"""
-    # Enable reading by setting cycle status
-    current_cycle_status["written"] = True
+async def test_read_moisture_success(httpx_mock):
+    """Test successful moisture reading from ESP32"""
+    # Mock ESP32 response
+    httpx_mock.add_response(
+        url="http://192.168.1.100:80/moisture",
+        method="GET",
+        json={"value": 2047, "timestamp": "2025-01-23T14:30:00Z", "status": "ok"}
+    )
 
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
@@ -46,35 +42,76 @@ async def test_read_moisture_with_status():
     result = await read_tool.run(arguments={})
     assert result.content is not None
 
-    # Check sensor value is in reasonable range
-    assert 1500 <= ms_module.mock_sensor_value <= 3500
-
     # Check history was updated
     assert len(ms_module.sensor_history) == 1
+    assert ms_module.sensor_history[0]["value"] == 2047
 
 
 @pytest.mark.asyncio
-async def test_moisture_decline_simulation():
-    """Test that moisture naturally declines over time"""
-    current_cycle_status["written"] = True
-    initial_value = ms_module.mock_sensor_value
+async def test_read_moisture_timeout(httpx_mock):
+    """Test moisture reading with ESP32 timeout"""
+    # Mock timeout response
+    httpx_mock.add_exception(
+        Exception("Connection timeout"),
+        url="http://192.168.1.100:80/moisture"
+    )
 
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
     read_tool = test_mcp._tool_manager._tools["read_moisture"]
 
-    # Read multiple times
-    for _ in range(5):
-        await read_tool.run(arguments={})
-
-    # Value should have declined (but not necessarily monotonically due to noise)
-    assert ms_module.mock_sensor_value < initial_value
+    # Should handle timeout gracefully
+    result = await read_tool.run(arguments={})
+    # FastMCP wraps errors, check that result indicates error
+    assert "error" in result.content[0].text.lower() or "timeout" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
-async def test_sensor_history_limit():
-    """Test that sensor history is limited to prevent memory issues when using the tool"""
-    current_cycle_status["written"] = True
+async def test_read_moisture_http_error(httpx_mock):
+    """Test moisture reading with ESP32 HTTP error"""
+    # Mock HTTP 500 error
+    httpx_mock.add_response(
+        url="http://192.168.1.100:80/moisture",
+        status_code=500,
+        text="Internal Server Error"
+    )
+
+    test_mcp = FastMCP("Test")
+    ms_module.setup_moisture_sensor_tools(test_mcp)
+    read_tool = test_mcp._tool_manager._tools["read_moisture"]
+
+    # Should handle HTTP error gracefully
+    result = await read_tool.run(arguments={})
+    assert "error" in result.content[0].text.lower() or "500" in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_read_moisture_invalid_json(httpx_mock):
+    """Test moisture reading with invalid JSON response"""
+    # Mock invalid JSON
+    httpx_mock.add_response(
+        url="http://192.168.1.100:80/moisture",
+        text="not json"
+    )
+
+    test_mcp = FastMCP("Test")
+    ms_module.setup_moisture_sensor_tools(test_mcp)
+    read_tool = test_mcp._tool_manager._tools["read_moisture"]
+
+    # Should handle invalid JSON gracefully
+    result = await read_tool.run(arguments={})
+    assert "error" in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_sensor_history_limit(httpx_mock):
+    """Test that sensor history is limited to prevent memory issues"""
+    # Mock ESP32 response
+    httpx_mock.add_response(
+        url="http://192.168.1.100:80/moisture",
+        method="GET",
+        json={"value": 3000, "timestamp": "2025-01-23T14:30:00Z", "status": "ok"}
+    )
 
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
@@ -110,24 +147,8 @@ async def test_sensor_history_sampling():
 
     # Request 1 hour of history (should get 6 samples - every 10 min)
     result = await history_tool.run(arguments={"hours": 1})
-    # Result is in tool format, would need parsing to verify count
-
-
-@pytest.mark.asyncio
-async def test_sensor_value_boundaries():
-    """Test that sensor values stay within realistic boundaries"""
-    current_cycle_status["written"] = True
-
-    test_mcp = FastMCP("Test")
-    ms_module.setup_moisture_sensor_tools(test_mcp)
-    read_tool = test_mcp._tool_manager._tools["read_moisture"]
-
-    # Set to very low value
-    ms_module.mock_sensor_value = 1490
-
-    # Read should not go below minimum
-    await read_tool.run(arguments={})
-    assert ms_module.mock_sensor_value >= 1500
+    # Result is in tool format, verify it executed without error
+    assert result.content is not None
 
 
 @pytest.mark.asyncio
@@ -147,3 +168,28 @@ async def test_history_sampling_with_more_data_than_needed():
     # Request only 1 hour (should sample from all 120 to get 6 points)
     result = await history_tool.run(arguments={"hours": 1})
     # The sampling should pick evenly distributed points
+    assert result.content is not None
+
+
+@pytest.mark.asyncio
+async def test_read_moisture_uses_esp32_timestamp(httpx_mock):
+    """Test that moisture reading uses ESP32's NTP-synced timestamp"""
+    # Mock ESP32 response with real ISO8601 timestamp
+    httpx_mock.add_response(
+        url="http://192.168.1.100:80/moisture",
+        json={
+            "value": 2500,
+            "timestamp": "2025-01-23T18:45:30Z",
+            "status": "ok"
+        }
+    )
+
+    test_mcp = FastMCP("Test")
+    ms_module.setup_moisture_sensor_tools(test_mcp)
+    read_tool = test_mcp._tool_manager._tools["read_moisture"]
+
+    await read_tool.run(arguments={})
+
+    # Verify ESP32's timestamp was stored
+    assert len(ms_module.sensor_history) == 1
+    assert ms_module.sensor_history[0]["timestamp"] == "2025-01-23T18:45:30Z"

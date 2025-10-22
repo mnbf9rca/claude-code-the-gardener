@@ -21,7 +21,10 @@ class MoistureReading(BaseModel):
 sensor_history = []
 
 # ESP32 configuration from environment
-ESP32_HOST = os.getenv("ESP32_HOST", "192.168.1.100")
+ESP32_HOST = os.getenv("ESP32_HOST")
+if not ESP32_HOST:
+    raise ValueError("ESP32_HOST environment variable is required but not set")
+
 ESP32_PORT = int(os.getenv("ESP32_PORT", "80"))
 ESP32_BASE_URL = f"http://{ESP32_HOST}:{ESP32_PORT}"
 
