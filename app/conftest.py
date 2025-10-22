@@ -208,7 +208,7 @@ def mock_hardware_config(monkeypatch):
 
     # Reset singletons to pick up mocked environment
     import tools.light as light_module
-    light_module._ha_config = None
+    light_module.reset_ha_config()
 
     from utils.esp32_config import _config as esp32_config_singleton
     if esp32_config_singleton is not None:

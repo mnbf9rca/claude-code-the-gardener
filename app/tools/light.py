@@ -14,9 +14,8 @@ import httpx
 import os
 import json
 import asyncio
-import atexit
 from dotenv import load_dotenv
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 # Load environment variables
 load_dotenv()
@@ -103,8 +102,14 @@ def get_ha_config() -> HAConfig:
     return _ha_config
 
 
-# HTTP client for Home Assistant (deprecated - use HAConfig.get_client())
-http_client: Optional[httpx.AsyncClient] = None
+def reset_ha_config() -> None:
+    """
+    Reset the Home Assistant configuration singleton.
+    This is primarily intended for test isolation.
+    """
+    global _ha_config
+    _ha_config = None
+
 
 # State persistence - separate files for state vs history
 STATE_FILE = get_app_dir("data") / "light_state.json"
@@ -115,41 +120,6 @@ scheduled_task: Optional[asyncio.Task] = None
 
 # Startup reconciliation flag
 _reconciliation_done = False
-
-def get_http_client() -> httpx.AsyncClient:
-    """Get or create the HTTP client for Home Assistant (deprecated - use get_ha_config().get_client())"""
-    global http_client
-    if http_client is None:
-        config = get_ha_config()
-        http_client = httpx.AsyncClient(
-            timeout=10.0,
-            headers={"Authorization": f"Bearer {config.token}"}
-        )
-    return http_client
-
-
-async def close_http_client():
-    """Close the global HTTP client if it exists to prevent resource leaks"""
-    global http_client
-    if http_client is not None:
-        await http_client.aclose()
-        http_client = None
-
-
-def _cleanup_http_client_sync():
-    """Synchronous wrapper for async HTTP client cleanup (called by atexit)"""
-    global http_client
-    if http_client is not None:
-        try:
-            # Run the async cleanup in a new event loop
-            asyncio.run(close_http_client())
-        except Exception as e:
-            # Don't let cleanup errors break shutdown
-            logger.warning(f"Failed to close HTTP client during shutdown: {e}")
-
-
-# Register cleanup on module unload
-atexit.register(_cleanup_http_client_sync)
 
 # Light state
 light_state = {
@@ -566,16 +536,16 @@ async def call_ha_service(service: str, entity_id: str, max_retries: int = 3) ->
 
     for attempt in range(max_retries):
         try:
-            client = get_http_client()
-            domain = entity_id.split(".")[0]  # Extract domain (e.g., 'switch' from 'switch.smart_plug_mini')
-            url = f"{config.url}/api/services/{domain}/{service}"
+            async with config.get_client() as client:
+                domain = entity_id.split(".")[0]  # Extract domain (e.g., 'switch' from 'switch.smart_plug_mini')
+                url = urljoin(config.url, f"/api/services/{domain}/{service}")
 
-            response = await client.post(
-                url,
-                json={"entity_id": entity_id}
-            )
-            response.raise_for_status()
-            return True
+                response = await client.post(
+                    url,
+                    json={"entity_id": entity_id}
+                )
+                response.raise_for_status()
+                return True
 
         except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
             # Transient errors - retry with exponential backoff
@@ -603,13 +573,13 @@ async def get_ha_entity_state(entity_id: str) -> Optional[str]:
     """
     config = get_ha_config()
     try:
-        client = get_http_client()
-        url = f"{config.url}/api/states/{entity_id}"
+        async with config.get_client() as client:
+            url = urljoin(config.url, f"/api/states/{entity_id}")
 
-        response = await client.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("state")
+            response = await client.get(url)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("state")
     except Exception as e:
         logger.warning(f"Failed to get Home Assistant entity state: {e}")
         return None
@@ -817,6 +787,14 @@ def setup_light_tools(mcp: FastMCP):
             For sampling: List of event dicts with full context (timestamp, event_type, etc.)
             For aggregation: List of {"bucket_start": str, "bucket_end": str, "value": number, "count": int}
         """
+        # Validate aggregation parameter
+        SUPPORTED_AGGREGATIONS = ["first", "last", "middle", "count", "sum", "mean"]
+        if aggregation not in SUPPORTED_AGGREGATIONS:
+            raise ValueError(
+                f"Unsupported aggregation '{aggregation}'. "
+                f"Supported values are: {', '.join(SUPPORTED_AGGREGATIONS)}"
+            )
+
         # Parse end_time if provided
         end_dt = None
         if end_time:
