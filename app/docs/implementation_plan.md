@@ -420,6 +420,8 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
 ### Configuration Required for Deployment
 
 - `.env` file with configuration (see `.env.example`):
+  - **REQUIRED**: `DATA_DIR` - JSONL history storage directory (MUST be outside app directory)
+  - **REQUIRED**: `CAMERA_SAVE_PATH` - Photo storage directory (MUST be outside app directory)
   - `MCP_HOST` and `MCP_PORT` for HTTP server
   - `HOME_ASSISTANT_URL` and `HOME_ASSISTANT_TOKEN` for light control
   - `LIGHT_ENTITY_ID` for smart plug entity
@@ -432,8 +434,13 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
   - WiFi configured via captive portal
 - USB webcam connected to Raspberry Pi
 - Home Assistant instance running and accessible
-- All state files auto-created in `app/data/` directory
-- Photo storage auto-created in `app/photos/` directory
+
+**Data Persistence:**
+- `DATA_DIR` and `CAMERA_SAVE_PATH` must be configured outside `/home/mcpserver/plant-care-app`
+- Recommended: Use relative paths (`DATA_DIR=../data`, `CAMERA_SAVE_PATH=../photos`)
+- This creates `/home/mcpserver/data/` and `/home/mcpserver/photos/` outside the app directory
+- ⚠️ **CRITICAL**: The install script deletes the app directory on updates - data MUST be external
+- State files and photos are automatically created in configured directories on first use
 
 ### Known Limitations & Future Work
 

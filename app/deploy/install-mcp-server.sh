@@ -49,14 +49,58 @@ if [ ! -f "$APP_DIR/.env" ]; then
     echo "  cp $APP_DIR/.env.example $APP_DIR/.env"
     echo "  # Edit $APP_DIR/.env with appropriate configuration"
     echo ""
-    echo "Key settings for mcpserver deployment:"
+    echo "REQUIRED settings for mcpserver deployment:"
+    echo "  DATA_DIR=../data                  # JSONL history storage (outside app dir)"
+    echo "  CAMERA_SAVE_PATH=../photos        # Photo storage (outside app dir)"
     echo "  MCP_HOST=0.0.0.0"
     echo "  MCP_PORT=8000"
-    echo "  CAMERA_SAVE_PATH=/home/mcpserver/photos"
     exit 1
 fi
 
 echo "✓ .env file present"
+
+# Validate required environment variables in .env
+echo "Validating required environment variables..."
+ENV_ERRORS=0
+
+# Check DATA_DIR
+DATA_DIR_VALUE=$(grep "^DATA_DIR=" "$APP_DIR/.env" | cut -d'=' -f2- | tr -d '[:space:]')
+if ! grep -q "^DATA_DIR=" "$APP_DIR/.env"; then
+    echo "✗ ERROR: DATA_DIR not set in .env"
+    ENV_ERRORS=$((ENV_ERRORS + 1))
+elif [ -z "$DATA_DIR_VALUE" ]; then
+    echo "✗ ERROR: DATA_DIR is empty in .env"
+    ENV_ERRORS=$((ENV_ERRORS + 1))
+fi
+
+# Check CAMERA_SAVE_PATH
+CAMERA_SAVE_PATH_VALUE=$(grep "^CAMERA_SAVE_PATH=" "$APP_DIR/.env" | cut -d'=' -f2- | tr -d '[:space:]')
+if ! grep -q "^CAMERA_SAVE_PATH=" "$APP_DIR/.env"; then
+    echo "✗ ERROR: CAMERA_SAVE_PATH not set in .env"
+    ENV_ERRORS=$((ENV_ERRORS + 1))
+elif [ -z "$CAMERA_SAVE_PATH_VALUE" ]; then
+    echo "✗ ERROR: CAMERA_SAVE_PATH is empty in .env"
+    ENV_ERRORS=$((ENV_ERRORS + 1))
+fi
+
+if [ $ENV_ERRORS -gt 0 ]; then
+    echo ""
+    echo "ERROR: Required environment variables missing from .env"
+    echo ""
+    echo "Data directories MUST be configured outside the application directory."
+    echo "The install script deletes /home/mcpserver/plant-care-app on updates."
+    echo ""
+    echo "Add to $APP_DIR/.env:"
+    echo "  DATA_DIR=../data              # Recommended: relative path"
+    echo "  CAMERA_SAVE_PATH=../photos    # Recommended: relative path"
+    echo ""
+    echo "Or use absolute paths:"
+    echo "  DATA_DIR=/var/lib/plant-care/data"
+    echo "  CAMERA_SAVE_PATH=/var/lib/plant-care/photos"
+    exit 1
+fi
+
+echo "✓ Required environment variables present (DATA_DIR, CAMERA_SAVE_PATH)"
 
 # Check for systemd service file
 if [ ! -f "$SCRIPT_DIR/$SERVICE_NAME" ]; then
@@ -162,8 +206,10 @@ if [ -d "$MCP_APP_DIR" ]; then
     rm -rf "$MCP_APP_DIR"
 fi
 
-# Use rsync to copy only necessary files, excluding build artifacts and runtime data
-# This ensures a clean deployment without .venv, __pycache__, data/, photos/, etc.
+# Use rsync to copy only necessary files, excluding build artifacts and test data
+# This ensures a clean deployment without .venv, __pycache__, test artifacts, etc.
+# Note: data/ and photos/ should be configured outside app dir via DATA_DIR and CAMERA_SAVE_PATH
+# but we exclude them here for safety in case they exist in development environment
 mkdir -p "$MCP_APP_DIR"
 rsync -a \
     --exclude='.venv/' \
