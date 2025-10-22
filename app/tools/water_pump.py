@@ -197,6 +197,7 @@ def setup_water_pump_tools(mcp: FastMCP):
     ) -> list[dict]:
         """
         Get time-bucketed water pump history for temporal analysis.
+        Note: water is not proactively dispensed - this returns historical data from previous dispense_water calls.
 
         Supports two query modes:
         1. Sampling (first/last/middle): Returns sample dispense events
