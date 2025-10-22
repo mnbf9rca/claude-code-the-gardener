@@ -235,15 +235,11 @@ async def get_photos_api(request: Request) -> JSONResponse:
         limit = int(request.query_params.get('limit', 20))
         offset = int(request.query_params.get('offset', 0))
 
-        # Validate limit
-        if limit < 1:
-            limit = 1
-        elif limit > 100:
-            limit = 100
+        # Validate limit (clamp between 1 and 100)
+        limit = max(1, min(limit, 100))
 
-        # Validate offset
-        if offset < 0:
-            offset = 0
+        # Validate offset (prevent negative values)
+        offset = max(offset, 0)
 
     except ValueError:
         return JSONResponse(
@@ -857,8 +853,7 @@ async def get_gallery_ui(request: Request) -> HTMLResponse:
     offset = int(request.query_params.get('offset', 0))
 
     # Validate offset (prevent negative values)
-    if offset < 0:
-        offset = 0
+    offset = max(offset, 0)
 
     photos_data = _get_photos_from_directory(limit=limit, offset=offset)
 
@@ -1234,17 +1229,31 @@ def add_message_routes(app: Starlette):
         Route('/api/capture', post_capture_photo, methods=['POST']),
     ]
 
-    # Check for existing route paths to prevent duplicates
-    existing_paths = {getattr(route, 'path', None) for route in app.router.routes}
-    existing_paths.discard(None)  # Remove None values from non-path routes
+    # Check for existing routes to prevent duplicates (consider both path and methods)
+    existing_routes = set()
+    for route in app.router.routes:
+        path = getattr(route, 'path', None)
+        methods = getattr(route, 'methods', None)
+        if path and methods:
+            # Add tuples of (path, method) for each method
+            for method in methods:
+                existing_routes.add((path, method))
 
     # Add only new routes
     routes_added = 0
     for route in new_routes:
-        if route.path not in existing_paths:
+        # Check if any method for this path already exists
+        route_exists = False
+        if route.methods:
+            route_exists = any(
+                (route.path, method) in existing_routes
+                for method in route.methods
+            )
+
+        if not route_exists:
             app.router.routes.append(route)
             routes_added += 1
         else:
-            logger.warning(f"Route {route.path} already exists, skipping")
+            logger.warning(f"Route {route.path} {route.methods} already exists, skipping")
 
     logger.info(f"Added {routes_added} message and photo routes to Starlette app")
