@@ -1,0 +1,70 @@
+{
+  "description": "Arduino library dependencies for Gardener Controller",
+  "note": "This file is for documentation only. Arduino IDE requires manual library installation.",
+  "dependencies": [
+    {
+      "name": "M5Unified",
+      "version": ">=0.1.0",
+      "author": "M5Stack",
+      "install_via": "Library Manager",
+      "purpose": "M5Stack hardware abstraction (display, GPIO, power management)"
+    },
+    {
+      "name": "WiFiManager",
+      "version": ">=2.0.0",
+      "author": "tzapu",
+      "install_via": "Library Manager",
+      "purpose": "Captive portal WiFi configuration"
+    },
+    {
+      "name": "ESP Async WebServer",
+      "library_id": "ESP32Async/ESPAsyncWebServer",
+      "version": ">=3.8.0",
+      "author": "ESP32Async",
+      "install_via": "Library Manager",
+      "search_term": "ESP32Async/ESPAsyncWebServer",
+      "github": "https://github.com/ESP32Async/ESPAsyncWebServer",
+      "purpose": "Async HTTP web server (maintained fork)",
+      "note": "Search 'ESP32Async/ESPAsyncWebServer' in Library Manager. Original me-no-dev library is archived and incompatible with ESP32 Arduino Core 3.0+"
+    },
+    {
+      "name": "AsyncTCP",
+      "library_id": "ESP32Async/AsyncTCP",
+      "version": ">=3.0.0",
+      "author": "ESP32Async",
+      "install_via": "Library Manager",
+      "search_term": "ESP32Async/AsyncTCP",
+      "github": "https://github.com/ESP32Async/AsyncTCP",
+      "purpose": "Required dependency for ESPAsyncWebServer (maintained fork)",
+      "note": "Search 'ESP32Async/AsyncTCP' in Library Manager"
+    },
+    {
+      "name": "ArduinoJson",
+      "version": "^6.0.0",
+      "version_constraint": "<7.0.0",
+      "author": "Benoit Blanchon",
+      "install_via": "Library Manager",
+      "purpose": "JSON parsing and serialization",
+      "important": "Must use version 6.x - version 7.x breaks backward compatibility with StaticJsonDocument API"
+    }
+  ],
+  "included_with_esp32": [
+    {
+      "name": "WiFi",
+      "purpose": "WiFi connectivity"
+    },
+    {
+      "name": "ESPmDNS",
+      "purpose": "mDNS hostname resolution"
+    },
+    {
+      "name": "ArduinoOTA",
+      "purpose": "Over-the-air firmware updates"
+    }
+  ],
+  "board": {
+    "platform": "M5Stack ESP32",
+    "board": "M5Stack-CoreS3",
+    "board_manager_url": "https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json"
+  }
+}

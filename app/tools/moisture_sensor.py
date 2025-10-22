@@ -1,13 +1,13 @@
 """
-Moisture Sensor Tool - Reads soil moisture levels
-For now, returns mock data. Will integrate with ESP32 later.
+Moisture Sensor Tool - Reads soil moisture levels from ESP32 via HTTP
 """
-from typing import Dict, Any
+from typing import Any
 from datetime import datetime, timezone
-import random
+import json
+import httpx
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
-from utils.shared_state import current_cycle_status
+from utils.esp32_config import get_esp32_config
 
 
 class MoistureReading(BaseModel):
@@ -18,10 +18,16 @@ class MoistureReading(BaseModel):
 
 
 # Store recent readings for history
+# Note: Thread-safety is not needed here as MCP server runs in a single-threaded
+# async event loop. All accesses to this list are via async functions that won't
+# execute concurrently within the same event loop.
 sensor_history = []
 
-# Mock sensor state - starts at moderate moisture
-mock_sensor_value = 2000
+# Maximum sensor history entries (24 hours at 1 reading/minute)
+MAX_SENSOR_HISTORY_LENGTH = 1440
+
+# HTTP client timeout (seconds)
+HTTP_TIMEOUT = 5.0
 
 
 def setup_moisture_sensor_tools(mcp: FastMCP):
@@ -30,60 +36,79 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
     @mcp.tool()
     async def read_moisture() -> MoistureReading:
         """
-        Read current moisture level from the sensor.
+        Read current moisture level from the sensor via ESP32 HTTP API.
         Returns raw ADC value (0-4095).
         Lower values = drier soil, Higher values = wetter soil.
         Typical range: 1500 (dry) to 3000 (wet)
         """
-        global mock_sensor_value
+        # Get ESP32 config lazily (only when needed)
+        esp32_config = get_esp32_config()
 
-        # Simulate natural moisture decline over time
-        # and add some realistic noise
-        mock_sensor_value = max(
-            1500,  # Don't go below very dry
-            mock_sensor_value - random.randint(5, 15) + random.randint(0, 5)
-        )
+        try:
+            # Call ESP32 HTTP API
+            async with esp32_config.get_client(timeout=HTTP_TIMEOUT) as client:
+                response = await client.get("/moisture")
+                response.raise_for_status()
+                data = response.json()
 
-        timestamp = datetime.now(timezone.utc).isoformat()
-        reading = MoistureReading(
-            value=mock_sensor_value,
-            timestamp=timestamp,
-            status="ok"
-        )
+            # Extract values from ESP32 response
+            value = data["value"]
+            # Use ESP32's timestamp if available, otherwise use current time
+            timestamp = data.get("timestamp", datetime.now(timezone.utc).isoformat())
+            status = data.get("status", "ok")
 
-        # Store in history
-        sensor_history.append({
-            "value": mock_sensor_value,
-            "timestamp": timestamp
-        })
+            reading = MoistureReading(
+                value=value,
+                timestamp=timestamp,
+                status=status
+            )
 
-        # Keep history limited
-        if len(sensor_history) > 1440:  # ~24 hours at 1 reading/minute
-            sensor_history.pop(0)
+            # Store in history
+            sensor_history.append({
+                "value": value,
+                "timestamp": timestamp
+            })
 
-        return reading
+            # Keep history limited
+            if len(sensor_history) > MAX_SENSOR_HISTORY_LENGTH:
+                sensor_history.pop(0)
+
+            return reading
+
+        except httpx.TimeoutException as e:
+            raise ValueError(f"ESP32 timeout: No response from {esp32_config.base_url} within {HTTP_TIMEOUT}s") from e
+        except httpx.HTTPStatusError as e:
+            raise ValueError(f"ESP32 HTTP error: {e.response.status_code} - {e.response.text}") from e
+        except httpx.RequestError as e:
+            raise ValueError(f"ESP32 connection error: Cannot reach {esp32_config.base_url} - {str(e)}") from e
+        except KeyError as e:
+            raise ValueError(f"ESP32 response error: Missing expected key in JSON - {str(e)}") from e
+        except json.JSONDecodeError as e:
+            raise ValueError(f"ESP32 response error: Invalid JSON format - {str(e)}") from e
 
     @mcp.tool()
     async def get_moisture_history(
         hours: int = Field(24, description="Number of hours of history to return")
-    ) -> list[Dict[str, Any]]:
+    ) -> list[list[Any]]:
         """
         Get historical moisture sensor readings.
         Returns array of [timestamp, value] pairs at 10-minute intervals.
+
+        Note: Internal storage uses dict format for consistency with JSONL persistence,
+        but API returns [timestamp, value] pairs for easier plotting/visualization.
         """
-        # For mock data, return last N entries based on hours requested
-        # In production, this would query actual stored data
         entries_needed = hours * 6  # 6 readings per hour (every 10 min)
 
         if not sensor_history:
             return []
 
-        # Sample the history at intervals if we have too many points
+        # Return all available entries if we don't have enough
         if len(sensor_history) <= entries_needed:
-            return sensor_history[-entries_needed:]
+            return [[r["timestamp"], r["value"]] for r in sensor_history[-entries_needed:]]
 
         # Sample evenly from available history
-        step = len(sensor_history) // entries_needed
+        # Ensure step is at least 1 to avoid division by zero or infinite loops
+        step = max(1, len(sensor_history) // entries_needed)
         sampled = []
         indices = list(range(0, len(sensor_history), step))[:entries_needed]
         for i in indices:

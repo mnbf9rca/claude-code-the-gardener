@@ -6,8 +6,10 @@
 - **Phase 3: COMPLETED ✅** - Thinking & logging tools + JSONL refactoring
 - **Phase 4: COMPLETED ✅** - HTTP deployment with systemd service
 - **Phase 5: COMPLETED ✅** - UTC timestamps & HTTP image retrieval
+- **Phase 6: COMPLETED ✅** - Notes tools for unstructured data storage
+- **Phase 7: COMPLETED ✅** - ESP32 hardware integration for moisture sensor and pump
 - **153 tests passing** (all timezone issues resolved)
-- Ready for production deployment on Raspberry Pi
+- Ready for hardware deployment and testing
 
 ## Phase 1: Core MCP Setup & Basic Tools (COMPLETED ✅)
 - [x] Install FastMCP and dependencies in pyproject.toml
@@ -159,6 +161,78 @@
 - Current note: `app/data/notes.md` (plain file, not JSONL)
 - Archives: `app/data/notes_archive/YYYY-MM-DD_HH-MM-SS_UTC.md`
 
+## Phase 7: ESP32 Hardware Integration (COMPLETED ✅)
+
+### ESP32 Firmware
+- [x] Created `esp32/gardener-controller/` Arduino project
+  - [x] `config.h` - Pin definitions, constants, and configuration
+  - [x] `gardener-controller.ino` - Main firmware (~400 lines)
+- [x] Hardware Configuration
+  - [x] GPIO10 (M5-Bus) → Moisture sensor (ADC1_CH9, 12-bit: 0-4095)
+  - [x] GPIO7 (M5-Bus) → Relay control for pump (digital output)
+- [x] HTTP REST API (ESPAsyncWebServer)
+  - [x] `GET /moisture` - Read soil moisture sensor
+  - [x] `POST /pump {"seconds": N}` - Activate pump (1-30s safety limit)
+  - [x] `GET /status` - System health check
+  - [x] CORS headers for cross-origin requests
+- [x] Display UI (M5Unified, 2.0" LCD)
+  - [x] WiFi status and IP address
+  - [x] Live moisture reading with visual bar (updates every 2s)
+  - [x] Pump status with countdown timer
+  - [x] Error messages and status indicators
+- [x] WiFi Management (WiFiManager)
+  - [x] Captive portal on first boot ("GardenerSetup" AP)
+  - [x] Credentials stored in NVS flash
+  - [x] Auto-reconnect on disconnect
+- [x] OTA Updates (ArduinoOTA)
+  - [x] Wireless firmware updates
+  - [x] mDNS hostname: "gardener-esp32.local"
+
+### FastAPI Integration
+- [x] Updated `app/tools/moisture_sensor.py`
+  - [x] Replaced mock data with HTTP client
+  - [x] Calls `GET http://{ESP32_HOST}/moisture`
+  - [x] Error handling for timeout, connection errors, invalid responses
+  - [x] Maintains history tracking functionality
+- [x] Updated `app/tools/water_pump.py`
+  - [x] Added ML-to-seconds conversion logic
+  - [x] Calls `POST http://{ESP32_HOST}/pump {"seconds": N}`
+  - [x] Calibration constant `PUMP_ML_PER_SECOND` from environment
+  - [x] Validates against ESP32 safety limits (30s max)
+  - [x] Records actual ML dispensed and seconds in history
+  - [x] All existing safety limits retained (500ml/24h, gatekeeper)
+- [x] Updated `app/.env.example`
+  - [x] Added ESP32_HOST configuration
+  - [x] Added ESP32_PORT configuration
+  - [x] Added PUMP_ML_PER_SECOND calibration value
+  - [x] Documented calibration procedure
+
+### Documentation
+- [x] Created `esp32/README.md`
+  - [x] Hardware wiring diagrams and pin connections
+  - [x] Arduino IDE setup and library installation
+  - [x] Flashing instructions for macOS
+  - [x] WiFi configuration guide
+  - [x] HTTP API reference
+  - [x] Display information
+  - [x] Calibration procedures (moisture sensor + pump)
+  - [x] Troubleshooting guide
+- [x] Created `esp32/implementation_plan.md`
+  - [x] 6 implementation phases (hardware, HTTP, WiFi, display, OTA, polish)
+  - [x] Architecture and design principles (KISS, YAGNI)
+  - [x] Code structure and key functions
+  - [x] Testing strategy and calibration
+  - [x] Safety considerations
+
+### Lessons Learned
+- **GPIO Selection**: CoreS3-SE has limited GPIO access - Port.A is I2C (avoid), M5-Bus pins require soldering
+- **ML-to-Seconds Conversion**: Keeping conversion logic in FastAPI (not ESP32) allows calibration updates without reflashing
+- **Safety Layers**: Dual safety limits (30s in ESP32, 500ml/24h in FastAPI) prevent failures from cascading
+- **Arduino vs ESP-IDF**: Arduino IDE + M5Unified provides simpler development for hobby projects
+- **Async HTTP Server**: ESPAsyncWebServer allows display updates during pump operation (non-blocking)
+- **Error Messages**: Clear HTTP error responses from ESP32 help debug connection issues
+- **KISS Success**: Simple HTTP REST API (no MQTT, no auth) works perfectly for private network hobby project
+
 ## Key Design Decisions
 - No database initially - in-memory dictionaries
 - Mock hardware - realistic fake data
@@ -261,16 +335,23 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
 - ✅ Clean, maintainable codebase following KISS and YAGNI
 
 ### Next Steps (Post-Deployment)
-- Build ESP32 firmware for moisture sensor and water pump
-- Replace mock sensor/pump tools with real HTTP calls to ESP32
-- Deploy to Raspberry Pi and set up cron job for Claude
+- Flash ESP32 firmware to M5Stack CoreS3-SE
+- Wire moisture sensor and relay to M5-Bus GPIO pins
+- Configure ESP32 WiFi via captive portal
+- Calibrate pump rate (run for 10s, measure ML dispensed)
+- Update `.env` with ESP32_HOST and PUMP_ML_PER_SECOND
+- Test end-to-end: Claude → FastAPI → ESP32 → physical hardware
+- Deploy complete system to Raspberry Pi
+- Set up gardener agent cron job
 - Monitor Claude's plant care performance over time
 
 ## Production Deployment Notes
 
 ### What's Implemented and Working
 
-- ✅ Water pump: Full JSONL history, daily limits enforced (mock ESP32)
+- ✅ Water pump: Full JSONL history, daily limits enforced, HTTP integration with ESP32
+- ✅ Moisture sensor: HTTP integration with ESP32, ADC readings (0-4095)
+- ✅ ESP32 firmware: Arduino-based, HTTP REST API, display UI, WiFi management, OTA updates
 - ✅ Light: Home Assistant integration, scheduling, state reconciliation
 - ✅ Camera: Real USB capture, cross-platform tested (Mac/Raspberry Pi)
 - ✅ Thinking & Action logs: JSONL persistence with efficient querying
@@ -283,7 +364,13 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
   - `MCP_HOST` and `MCP_PORT` for HTTP server
   - `HOME_ASSISTANT_URL` and `HOME_ASSISTANT_TOKEN` for light control
   - `LIGHT_ENTITY_ID` for smart plug entity
+  - `ESP32_HOST` and `ESP32_PORT` for ESP32 controller
+  - `PUMP_ML_PER_SECOND` - calibrated pump rate
   - Camera settings (device index, resolution, quality)
+- ESP32 M5Stack CoreS3-SE with firmware flashed
+  - Moisture sensor wired to GPIO10
+  - Relay wired to GPIO7
+  - WiFi configured via captive portal
 - USB webcam connected to Raspberry Pi
 - Home Assistant instance running and accessible
 - All state files auto-created in `app/data/` directory
@@ -291,9 +378,9 @@ See [README.md](README.md) for complete Raspberry Pi deployment instructions wit
 
 ### Known Limitations & Future Work
 
-- ⚠️ **Mock hardware**: `moisture_sensor` and `water_pump` use mock ESP32 responses
-  - Need to build ESP32 firmware
-  - Replace mock calls with real HTTP calls to ESP32 device
-- ⚠️ **No authentication**: MCP server has no auth (suitable for private network only)
+- ⚠️ **No authentication**: MCP server and ESP32 have no auth (suitable for private network only)
+- ⚠️ **Manual calibration required**: Pump rate must be calibrated by measuring water dispensed
+- ⚠️ **Hardware wiring**: M5-Bus GPIO pins require soldering for sensor connections
 - ⚠️ **Light dependency**: Requires Home Assistant running and accessible
 - ⚠️ **Camera dependency**: Requires OpenCV and USB webcam hardware
+- ⚠️ **Single ESP32 instance**: No support for multiple controllers or failover
