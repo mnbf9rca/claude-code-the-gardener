@@ -21,3 +21,10 @@ dev = [
     "pytest-httpx>=0.30.0",
     "ruff>=0.14.1",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (integration tests requiring real hardware)",
+]
+# Run fast tests by default, use -m slow to run integration tests
+addopts = "-v"

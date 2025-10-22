@@ -3,11 +3,11 @@ Moisture Sensor Tool - Reads soil moisture levels from ESP32 via HTTP
 """
 from typing import Any
 from datetime import datetime, timezone
-import os
-from urllib.parse import urlunparse
+import json
 import httpx
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
+from utils.esp32_config import get_esp32_config
 
 
 class MoistureReading(BaseModel):
@@ -23,21 +23,8 @@ class MoistureReading(BaseModel):
 # execute concurrently within the same event loop.
 sensor_history = []
 
-# ESP32 configuration from environment
-ESP32_HOST = os.getenv("ESP32_HOST")
-if not ESP32_HOST:
-    raise ValueError("ESP32_HOST environment variable is required but not set")
-
-ESP32_PORT = int(os.getenv("ESP32_PORT", "80"))
-
-# Construct base URL properly using urllib
-# Strip any protocol prefix from host if present
-esp32_host_clean = ESP32_HOST.removeprefix("http://").removeprefix("https://")
-# Remove any port suffix from host if present
-if ":" in esp32_host_clean:
-    esp32_host_clean = esp32_host_clean.split(":")[0]
-
-ESP32_BASE_URL = urlunparse(("http", f"{esp32_host_clean}:{ESP32_PORT}", "", "", "", ""))
+# Maximum sensor history entries (24 hours at 1 reading/minute)
+MAX_SENSOR_HISTORY_LENGTH = 1440
 
 # HTTP client timeout (seconds)
 HTTP_TIMEOUT = 5.0
@@ -54,10 +41,13 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         Lower values = drier soil, Higher values = wetter soil.
         Typical range: 1500 (dry) to 3000 (wet)
         """
+        # Get ESP32 config lazily (only when needed)
+        esp32_config = get_esp32_config()
+
         try:
             # Call ESP32 HTTP API
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-                response = await client.get(f"{ESP32_BASE_URL}/moisture")
+            async with esp32_config.get_client(timeout=HTTP_TIMEOUT) as client:
+                response = await client.get("/moisture")
                 response.raise_for_status()
                 data = response.json()
 
@@ -80,18 +70,20 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
             })
 
             # Keep history limited
-            if len(sensor_history) > 1440:  # ~24 hours at 1 reading/minute
+            if len(sensor_history) > MAX_SENSOR_HISTORY_LENGTH:
                 sensor_history.pop(0)
 
             return reading
 
         except httpx.TimeoutException as e:
-            raise ValueError(f"ESP32 timeout: No response from {ESP32_BASE_URL} within {HTTP_TIMEOUT}s") from e
+            raise ValueError(f"ESP32 timeout: No response from {esp32_config.base_url} within {HTTP_TIMEOUT}s") from e
         except httpx.HTTPStatusError as e:
             raise ValueError(f"ESP32 HTTP error: {e.response.status_code} - {e.response.text}") from e
         except httpx.RequestError as e:
-            raise ValueError(f"ESP32 connection error: Cannot reach {ESP32_BASE_URL} - {str(e)}") from e
-        except (KeyError, ValueError) as e:
+            raise ValueError(f"ESP32 connection error: Cannot reach {esp32_config.base_url} - {str(e)}") from e
+        except KeyError as e:
+            raise ValueError(f"ESP32 response error: Missing expected key in JSON - {str(e)}") from e
+        except json.JSONDecodeError as e:
             raise ValueError(f"ESP32 response error: Invalid JSON format - {str(e)}") from e
 
     @mcp.tool()

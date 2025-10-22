@@ -8,6 +8,10 @@ These tests verify the water pump functionality including:
 - Usage tracking and reporting
 - State persistence and recovery
 """
+from dotenv import load_dotenv
+
+# Load environment variables from .env file BEFORE importing modules
+load_dotenv()
 
 import os
 import pytest
@@ -18,14 +22,20 @@ from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from fastmcp import FastMCP
 from utils.shared_state import reset_cycle, current_cycle_status
-
-# Set ESP32_HOST before importing module (required)
-os.environ["ESP32_HOST"] = "192.168.1.100"
-os.environ["ESP32_PORT"] = "80"
-os.environ["PUMP_ML_PER_SECOND"] = "3.5"
-
 import tools.water_pump as wp_module
 from tools.water_pump import setup_water_pump_tools
+
+# Ensure required env vars are set (will use .env values, or use test defaults)
+os.environ.setdefault("ESP32_HOST", "192.168.1.100")
+os.environ.setdefault("ESP32_PORT", "80")
+os.environ.setdefault("PUMP_ML_PER_SECOND", "3.5")
+
+
+@pytest.fixture
+def esp32_base_url():
+    """Get ESP32 base URL for mocking"""
+    from utils.esp32_config import get_esp32_config
+    return get_esp32_config().base_url
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -34,6 +44,10 @@ async def setup_pump_state(tmp_path):
     # Reset cycle state
     reset_cycle()
     current_cycle_status["written"] = True  # Allow tool calls
+
+    # Reset ESP32 config singleton
+    import utils.esp32_config
+    utils.esp32_config._config = None
 
     # Use temp directory for state file (don't touch production state!)
     from utils.jsonl_history import JsonlHistory
@@ -57,13 +71,13 @@ async def setup_pump_state(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_dispense_basic(setup_pump_state, httpx_mock):
+async def test_dispense_basic(setup_pump_state, httpx_mock, esp32_base_url):
     """Test basic water dispensing via ESP32"""
     mcp = setup_pump_state
 
     # Mock ESP32 successful response
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
     )
@@ -84,18 +98,18 @@ async def test_dispense_basic(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_dispense_minimum_maximum(setup_pump_state, httpx_mock):
+async def test_dispense_minimum_maximum(setup_pump_state, httpx_mock, esp32_base_url):
     """Test min/max dispensing limits"""
     mcp = setup_pump_state
 
     # Mock responses for both dispenses
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 3, "timestamp": "2025-01-23T14:30:00Z"}
     )
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 29, "timestamp": "2025-01-23T14:30:05Z"}
     )
@@ -152,14 +166,14 @@ async def test_dispense_validation_non_integer_values(setup_pump_state):
 
 
 @pytest.mark.asyncio
-async def test_24h_limit_enforcement(setup_pump_state, httpx_mock):
+async def test_24h_limit_enforcement(setup_pump_state, httpx_mock, esp32_base_url):
     """Test that 500ml/24h limit is enforced"""
     mcp = setup_pump_state
 
     # Mock 5 successful dispenses
     for _ in range(5):
         httpx_mock.add_response(
-            url="http://192.168.1.100:80/pump",
+            url=f"{esp32_base_url}/pump",
             method="POST",
             json={"success": True, "duration": 29, "timestamp": "2025-01-23T14:30:00Z"}
         )
@@ -179,14 +193,14 @@ async def test_24h_limit_enforcement(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_24h_rolling_window(setup_pump_state, httpx_mock):
+async def test_24h_rolling_window(setup_pump_state, httpx_mock, esp32_base_url):
     """Test that the 24h limit is a rolling window"""
     mcp = setup_pump_state
 
     # Mock successful responses
     for _ in range(5):
         httpx_mock.add_response(
-            url="http://192.168.1.100:80/pump",
+            url=f"{esp32_base_url}/pump",
             method="POST",
             json={"success": True, "duration": 29, "timestamp": "2025-01-23T14:30:00Z"}
         )
@@ -217,18 +231,18 @@ async def test_24h_rolling_window(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_get_usage_24h(setup_pump_state, httpx_mock):
+async def test_get_usage_24h(setup_pump_state, httpx_mock, esp32_base_url):
     """Test getting water usage statistics"""
     mcp = setup_pump_state
 
     # Mock responses for dispenses
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
     )
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 21, "timestamp": "2025-01-23T14:30:05Z"}
     )
@@ -255,14 +269,14 @@ async def test_get_usage_24h(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_partial_dispensing_at_limit(setup_pump_state, httpx_mock):
+async def test_partial_dispensing_at_limit(setup_pump_state, httpx_mock, esp32_base_url):
     """Test that we dispense only what's available when near limit"""
     mcp = setup_pump_state
 
     # Mock responses for dispenses
     for _ in range(6):
         httpx_mock.add_response(
-            url="http://192.168.1.100:80/pump",
+            url=f"{esp32_base_url}/pump",
             method="POST",
             json={"success": True, "duration": 20, "timestamp": "2025-01-23T14:30:00Z"}
         )
@@ -295,14 +309,14 @@ async def test_gatekeeper_enforcement(setup_pump_state):
 
 
 @pytest.mark.asyncio
-async def test_esp32_timeout(setup_pump_state, httpx_mock):
+async def test_esp32_timeout(setup_pump_state, httpx_mock, esp32_base_url):
     """Test handling of ESP32 timeout"""
     mcp = setup_pump_state
 
     # Mock timeout using httpx.TimeoutException
     httpx_mock.add_exception(
         httpx.TimeoutException("Connection timeout"),
-        url="http://192.168.1.100:80/pump"
+        url=f"{esp32_base_url}/pump"
     )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
@@ -313,13 +327,13 @@ async def test_esp32_timeout(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_esp32_pump_already_active(setup_pump_state, httpx_mock):
+async def test_esp32_pump_already_active(setup_pump_state, httpx_mock, esp32_base_url):
     """Test handling when ESP32 reports pump already active"""
     mcp = setup_pump_state
 
     # Mock 409 Conflict response
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         status_code=409,
         json={"success": False, "error": "Pump already active"}
@@ -333,13 +347,33 @@ async def test_esp32_pump_already_active(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_ml_to_seconds_conversion(setup_pump_state, httpx_mock):
+async def test_esp32_malformed_json(setup_pump_state, httpx_mock, esp32_base_url):
+    """Test handling of malformed JSON response from ESP32"""
+    mcp = setup_pump_state
+
+    # Mock malformed JSON response
+    httpx_mock.add_response(
+        url=f"{esp32_base_url}/pump",
+        method="POST",
+        text="not valid json",
+        status_code=200
+    )
+
+    dispense_tool = mcp._tool_manager._tools["dispense_water"]
+
+    # Should handle malformed JSON gracefully
+    with pytest.raises(ValueError, match="Invalid JSON format"):
+        await dispense_tool.run(arguments={"ml": 50})
+
+
+@pytest.mark.asyncio
+async def test_ml_to_seconds_conversion(setup_pump_state, httpx_mock, esp32_base_url):
     """Test ML-to-seconds conversion logic"""
     mcp = setup_pump_state
 
     # Mock response
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
     )
@@ -360,13 +394,13 @@ async def test_ml_to_seconds_conversion(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_state_file_creation(setup_pump_state, httpx_mock):
+async def test_state_file_creation(setup_pump_state, httpx_mock, esp32_base_url):
     """Test that state file is created on first append (JSONL format)"""
     mcp = setup_pump_state
 
     # Mock ESP32 response
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
     )
@@ -393,18 +427,18 @@ async def test_state_file_creation(setup_pump_state, httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_state_persistence_across_restarts(setup_pump_state, httpx_mock):
+async def test_state_persistence_across_restarts(setup_pump_state, httpx_mock, esp32_base_url):
     """Test that water history persists across server restarts"""
     mcp = setup_pump_state
 
     # Mock responses
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
     )
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 21, "timestamp": "2025-01-23T14:30:05Z"}
     )
@@ -471,13 +505,13 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
 
 
 @pytest.mark.asyncio
-async def test_state_loads_only_once(setup_pump_state, httpx_mock):
+async def test_state_loads_only_once(setup_pump_state, httpx_mock, esp32_base_url):
     """Test that state is loaded only once, not on every tool call (JSONL format)"""
     mcp = setup_pump_state
 
     # Mock ESP32 response
     httpx_mock.add_response(
-        url="http://192.168.1.100:80/pump",
+        url=f"{esp32_base_url}/pump",
         method="POST",
         json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
     )

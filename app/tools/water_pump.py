@@ -3,40 +3,33 @@ Water Pump Tool - Dispense water with daily usage limits
 Integrates with ESP32 pump via HTTP API with ML-to-seconds conversion.
 """
 from datetime import datetime, timezone
+import json
 import os
-from urllib.parse import urlunparse
 import httpx
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from utils.shared_state import current_cycle_status
 from utils.jsonl_history import JsonlHistory
 from utils.paths import get_app_dir
+from utils.esp32_config import get_esp32_config
 
 # Constants
 MAX_ML_PER_24H = 500  # Maximum water allowed in 24 hours
 MIN_ML_PER_DISPENSE = 10  # Minimum amount per dispense
 MAX_ML_PER_DISPENSE = 100  # Maximum amount per dispense
 
-# ESP32 configuration from environment
-ESP32_HOST = os.getenv("ESP32_HOST")
-if not ESP32_HOST:
-    raise ValueError("ESP32_HOST environment variable is required but not set")
-
-ESP32_PORT = int(os.getenv("ESP32_PORT", "80"))
-
-# Construct base URL properly using urllib
-# Strip any protocol prefix from host if present
-esp32_host_clean = ESP32_HOST.removeprefix("http://").removeprefix("https://")
-# Remove any port suffix from host if present
-if ":" in esp32_host_clean:
-    esp32_host_clean = esp32_host_clean.split(":")[0]
-
-ESP32_BASE_URL = urlunparse(("http", f"{esp32_host_clean}:{ESP32_PORT}", "", "", "", ""))
-
 # Pump calibration - ML dispensed per second of pump operation
 # This value should be calibrated by running the pump for a known duration
 # and measuring the water dispensed (e.g., run for 10s, measure 35ml = 3.5 ml/s)
-PUMP_ML_PER_SECOND = float(os.getenv("PUMP_ML_PER_SECOND", "3.5"))
+_pump_ml_per_second_str = os.getenv("PUMP_ML_PER_SECOND", "3.5")
+try:
+    PUMP_ML_PER_SECOND = float(_pump_ml_per_second_str)
+    if PUMP_ML_PER_SECOND <= 0:
+        raise ValueError("PUMP_ML_PER_SECOND must be a positive number")
+    if PUMP_ML_PER_SECOND > 100:
+        raise ValueError("PUMP_ML_PER_SECOND seems unreasonably high (>100ml/s), please verify calibration")
+except ValueError as e:
+    raise ValueError(f"Invalid PUMP_ML_PER_SECOND environment variable: {_pump_ml_per_second_str} - {str(e)}") from e
 
 # HTTP client timeout (seconds)
 HTTP_TIMEOUT = 10.0  # Longer timeout since pump operations take time
@@ -127,11 +120,14 @@ def setup_water_pump_tools(mcp: FastMCP):
         elif seconds > 30:
             raise ValueError(f"Requested {actual_ml}ml requires {seconds}s, exceeds ESP32 safety limit (30s)")
 
+        # Get ESP32 config lazily (only when needed)
+        esp32_config = get_esp32_config()
+
         try:
             # Call ESP32 HTTP API to activate pump
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            async with esp32_config.get_client(timeout=HTTP_TIMEOUT) as client:
                 response = await client.post(
-                    f"{ESP32_BASE_URL}/pump",
+                    "/pump",
                     json={"seconds": seconds},
                     headers={"Content-Type": "application/json"}
                 )
@@ -142,19 +138,21 @@ def setup_water_pump_tools(mcp: FastMCP):
             if not data.get("success", False):
                 raise ValueError(f"ESP32 pump activation failed: {data.get('error', 'Unknown error')}")
 
-        except httpx.TimeoutException:
-            raise ValueError(f"ESP32 timeout: No response from {ESP32_BASE_URL} within {HTTP_TIMEOUT}s")
+        except httpx.TimeoutException as e:
+            raise ValueError(f"ESP32 timeout: No response from {esp32_config.base_url} within {HTTP_TIMEOUT}s") from e
         except httpx.HTTPStatusError as e:
             error_msg = e.response.text
             try:
                 error_data = e.response.json()
                 error_msg = error_data.get("error", error_msg)
-            except Exception:
+            except json.JSONDecodeError:
                 # JSON parsing failed, use raw text
                 pass
-            raise ValueError(f"ESP32 HTTP error ({e.response.status_code}): {error_msg}")
+            raise ValueError(f"ESP32 HTTP error ({e.response.status_code}): {error_msg}") from e
+        except json.JSONDecodeError as e:
+            raise ValueError(f"ESP32 response error: Invalid JSON format - {str(e)}") from e
         except httpx.RequestError as e:
-            raise ValueError(f"ESP32 connection error: Cannot reach {ESP32_BASE_URL} - {str(e)}")
+            raise ValueError(f"ESP32 connection error: Cannot reach {esp32_config.base_url} - {str(e)}") from e
 
         # Record the dispensing event (only after successful ESP32 activation)
         timestamp = datetime.now(timezone.utc).isoformat()
