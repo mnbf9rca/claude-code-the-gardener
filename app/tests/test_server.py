@@ -11,11 +11,16 @@ For unit tests of individual modules, see:
 - test_light.py - Unit tests for light control module
 - test_camera.py - Unit tests for camera module
 """
+import os
+
+# Set test calibration BEFORE any imports
+os.environ["PUMP_ML_PER_SECOND"] = "0.9"
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file BEFORE importing project modules
 # This is intentional - project modules may read env vars during import
-load_dotenv()
+load_dotenv(override=False)
 
 # ruff: noqa: E402 - imports must come after load_dotenv()
 import pytest
@@ -115,7 +120,7 @@ async def reset_server_state(httpx_mock: HTTPXMock):
         return httpx.Response(200, json={"value": 2000, "timestamp": "2025-01-23T14:30:00Z", "status": "ok"})
 
     def mock_pump_activate(request):
-        return httpx.Response(200, json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"})
+        return httpx.Response(200, json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"})
 
     # Add ESP32 mocks - use non-matching URLs to avoid conflicts with httpx_mock
     for _ in range(50):  # More iterations for tests that use multiple calls
@@ -342,7 +347,7 @@ async def test_water_pump_integration():
     # Try to dispense water before writing status - should fail
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
     with pytest.raises(ValueError, match="Must call write_status first"):
-        await dispense_tool.run(arguments={"ml": 50})
+        await dispense_tool.run(arguments={"ml": 20})
 
     # Write status first
     write_status_tool = mcp._tool_manager._tools["write_plant_status"]
@@ -356,11 +361,11 @@ async def test_water_pump_integration():
     })
 
     # Now dispense water should work
-    tool_result = await dispense_tool.run(arguments={"ml": 50})
+    tool_result = await dispense_tool.run(arguments={"ml": 20})
     result = json.loads(tool_result.content[0].text)
 
-    assert result["dispensed"] == 50
-    assert result["remaining_24h"] == 450
+    assert result["dispensed"] == 20
+    assert result["remaining_24h"] == 480  # 500 - 20
     print("✓ Water pump integration works with gatekeeper")
 
 
@@ -510,9 +515,9 @@ async def test_full_cycle_integration():
 
     # 3. Dispense water
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
-    tool_result = await dispense_tool.run(arguments={"ml": 80})
+    tool_result = await dispense_tool.run(arguments={"ml": 20})
     water = json.loads(tool_result.content[0].text)
-    assert water["dispensed"] == 80
+    assert water["dispensed"] == 20
 
     # 4. Turn on light
     turn_on_tool = mcp._tool_manager._tools["turn_on_light"]
@@ -530,7 +535,7 @@ async def test_full_cycle_integration():
     usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
     tool_result = await usage_tool.run(arguments={})
     usage = json.loads(tool_result.content[0].text)
-    assert usage["used_ml"] == 80
+    assert usage["used_ml"] == 20
     assert usage["events"] == 1
 
     print("✓ Full plant care cycle integration successful")
@@ -551,25 +556,25 @@ async def test_action_limits_with_time():
     })
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
-        # Dispense water up to limit
+        # Dispense water (5 × 25ml = 125ml)
         dispense_tool = mcp._tool_manager._tools["dispense_water"]
         for _ in range(5):
-            await dispense_tool.run(arguments={"ml": 100})
+            await dispense_tool.run(arguments={"ml": 25})
 
-        # Should be at limit now
+        # Check usage
         usage_tool = mcp._tool_manager._tools["get_water_usage_24h"]
         tool_result = await usage_tool.run(arguments={})
         usage = json.loads(tool_result.content[0].text)
-        assert usage["used_ml"] == 500
-        assert usage["remaining_ml"] == 0
+        assert usage["used_ml"] == 125  # 5 × 25ml
+        assert usage["remaining_ml"] == 375  # 500 - 125
 
         # Move forward 25 hours
         frozen_time.move_to("2024-01-02 13:00:00")
 
         # Should be able to dispense again
-        tool_result = await dispense_tool.run(arguments={"ml": 100})
+        tool_result = await dispense_tool.run(arguments={"ml": 25})
         result = json.loads(tool_result.content[0].text)
-        assert result["dispensed"] == 100
+        assert result["dispensed"] == 25
 
     print("✓ Time-based water limits work correctly with freezegun")
 

@@ -194,7 +194,7 @@ Returns:
 
 ### Write Tools
 
-- `dispense_water(ml)` - Dispense water. Accepts integer 10-100. Returns `{"dispensed": 30, "remaining_24h": 470, "timestamp": "ISO8601"}`. Error if exceeds 500ml daily limit.
+- `dispense_water(ml)` - Dispense water. Accepts integer 10-25. Returns `{"dispensed": 25, "remaining_24h": 475, "timestamp": "ISO8601"}`. Error if exceeds 500ml daily limit. NOTE: Maximum 25ml per event due to ESP32 30s safety limit. For larger amounts, trigger multiple sequential dispenses.
 
 ### Query Tools
 
