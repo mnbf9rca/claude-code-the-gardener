@@ -8,12 +8,18 @@ These tests verify the water pump functionality including:
 - Usage tracking and reporting
 - State persistence and recovery
 """
+import os
+
+# Set test environment variables BEFORE any imports
+os.environ["ESP32_HOST"] = "192.168.1.100"
+os.environ["ESP32_PORT"] = "80"
+os.environ["PUMP_ML_PER_SECOND"] = "0.9"
+
 from dotenv import load_dotenv
 
-# Load environment variables from .env file BEFORE importing modules
-load_dotenv()
+# Load environment variables from .env file (test values take precedence)
+load_dotenv(override=False)
 
-import os
 import pytest
 import pytest_asyncio
 import json
@@ -24,11 +30,6 @@ from fastmcp import FastMCP
 from utils.shared_state import reset_cycle, current_cycle_status
 import tools.water_pump as wp_module
 from tools.water_pump import setup_water_pump_tools
-
-# Ensure required env vars are set (will use .env values, or use test defaults)
-os.environ.setdefault("ESP32_HOST", "192.168.1.100")
-os.environ.setdefault("ESP32_PORT", "80")
-os.environ.setdefault("PUMP_ML_PER_SECOND", "3.5")
 
 
 @pytest.fixture
@@ -79,22 +80,22 @@ async def test_dispense_basic(setup_pump_state, httpx_mock, esp32_base_url):
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"}
     )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
-    tool_result = await dispense_tool.run(arguments={"ml": 50})
+    tool_result = await dispense_tool.run(arguments={"ml": 20})
     result = json.loads(tool_result.content[0].text)
 
-    assert result["dispensed"] == 50
-    assert result["remaining_24h"] == 450  # 500 - 50
+    assert result["dispensed"] == 20
+    assert result["remaining_24h"] == 480  # 500 - 20
     assert "timestamp" in result
     assert len(wp_module.water_history) == 1
 
-    # Verify ML-to-seconds conversion (50ml / 3.5 ml/s = ~14s)
+    # Verify ML-to-seconds conversion (20ml / 0.9 ml/s = ~22s)
     # Access via public API
     history = list(wp_module.water_history.get_all())
-    assert history[0]["seconds"] == 14
+    assert history[0]["seconds"] == 22
 
 
 @pytest.mark.asyncio
@@ -106,12 +107,12 @@ async def test_dispense_minimum_maximum(setup_pump_state, httpx_mock, esp32_base
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 3, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 11, "timestamp": "2025-01-23T14:30:00Z"}
     )
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 29, "timestamp": "2025-01-23T14:30:05Z"}
+        json={"success": True, "duration": 28, "timestamp": "2025-01-23T14:30:05Z"}
     )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
@@ -121,10 +122,10 @@ async def test_dispense_minimum_maximum(setup_pump_state, httpx_mock, esp32_base
     result = json.loads(tool_result.content[0].text)
     assert result["dispensed"] == 10
 
-    # Test maximum (100ml)
-    tool_result = await dispense_tool.run(arguments={"ml": 100})
+    # Test maximum (25ml)
+    tool_result = await dispense_tool.run(arguments={"ml": 25})
     result = json.loads(tool_result.content[0].text)
-    assert result["dispensed"] == 100
+    assert result["dispensed"] == 25
 
 
 @pytest.mark.asyncio
@@ -139,7 +140,7 @@ async def test_dispense_validation(setup_pump_state):
 
     # Test above maximum
     with pytest.raises(Exception):  # Will be a Pydantic validation error
-        await dispense_tool.run(arguments={"ml": 150})
+        await dispense_tool.run(arguments={"ml": 20})
 
 
 @pytest.mark.asyncio
@@ -170,19 +171,19 @@ async def test_24h_limit_enforcement(setup_pump_state, httpx_mock, esp32_base_ur
     """Test that 500ml/24h limit is enforced"""
     mcp = setup_pump_state
 
-    # Mock 5 successful dispenses
-    for _ in range(5):
+    # Mock 20 successful dispenses
+    for _ in range(20):
         httpx_mock.add_response(
             url=f"{esp32_base_url}/pump",
             method="POST",
-            json={"success": True, "duration": 29, "timestamp": "2025-01-23T14:30:00Z"}
+            json={"success": True, "duration": 28, "timestamp": "2025-01-23T14:30:00Z"}
         )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
-    # Dispense 500ml total
-    for _ in range(5):
-        tool_result = await dispense_tool.run(arguments={"ml": 100})
+    # Dispense 500ml total (20 × 25ml)
+    for _ in range(20):
+        tool_result = await dispense_tool.run(arguments={"ml": 25})
         result = json.loads(tool_result.content[0].text)
 
     assert result["remaining_24h"] == 0
@@ -202,32 +203,32 @@ async def test_24h_rolling_window(setup_pump_state, httpx_mock, esp32_base_url):
         httpx_mock.add_response(
             url=f"{esp32_base_url}/pump",
             method="POST",
-            json={"success": True, "duration": 29, "timestamp": "2025-01-23T14:30:00Z"}
+            json={"success": True, "duration": 28, "timestamp": "2025-01-23T14:30:00Z"}
         )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     with freeze_time("2024-01-01 12:00:00") as frozen_time:
-        # Dispense 300ml
-        await dispense_tool.run(arguments={"ml": 100})
-        await dispense_tool.run(arguments={"ml": 100})
-        await dispense_tool.run(arguments={"ml": 100})
+        # Dispense 75ml (3 × 25ml)
+        await dispense_tool.run(arguments={"ml": 25})
+        await dispense_tool.run(arguments={"ml": 25})
+        await dispense_tool.run(arguments={"ml": 25})
 
         # Move forward 12 hours
         frozen_time.move_to("2024-01-02 00:00:00")
 
-        # Should still count the 300ml (within 24h)
-        tool_result = await dispense_tool.run(arguments={"ml": 100})
+        # Should still count the 75ml (within 24h)
+        tool_result = await dispense_tool.run(arguments={"ml": 25})
         result = json.loads(tool_result.content[0].text)
-        assert result["remaining_24h"] == 100
+        assert result["remaining_24h"] == 400  # 500 - 100
 
         # Move forward another 13 hours (25 hours total from first dispense)
         frozen_time.move_to("2024-01-02 13:00:00")
 
-        # First 300ml should no longer count
-        tool_result = await dispense_tool.run(arguments={"ml": 100})
+        # First 75ml should no longer count
+        tool_result = await dispense_tool.run(arguments={"ml": 25})
         result = json.loads(tool_result.content[0].text)
-        assert result["remaining_24h"] == 300  # 500 - 200 (last two dispenses)
+        assert result["remaining_24h"] == 450  # 500 - 50 (last two dispenses)
 
 
 @pytest.mark.asyncio
@@ -239,7 +240,7 @@ async def test_get_usage_24h(setup_pump_state, httpx_mock, esp32_base_url):
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"}
     )
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
@@ -258,13 +259,13 @@ async def test_get_usage_24h(setup_pump_state, httpx_mock, esp32_base_url):
     assert result["events"] == 0
 
     # Dispense some water
-    await dispense_tool.run(arguments={"ml": 50})
-    await dispense_tool.run(arguments={"ml": 75})
+    await dispense_tool.run(arguments={"ml": 20})
+    await dispense_tool.run(arguments={"ml": 25})
 
     tool_result = await usage_tool.run(arguments={})
     result = json.loads(tool_result.content[0].text)
-    assert result["used_ml"] == 125
-    assert result["remaining_ml"] == 375
+    assert result["used_ml"] == 45  # 20 + 25
+    assert result["remaining_ml"] == 455  # 500 - 45
     assert result["events"] == 2
 
 
@@ -273,8 +274,8 @@ async def test_partial_dispensing_at_limit(setup_pump_state, httpx_mock, esp32_b
     """Test that we dispense only what's available when near limit"""
     mcp = setup_pump_state
 
-    # Mock responses for dispenses
-    for _ in range(6):
+    # Mock responses for dispenses (need 20 dispenses + 1 partial)
+    for _ in range(21):
         httpx_mock.add_response(
             url=f"{esp32_base_url}/pump",
             method="POST",
@@ -283,15 +284,15 @@ async def test_partial_dispensing_at_limit(setup_pump_state, httpx_mock, esp32_b
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
-    # Dispense 460ml
-    for _ in range(4):
-        await dispense_tool.run(arguments={"ml": 100})
-    await dispense_tool.run(arguments={"ml": 60})
+    # Dispense 490ml (19×25ml + 1×15ml)
+    for _ in range(19):
+        await dispense_tool.run(arguments={"ml": 25})
+    await dispense_tool.run(arguments={"ml": 15})
 
-    # Try to dispense 100ml, should only get 40ml
-    tool_result = await dispense_tool.run(arguments={"ml": 100})
+    # Try to dispense 25ml, should only get 10ml (partial)
+    tool_result = await dispense_tool.run(arguments={"ml": 25})
     result = json.loads(tool_result.content[0].text)
-    assert result["dispensed"] == 40
+    assert result["dispensed"] == 10  # Only 10ml remaining
     assert result["remaining_24h"] == 0
 
 
@@ -305,7 +306,7 @@ async def test_gatekeeper_enforcement(setup_pump_state):
     current_cycle_status["written"] = False
 
     with pytest.raises(ValueError, match="Must call write_status first"):
-        await dispense_tool.run(arguments={"ml": 50})
+        await dispense_tool.run(arguments={"ml": 20})
 
 
 @pytest.mark.asyncio
@@ -323,7 +324,7 @@ async def test_esp32_timeout(setup_pump_state, httpx_mock, esp32_base_url):
 
     # Should handle timeout gracefully
     with pytest.raises(ValueError, match="timeout"):
-        await dispense_tool.run(arguments={"ml": 50})
+        await dispense_tool.run(arguments={"ml": 20})
 
 
 @pytest.mark.asyncio
@@ -343,7 +344,7 @@ async def test_esp32_pump_already_active(setup_pump_state, httpx_mock, esp32_bas
 
     # Should handle 409 error gracefully
     with pytest.raises(ValueError, match="409"):
-        await dispense_tool.run(arguments={"ml": 50})
+        await dispense_tool.run(arguments={"ml": 20})
 
 
 @pytest.mark.asyncio
@@ -363,7 +364,7 @@ async def test_esp32_malformed_json(setup_pump_state, httpx_mock, esp32_base_url
 
     # Should handle malformed JSON gracefully
     with pytest.raises(ValueError, match="Invalid JSON format"):
-        await dispense_tool.run(arguments={"ml": 50})
+        await dispense_tool.run(arguments={"ml": 20})
 
 
 @pytest.mark.asyncio
@@ -375,19 +376,19 @@ async def test_ml_to_seconds_conversion(setup_pump_state, httpx_mock, esp32_base
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"}
     )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
-    # 50ml / 3.5 ml/s = 14.29s, rounds to 14s
-    await dispense_tool.run(arguments={"ml": 50})
+    # 20ml / 0.9 ml/s = 22.22s, rounds to 22s
+    await dispense_tool.run(arguments={"ml": 20})
 
     # Check the request was made with correct seconds
     requests = httpx_mock.get_requests()
     assert len(requests) == 1
     request_body = json.loads(requests[0].content)
-    assert request_body["seconds"] == 14
+    assert request_body["seconds"] == 22
 
 
 # ===== State Persistence Tests =====
@@ -402,7 +403,7 @@ async def test_state_file_creation(setup_pump_state, httpx_mock, esp32_base_url)
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"}
     )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
@@ -411,7 +412,7 @@ async def test_state_file_creation(setup_pump_state, httpx_mock, esp32_base_url)
     assert not wp_module.water_history.file_path.exists()
 
     # Dispense water
-    await dispense_tool.run(arguments={"ml": 50})
+    await dispense_tool.run(arguments={"ml": 20})
 
     # State file should now exist
     assert wp_module.water_history.file_path.exists()
@@ -421,8 +422,8 @@ async def test_state_file_creation(setup_pump_state, httpx_mock, esp32_base_url)
         lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
-        assert event["ml"] == 50
-        assert event["seconds"] == 14
+        assert event["ml"] == 20
+        assert event["seconds"] == 22
         assert "timestamp" in event
 
 
@@ -435,7 +436,7 @@ async def test_state_persistence_across_restarts(setup_pump_state, httpx_mock, e
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"}
     )
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
@@ -446,8 +447,8 @@ async def test_state_persistence_across_restarts(setup_pump_state, httpx_mock, e
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
 
     # Dispense some water
-    await dispense_tool.run(arguments={"ml": 50})
-    await dispense_tool.run(arguments={"ml": 75})
+    await dispense_tool.run(arguments={"ml": 20})
+    await dispense_tool.run(arguments={"ml": 25})
 
     assert len(wp_module.water_history) == 2
 
@@ -463,7 +464,7 @@ async def test_state_persistence_across_restarts(setup_pump_state, httpx_mock, e
 
     # History should be restored
     assert len(wp_module.water_history) == 2
-    assert result["used_ml"] == 125
+    assert result["used_ml"] == 45  # 20 + 25
     assert result["events"] == 2
 
 
@@ -477,8 +478,8 @@ async def test_state_loading_on_first_tool_call(setup_pump_state):
     file_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     test_history = [
-        {"timestamp": (now - timedelta(hours=2)).isoformat(), "ml": 30, "seconds": 9},
-        {"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 45, "seconds": 13},
+        {"timestamp": (now - timedelta(hours=2)).isoformat(), "ml": 20, "seconds": 9},
+        {"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 25, "seconds": 13},
     ]
     # Write as JSONL (one JSON object per line)
     with open(file_path, "w") as f:
@@ -513,7 +514,7 @@ async def test_state_loads_only_once(setup_pump_state, httpx_mock, esp32_base_ur
     httpx_mock.add_response(
         url=f"{esp32_base_url}/pump",
         method="POST",
-        json={"success": True, "duration": 14, "timestamp": "2025-01-23T14:30:00Z"}
+        json={"success": True, "duration": 22, "timestamp": "2025-01-23T14:30:00Z"}
     )
 
     dispense_tool = mcp._tool_manager._tools["dispense_water"]
@@ -523,7 +524,7 @@ async def test_state_loads_only_once(setup_pump_state, httpx_mock, esp32_base_ur
     file_path = wp_module.water_history.file_path
     file_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
-    test_history = [{"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 30, "seconds": 9}]
+    test_history = [{"timestamp": (now - timedelta(hours=1)).isoformat(), "ml": 20, "seconds": 9}]
     # Write as JSONL (one JSON object per line)
     with open(file_path, "w") as f:
         for event in test_history:
@@ -543,7 +544,7 @@ async def test_state_loads_only_once(setup_pump_state, httpx_mock, esp32_base_ur
         json.dump({"water_history": []}, f)
 
     # Second tool call should NOT reload state
-    await dispense_tool.run(arguments={"ml": 50})
+    await dispense_tool.run(arguments={"ml": 20})
 
     # Should still have the original loaded state plus the new dispense
     assert len(wp_module.water_history) == 2
@@ -560,7 +561,7 @@ async def test_get_water_history_sampling(setup_pump_state):
     for i in range(5):
         wp_module.water_history.append({
             "timestamp": (base_time + timedelta(minutes=i*10)).isoformat(),
-            "ml": 100 + i*10
+            "ml": 25 + i*10
         })
 
     # Test sampling mode (middle)
@@ -626,7 +627,7 @@ async def test_get_water_history_aggregation_sum(setup_pump_state):
     for i in range(3):
         wp_module.water_history.append({
             "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
-            "ml": 100
+            "ml": 25
         })
 
     # Test sum aggregation
@@ -643,7 +644,7 @@ async def test_get_water_history_aggregation_sum(setup_pump_state):
     # Should return bucket statistics with summed values
     assert isinstance(history, list)
     assert len(history) == 1  # All entries in one bucket
-    assert history[0]["value"] == 300  # 3 * 100ml
+    assert history[0]["value"] == 75  # 3 * 25ml
     assert history[0]["count"] == 3
 
 
@@ -661,11 +662,11 @@ async def test_get_water_history_aggregation_mean(setup_pump_state):
     })
     wp_module.water_history.append({
         "timestamp": (base_time + timedelta(minutes=1)).isoformat(),
-        "ml": 100
+        "ml": 25
     })
     wp_module.water_history.append({
         "timestamp": (base_time + timedelta(minutes=2)).isoformat(),
-        "ml": 150
+        "ml": 30
     })
 
     # Test mean aggregation
@@ -682,5 +683,5 @@ async def test_get_water_history_aggregation_mean(setup_pump_state):
     # Should return bucket statistics with averaged values
     assert isinstance(history, list)
     assert len(history) == 1  # All entries in one bucket
-    assert history[0]["value"] == 100.0  # (50 + 100 + 150) / 3
+    assert history[0]["value"] == 35.0  # (50 + 25 + 30) / 3 = 105 / 3 = 35
     assert history[0]["count"] == 3

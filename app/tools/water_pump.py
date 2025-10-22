@@ -17,7 +17,7 @@ from utils.esp32_config import get_esp32_config
 # Constants
 MAX_ML_PER_24H = 500  # Maximum water allowed in 24 hours
 MIN_ML_PER_DISPENSE = 10  # Minimum amount per dispense
-MAX_ML_PER_DISPENSE = 100  # Maximum amount per dispense
+MAX_ML_PER_DISPENSE = 25  # Maximum amount per dispense (limited by ESP32 30s max * 0.9 ml/s flow rate)
 
 # Pump calibration - ML dispensed per second of pump operation
 # This value should be calibrated by running the pump for a known duration
@@ -93,9 +93,10 @@ def setup_water_pump_tools(mcp: FastMCP):
         )
     ) -> WaterDispenseResponse:
         """
-        Dispense water to the plant via ESP32 pump controller.
-        Accepts 10-100ml per dispense.
+        Dispense water to the plant via the pump controller.
+        Accepts 10-25ml per dispense. Each dispense takes a maximum of 30 seconds.
         Limited to 500ml per rolling 24 hour period.
+        You can make multiple dispense calls as long as you stay within the 24h limit.
         """
         # Check if plant status has been written first
         if not current_cycle_status["written"]:
@@ -119,7 +120,7 @@ def setup_water_pump_tools(mcp: FastMCP):
         if seconds < 1:
             seconds = 1
         elif seconds > 30:
-            raise ValueError(f"Requested {actual_ml}ml requires {seconds}s, exceeds ESP32 safety limit (30s)")
+            raise ValueError(f"Requested {actual_ml}ml requires {seconds}s, exceeds safety limit (30s)")
 
         # Get ESP32 config lazily (only when needed)
         esp32_config = get_esp32_config()

@@ -291,6 +291,33 @@ The new time-bucketed query tools enable Claude to perform its own temporal anal
 - **Test isolation with JSONL**: Persistent JSONL files require careful cleanup in test fixtures to prevent contamination
 - **Type casting matters**: Float bucket calculations need explicit int conversion for range() calls
 
+## Phase 9: Water Pump Calibration Update (COMPLETED ✅)
+
+### Core Changes
+- [x] Updated `PUMP_ML_PER_SECOND` from 3.5 to 0.9 ml/s (based on measured flow rate)
+  - Measured: 27ml dispensed per 30 seconds = 0.9 ml/s
+  - Previous default (3.5 ml/s) was 3.9× too high
+- [x] Reduced `MAX_ML_PER_DISPENSE` from 100ml to 25ml
+  - ESP32 safety limit: 30 seconds maximum per activation
+  - At 0.9 ml/s: 30s × 0.9 = 27ml theoretical max
+  - Conservative 25ml limit provides safety margin
+- [x] Updated documentation in `tool_descriptions.md`
+  - Changed dispense_water() range from 10-100ml to 10-25ml
+  - Added note about multiple sequential dispenses for larger amounts
+- [x] Updated `.env.example` with accurate calibration instructions
+
+### Rationale
+- **No ESP32 reflashing required**: Avoided modifying ESP32 firmware (hard to reflash in situ)
+- **Agent can adapt**: 500ml daily limit unchanged - agent can trigger multiple 25ml events
+- **Accurate water dispensing**: Correct calibration ensures agent gets feedback loop it expects
+- **Conservative safety margin**: 25ml max stays well under 30s ESP32 limit
+
+### Lessons Learned
+- **Measure before deploy**: Default calibration values should be verified with actual hardware
+- **Document constraints**: ESP32 safety limits affect MCP tool design choices
+- **KISS for hobby projects**: Simple solution (reduce max per event) better than complex solution (reflash ESP32)
+- **Agent adaptability**: Agent can work around per-event limits via multiple sequential actions
+
 ## Key Design Decisions
 - No database initially - in-memory dictionaries
 - Mock hardware - realistic fake data
