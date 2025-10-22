@@ -62,6 +62,7 @@ uv sync --dev
 cp .env.example .env
 
 # Edit .env with your configuration
+# - DATA_DIR and CAMERA_SAVE_PATH (REQUIRED - must be outside app directory)
 # - Home Assistant URL and token
 # - Camera settings
 # - MCP server host/port
@@ -138,12 +139,16 @@ nano .env
 
 Required settings:
 
+- **`DATA_DIR`** - JSONL history storage (MUST be outside app directory, e.g., `../data`)
+- **`CAMERA_SAVE_PATH`** - Photo storage (MUST be outside app directory, e.g., `../photos`)
 - `HOME_ASSISTANT_URL` - Your Home Assistant URL
 - `HOME_ASSISTANT_TOKEN` - Long-lived access token
 - `LIGHT_ENTITY_ID` - Your smart plug entity ID
 - `CAMERA_DEVICE_INDEX` - USB camera index (usually 0)
 - `MCP_HOST=0.0.0.0` - Bind to all interfaces
 - `MCP_PORT=8000` - HTTP port
+
+**⚠️ CRITICAL**: `DATA_DIR` and `CAMERA_SAVE_PATH` must be outside the application directory. The installation script deletes and recreates the app directory on updates, which would delete all historical data if stored inside. Use relative paths like `../data` and `../photos` to store data outside the app folder.
 
 ### 3. Set Up Systemd Service
 
