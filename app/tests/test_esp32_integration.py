@@ -21,13 +21,13 @@ To run these tests, ensure:
 3. Moisture sensor is connected to GPIO10
 4. Water pump relay is connected to GPIO7
 """
+
 import pytest
 import pytest_asyncio
 import httpx
 from dotenv import load_dotenv
 from utils.esp32_config import get_esp32_config
 
-# Load environment variables
 load_dotenv()
 
 
@@ -51,9 +51,18 @@ async def check_esp32_available() -> tuple[bool, str]:
                 # Verify it has expected fields from actual ESP32 response
                 # Expected fields: rtc_time, wifi_connected, free_heap, pump_active, moisture
                 if "wifi_connected" in data and "free_heap" in data:
-                    return True, f"ESP32 available at {config.base_url} (WiFi: {data.get('wifi_connected')}, Heap: {data.get('free_heap')})"
-                return False, f"ESP32 at {config.base_url} returned invalid status format (got: {list(data.keys())})"
-            return False, f"ESP32 status check failed: HTTP {response.status_code} from {url}"
+                    return (
+                        True,
+                        f"ESP32 available at {config.base_url} (WiFi: {data.get('wifi_connected')}, Heap: {data.get('free_heap')})",
+                    )
+                return (
+                    False,
+                    f"ESP32 at {config.base_url} returned invalid status format (got: {list(data.keys())})",
+                )
+            return (
+                False,
+                f"ESP32 status check failed: HTTP {response.status_code} from {url}",
+            )
     except ValueError as e:
         # Config error (e.g., ESP32_HOST not set)
         return False, f"ESP32 config error: {e}"
@@ -85,6 +94,7 @@ async def setup_integration_state(esp32_availability):
 
     # Reset ESP32 config singleton
     import utils.esp32_config
+
     utils.esp32_config._config = None
 
     yield
@@ -94,6 +104,7 @@ async def setup_integration_state(esp32_availability):
 
 
 @pytest.mark.asyncio
+@pytest.mark.use_real_hardware
 async def test_esp32_status_endpoint():
     """Test that ESP32 status endpoint returns valid data"""
     config = get_esp32_config()
@@ -123,11 +134,14 @@ async def test_esp32_status_endpoint():
     assert 0 <= data["moisture"] <= 4095  # 12-bit ADC
     assert -100 <= data["wifi_rssi"] <= 0  # WiFi RSSI range
 
-    print(f"✓ ESP32 status: WiFi={data['wifi_connected']}, RSSI={data['wifi_rssi']}dBm, "
-          f"Heap={data['free_heap']} bytes, Moisture={data['moisture']}, Pump={data['pump_active']}")
+    print(
+        f"✓ ESP32 status: WiFi={data['wifi_connected']}, RSSI={data['wifi_rssi']}dBm, "
+        f"Heap={data['free_heap']} bytes, Moisture={data['moisture']}, Pump={data['pump_active']}"
+    )
 
 
 @pytest.mark.asyncio
+@pytest.mark.use_real_hardware
 async def test_read_moisture_adc():
     """Test reading moisture sensor ADC value from ESP32 (GPIO10)"""
     config = get_esp32_config()
@@ -153,6 +167,7 @@ async def test_read_moisture_adc():
 
 
 @pytest.mark.asyncio
+@pytest.mark.use_real_hardware
 async def test_activate_pump():
     """Test activating water pump relay (GPIO7) with minimal duration for safety"""
     config = get_esp32_config()
@@ -162,7 +177,7 @@ async def test_activate_pump():
         response = await client.post(
             f"{config.base_url}/pump",
             json={"seconds": 2},
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
         response.raise_for_status()
         data = response.json()
@@ -178,6 +193,7 @@ async def test_activate_pump():
 
 
 @pytest.mark.asyncio
+@pytest.mark.use_real_hardware
 async def test_esp32_error_handling():
     """Test that invalid requests to ESP32 are handled gracefully"""
     config = get_esp32_config()
@@ -187,7 +203,7 @@ async def test_esp32_error_handling():
         response = await client.post(
             f"{config.base_url}/pump",
             json={"seconds": 100},  # Exceeds 30s safety limit
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
 
         # Should return error

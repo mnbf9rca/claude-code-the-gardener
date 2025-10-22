@@ -38,8 +38,7 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         """
         Read current moisture level from the sensor via ESP32 HTTP API.
         Returns raw ADC value (0-4095).
-        Lower values = drier soil, Higher values = wetter soil.
-        Typical range: 1500 (dry) to 3000 (wet)
+        No scaling or calibration is applied.
         """
         # Get ESP32 config lazily (only when needed)
         esp32_config = get_esp32_config()
@@ -90,6 +89,7 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
     ) -> list[list[Any]]:
         """
         Get moisture sensor readings from the last N hours.
+        Note: samples are not proactively taken - this returns historical data from previous read_moisture calls.
         Samples are evenly distributed across time using time-bucketed sampling.
 
         Returns array of [timestamp, value] pairs for plotting/visualization.

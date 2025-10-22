@@ -14,8 +14,8 @@ import httpx
 import os
 import json
 import asyncio
-import atexit
 from dotenv import load_dotenv
+from urllib.parse import urlparse, urljoin
 
 # Load environment variables
 load_dotenv()
@@ -29,12 +29,94 @@ MAX_ON_MINUTES = 120  # Maximum time light can be on (2 hours)
 MIN_OFF_MINUTES = 30  # Minimum time between activations
 
 # Home Assistant Configuration
-HA_URL = os.getenv("HOME_ASSISTANT_URL", "http://homeassistant.local:8123")
-HA_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN", "")
-LIGHT_ENTITY_ID = os.getenv("LIGHT_ENTITY_ID", "switch.smart_plug_mini")
+class HAConfig:
+    """Home Assistant connection configuration"""
 
-# HTTP client for Home Assistant
-http_client: Optional[httpx.AsyncClient] = None
+    url: str
+    token: str
+    entity_id: str
+
+    def __init__(self):
+        # Load from environment (no defaults - all required)
+        url = os.getenv("HOME_ASSISTANT_URL")
+        token = os.getenv("HOME_ASSISTANT_TOKEN")
+        entity_id = os.getenv("LIGHT_ENTITY_ID")
+
+        # Validate configuration
+        errors = []
+
+        # Validate URL
+        if not url:
+            errors.append("HOME_ASSISTANT_URL is not set")
+        else:
+            try:
+                parsed = urlparse(url)
+                if parsed.scheme not in ("http", "https"):
+                    errors.append(f"HOME_ASSISTANT_URL must use http:// or https:// scheme, got: {parsed.scheme or '(none)'}")
+                if not parsed.netloc:
+                    errors.append(f"HOME_ASSISTANT_URL must include a hostname, got: {url}")
+            except Exception as e:
+                errors.append(f"HOME_ASSISTANT_URL is not a valid URL: {e}")
+
+        # Validate token
+        if not token:
+            errors.append("HOME_ASSISTANT_TOKEN is not set or empty")
+
+        # Validate entity ID
+        if not entity_id:
+            errors.append("LIGHT_ENTITY_ID is not set or empty")
+        elif "." not in entity_id:
+            errors.append(f"LIGHT_ENTITY_ID must be in format 'domain.entity_name', got: {entity_id}")
+
+        # Raise exception if any errors found
+        if errors:
+            error_msg = (
+                "Light tool requires Home Assistant configuration. Please set the following environment variables:\n"
+                "  - " + "\n  - ".join(errors) + "\n\n"
+                "Add these to your .env file or environment."
+            )
+            raise ValueError(error_msg)
+
+        # Assign validated values (type checker knows these are not None now)
+        self.url = url  # type: ignore[assignment]
+        self.token = token  # type: ignore[assignment]
+        self.entity_id = entity_id  # type: ignore[assignment]
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def get_client(self) -> httpx.AsyncClient:
+        """Get HTTP client with authorization header (creates fresh client each time)"""
+        # Create a fresh client for each request to avoid connection state issues
+        return httpx.AsyncClient(
+            timeout=10.0,
+            headers={"Authorization": f"Bearer {self.token}"},
+            http2=False  # Disable HTTP/2 to avoid connection issues
+        )
+
+
+# Singleton instance for reuse
+_ha_config: Optional[HAConfig] = None
+
+
+def get_ha_config() -> HAConfig:
+    """Get or create the Home Assistant configuration singleton"""
+    global _ha_config
+    if _ha_config is None:
+        _ha_config = HAConfig()
+    return _ha_config
+
+
+def reset_ha_config() -> None:
+    """
+    Reset the Home Assistant configuration singleton.
+    This is primarily intended for test isolation.
+    """
+    global _ha_config
+    if _ha_config is not None and _ha_config._client is not None:
+        # Note: We can't await here since this is a sync function
+        # The client will be closed when Python GC collects it
+        _ha_config._client = None
+    _ha_config = None
+
 
 # State persistence - separate files for state vs history
 STATE_FILE = get_app_dir("data") / "light_state.json"
@@ -45,40 +127,6 @@ scheduled_task: Optional[asyncio.Task] = None
 
 # Startup reconciliation flag
 _reconciliation_done = False
-
-def get_http_client() -> httpx.AsyncClient:
-    """Get or create the HTTP client for Home Assistant"""
-    global http_client
-    if http_client is None:
-        http_client = httpx.AsyncClient(
-            timeout=10.0,
-            headers={"Authorization": f"Bearer {HA_TOKEN}"}
-        )
-    return http_client
-
-
-async def close_http_client():
-    """Close the global HTTP client if it exists to prevent resource leaks"""
-    global http_client
-    if http_client is not None:
-        await http_client.aclose()
-        http_client = None
-
-
-def _cleanup_http_client_sync():
-    """Synchronous wrapper for async HTTP client cleanup (called by atexit)"""
-    global http_client
-    if http_client is not None:
-        try:
-            # Run the async cleanup in a new event loop
-            asyncio.run(close_http_client())
-        except Exception as e:
-            # Don't let cleanup errors break shutdown
-            logger.warning(f"Failed to close HTTP client during shutdown: {e}")
-
-
-# Register cleanup on module unload
-atexit.register(_cleanup_http_client_sync)
 
 # Light state
 light_state = {
@@ -255,7 +303,8 @@ async def execute_scheduled_turn_off():
 
         # Turn off the light via Home Assistant
         logger.debug("Executing scheduled turn-off")
-        success = await call_ha_service("turn_off", LIGHT_ENTITY_ID)
+        config = get_ha_config()
+        success = await call_ha_service("turn_off", config.entity_id)
 
         if success:
             # Update state
@@ -331,7 +380,8 @@ async def reconcile_state_on_startup():
         logger.debug(f"Loaded persisted state: {persisted}")
 
         # Query Home Assistant for actual state
-        actual_state = await get_ha_entity_state(LIGHT_ENTITY_ID)
+        config = get_ha_config()
+        actual_state = await get_ha_entity_state(config.entity_id)
         logger.debug(f"Home Assistant reports light is: {actual_state}")
 
         # Check if we have a scheduled off time
@@ -351,7 +401,7 @@ async def reconcile_state_on_startup():
 
                 if actual_state == "on":
                     logger.info("Light is still on, turning off now...")
-                    success = await call_ha_service("turn_off", LIGHT_ENTITY_ID)
+                    success = await call_ha_service("turn_off", config.entity_id)
                     if success:
                         light_state["status"] = "off"
                         light_state["last_off"] = now.isoformat()
@@ -488,20 +538,21 @@ async def call_ha_service(service: str, entity_id: str, max_retries: int = 3) ->
 
     Returns: True if successful, False otherwise
     """
+    config = get_ha_config()
     last_error = None
 
     for attempt in range(max_retries):
         try:
-            client = get_http_client()
-            domain = entity_id.split(".")[0]  # Extract domain (e.g., 'switch' from 'switch.smart_plug_mini')
-            url = f"{HA_URL}/api/services/{domain}/{service}"
+            async with config.get_client() as client:
+                domain = entity_id.split(".")[0]  # Extract domain (e.g., 'switch' from 'switch.smart_plug_mini')
+                url = urljoin(config.url, f"/api/services/{domain}/{service}")
 
-            response = await client.post(
-                url,
-                json={"entity_id": entity_id}
-            )
-            response.raise_for_status()
-            return True
+                response = await client.post(
+                    url,
+                    json={"entity_id": entity_id}
+                )
+                response.raise_for_status()
+                return True
 
         except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
             # Transient errors - retry with exponential backoff
@@ -527,51 +578,25 @@ async def get_ha_entity_state(entity_id: str) -> Optional[str]:
     Get the current state of a Home Assistant entity
     Returns: 'on', 'off', or None if unavailable
     """
+    config = get_ha_config()
     try:
-        client = get_http_client()
-        url = f"{HA_URL}/api/states/{entity_id}"
+        async with config.get_client() as client:
+            url = urljoin(config.url, f"/api/states/{entity_id}")
 
-        response = await client.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("state")
+            response = await client.get(url)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("state")
     except Exception as e:
         logger.warning(f"Failed to get Home Assistant entity state: {e}")
         return None
 
 
-def validate_environment():
-    """
-    Validate required environment variables are present and valid.
-    Raises ValueError if validation fails.
-    """
-    errors = []
-
-    # Check required variables
-    if not HA_URL:
-        errors.append("HOME_ASSISTANT_URL is not set")
-    elif not HA_URL.startswith(("http://", "https://")):
-        errors.append(f"HOME_ASSISTANT_URL must start with http:// or https://, got: {HA_URL}")
-
-    if not HA_TOKEN:
-        errors.append("HOME_ASSISTANT_TOKEN is not set or empty")
-
-    if not LIGHT_ENTITY_ID:
-        errors.append("LIGHT_ENTITY_ID is not set or empty")
-    elif "." not in LIGHT_ENTITY_ID:
-        errors.append(f"LIGHT_ENTITY_ID must be in format 'domain.entity_name', got: {LIGHT_ENTITY_ID}")
-
-    if errors:
-        error_msg = "Light tool configuration errors:\n  - " + "\n  - ".join(errors)
-        logger.warning(f"{error_msg}")
-        logger.warning("Light tools will run in fallback mode. Set environment variables to enable Home Assistant integration.")
-
-
 def setup_light_tools(mcp: FastMCP):
-    """Set up light control tools on the MCP server"""
-
-    # Validate environment configuration
-    validate_environment()
+    """
+    Set up light control tools on the MCP server.
+    Environment validation happens lazily on first tool invocation via get_ha_config().
+    """
 
     @mcp.tool()
     async def turn_on_light(
@@ -613,7 +638,8 @@ def setup_light_tools(mcp: FastMCP):
                 )
 
         # Call Home Assistant to turn on the light
-        success = await call_ha_service("turn_on", LIGHT_ENTITY_ID)
+        config = get_ha_config()
+        success = await call_ha_service("turn_on", config.entity_id)
         if not success:
             raise ValueError("Failed to communicate with Home Assistant to turn on light")
 
@@ -663,7 +689,8 @@ def setup_light_tools(mcp: FastMCP):
         cancel_scheduled_task()
 
         # Call Home Assistant to turn off the light
-        success = await call_ha_service("turn_off", LIGHT_ENTITY_ID)
+        config = get_ha_config()
+        success = await call_ha_service("turn_off", config.entity_id)
         if not success:
             raise ValueError("Failed to communicate with Home Assistant to turn off light")
 
@@ -701,8 +728,11 @@ def setup_light_tools(mcp: FastMCP):
         # Ensure startup reconciliation has been done
         await ensure_reconciliation_done()
 
+        # Get config (validates environment)
+        config = get_ha_config()
+
         # Query Home Assistant for actual state
-        ha_state = await get_ha_entity_state(LIGHT_ENTITY_ID)
+        ha_state = await get_ha_entity_state(config.entity_id)
 
         # If HA is available, sync with actual state
         if ha_state is not None:
@@ -713,7 +743,7 @@ def setup_light_tools(mcp: FastMCP):
         if light_state["status"] == "on" and light_state["scheduled_off"] and datetime.now(timezone.utc) >= datetime.fromisoformat(light_state["scheduled_off"]):
             logger.warning("Scheduled off time passed but light still on (background task may have failed)")
             # Turn off as safety measure
-            await call_ha_service("turn_off", LIGHT_ENTITY_ID)
+            await call_ha_service("turn_off", config.entity_id)
             light_state["status"] = "off"
             light_state["last_off"] = datetime.now(timezone.utc).isoformat()
             clear_scheduled_state()
@@ -728,4 +758,66 @@ def setup_light_tools(mcp: FastMCP):
             last_off=light_state["last_off"],
             can_activate=can_activate,
             minutes_until_available=minutes_wait
+        )
+
+    @mcp.tool()
+    async def get_light_history(
+        hours: int = Field(24, description="Time window in hours (how far back to query)", ge=1),
+        samples_per_hour: float = Field(6, description="Bucket density (6 = every 10min, 1 = hourly, 0.042 = daily)", gt=0),
+        aggregation: str = Field("middle", description="Strategy: first|last|middle (sampling) or count|sum|mean (aggregation)"),
+        value_field: Optional[str] = Field(None, description="Field to aggregate (required for sum/mean, e.g. 'duration_minutes')"),
+        end_time: Optional[str] = Field(None, description="End of time window (ISO8601 UTC). Defaults to now.")
+    ) -> list[dict]:
+        """
+        Get time-bucketed light event history for temporal analysis.
+        Note: the light may be turned on/off manually via Home Assistant - this log only captures tool-invoked events.
+
+        Supports two query modes:
+        1. Sampling (first/last/middle): Returns sample light events
+        2. Aggregation (count/sum/mean): Returns computed statistics per bucket
+
+        Event types in history:
+        - turn_on: Light activated (fields: duration_minutes, scheduled_off)
+        - turn_off_manual: Manually turned off (fields: was_scheduled, scheduled_off)
+        - turn_off_scheduled: Automatically turned off at scheduled time (fields: scheduled_time, actual_time)
+        - recovery_*: Startup reconciliation events
+
+        Examples:
+            - Light activations per day (last week):
+              hours=168, samples_per_hour=0.042, aggregation="count"
+            - Total light duration per day:
+              hours=168, samples_per_hour=0.042, aggregation="sum", value_field="duration_minutes"
+            - Sample light events (last 24h):
+              hours=24, samples_per_hour=6, aggregation="middle"
+
+        Returns:
+            For sampling: List of event dicts with full context (timestamp, event_type, etc.)
+            For aggregation: List of {"bucket_start": str, "bucket_end": str, "value": number, "count": int}
+        """
+        # Validate aggregation parameter
+        SUPPORTED_AGGREGATIONS = ["first", "last", "middle", "count", "sum", "mean"]
+        if aggregation not in SUPPORTED_AGGREGATIONS:
+            raise ValueError(
+                f"Unsupported aggregation '{aggregation}'. "
+                f"Supported values are: {', '.join(SUPPORTED_AGGREGATIONS)}"
+            )
+
+        # Parse end_time if provided
+        end_dt = None
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid end_time format. Expected ISO8601 like '2025-01-15T12:00:00Z'. Error: {str(e)}"
+                )
+
+        # Call time-bucketed sample with appropriate parameters
+        return light_history.get_time_bucketed_sample(
+            hours=hours,
+            samples_per_hour=samples_per_hour,
+            timestamp_key="timestamp",
+            aggregation=aggregation,
+            end_time=end_dt,
+            value_field=value_field
         )

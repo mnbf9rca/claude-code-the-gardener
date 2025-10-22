@@ -84,28 +84,27 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     light_module.STATE_FILE.unlink(missing_ok=True)
     light_module.light_history.file_path.unlink(missing_ok=True)
 
-    # Close httpx client unconditionally
-    try:
-        await light_module.http_client.aclose()
-    except AttributeError:
-        pass
-    light_module.http_client = None
+    # Reset HAConfig singleton to ensure clean state
+    light_module.reset_ha_config()
+
+    # Get config for test (will validate environment)
+    ha_config = light_module.get_ha_config()
 
     # Setup Home Assistant mocks
     def mock_turn_on(request):
-        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"}])
+        return httpx.Response(200, json=[{"entity_id": ha_config.entity_id, "state": "on"}])
 
     def mock_turn_off(request):
-        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"}])
+        return httpx.Response(200, json=[{"entity_id": ha_config.entity_id, "state": "off"}])
 
     def mock_get_state(request):
-        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": light_module.light_state["status"]})
+        return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": light_module.light_state["status"]})
 
     # Add each callback multiple times to allow reuse
     for _ in range(20):
-        httpx_mock.add_callback(mock_turn_on, url=f"{light_module.HA_URL}/api/services/switch/turn_on")
-        httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
-        httpx_mock.add_callback(mock_get_state, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+        httpx_mock.add_callback(mock_turn_on, url=f"{ha_config.url}/api/services/switch/turn_on")
+        httpx_mock.add_callback(mock_turn_off, url=f"{ha_config.url}/api/services/switch/turn_off")
+        httpx_mock.add_callback(mock_get_state, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
 
     # Setup ESP32 mocks for moisture sensor and water pump
     from utils.esp32_config import get_esp32_config
@@ -139,13 +138,6 @@ async def reset_server_state(httpx_mock: HTTPXMock):
 
     # Clear persisted state file unconditionally
     light_module.STATE_FILE.unlink(missing_ok=True)
-
-    # Close httpx client unconditionally
-    try:
-        await light_module.http_client.aclose()
-    except AttributeError:
-        pass
-    light_module.http_client = None
 
 
 @pytest.mark.asyncio

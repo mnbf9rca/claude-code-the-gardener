@@ -17,6 +17,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "integration: Mark test as integration test (may require external services)"
     )
+    config.addinivalue_line(
+        "markers", "use_real_hardware: Skip hardware config mocking - use real credentials from .env"
+    )
 
 
 @pytest.fixture
@@ -188,4 +191,39 @@ def allow_camera_capture(reset_cycle_state):
     """Allow camera capture by marking status as written."""
     from utils.shared_state import current_cycle_status
     current_cycle_status["written"] = True
+    yield
+
+
+@pytest.fixture(autouse=True)
+def mock_hardware_config(request, monkeypatch):
+    """
+    Mock Home Assistant and ESP32 environment variables for all tests.
+    This ensures tests don't depend on .env file or real credentials/hardware.
+
+    To use real hardware credentials, mark test with @pytest.mark.use_real_hardware
+    """
+    # Skip mocking for tests that need real hardware credentials
+    if "use_real_hardware" in request.keywords:
+        yield
+        return
+
+    # Mock Home Assistant config (for light tools)
+    monkeypatch.setenv("HOME_ASSISTANT_URL", "http://homeassistant.local:8123")
+    monkeypatch.setenv("HOME_ASSISTANT_TOKEN", "test-token-12345")
+    monkeypatch.setenv("LIGHT_ENTITY_ID", "switch.smart_plug_mini")
+
+    # Mock ESP32 config (for moisture sensor and water pump tools)
+    monkeypatch.setenv("ESP32_HOST", "192.168.1.100")
+    monkeypatch.setenv("PUMP_ML_PER_SECOND", "3.5")
+
+    # Reset singletons to pick up mocked environment
+    import tools.light as light_module
+    light_module.reset_ha_config()
+
+    from utils.esp32_config import _config as esp32_config_singleton
+    if esp32_config_singleton is not None:
+        # Reset ESP32 config singleton
+        import utils.esp32_config
+        utils.esp32_config._config = None
+
     yield

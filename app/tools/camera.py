@@ -416,6 +416,7 @@ def setup_camera_tools(mcp: FastMCP):
         Get time-bucketed camera usage history for temporal analysis.
 
         Queries the usage_history (JSONL audit log) to analyze photo capture patterns.
+        Note: camera is not proactively capturing photos - this returns historical data from previous capture_photo calls.
 
         Supports two query modes:
         1. Sampling (first/last/middle): Returns sample capture events from each bucket
