@@ -90,15 +90,6 @@
 #define TEXT_SIZE_LARGE 3
 
 // ============================================================================
-// Sensor Calibration (default values)
-// ============================================================================
-
-// These are typical values - calibrate for your specific sensor
-// Lower value = drier soil, Higher value = wetter soil
-#define MOISTURE_DRY_VALUE 1500   // ADC reading in dry soil
-#define MOISTURE_WET_VALUE 3000   // ADC reading in wet soil
-
-// ============================================================================
 // Debug Configuration
 // ============================================================================
 

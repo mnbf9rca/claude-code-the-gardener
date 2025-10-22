@@ -133,18 +133,6 @@ void checkPumpTimeout() {
   }
 }
 
-/**
- * Calculate moisture percentage (0-100%)
- * Based on calibrated dry/wet values
- */
-int getMoisturePercent(int rawValue) {
-  if (rawValue <= MOISTURE_DRY_VALUE) return 0;
-  if (rawValue >= MOISTURE_WET_VALUE) return 100;
-
-  int range = MOISTURE_WET_VALUE - MOISTURE_DRY_VALUE;
-  int adjusted = rawValue - MOISTURE_DRY_VALUE;
-  return (adjusted * 100) / range;
-}
 
 /**
  * Get ISO8601 formatted timestamp (UTC) from RTC
@@ -181,26 +169,15 @@ void updateDisplay() {
 
   M5.Display.println();
 
-  // Moisture sensor
+  // Moisture sensor (raw ADC value)
   M5.Display.setTextColor(COLOR_TEXT);
   int moisture = lastMoistureReading;
-  int percent = getMoisturePercent(moisture);
   M5.Display.printf("Moisture: %d\n", moisture);
+  M5.Display.setTextColor(COLOR_INFO);
+  M5.Display.setTextSize(TEXT_SIZE_MEDIUM);
+  M5.Display.println("(0-4095 ADC raw)");
 
-  // Moisture bar
-  int barWidth = 200;
-  int barHeight = 20;
-  int barX = 10;
-  int barY = M5.Display.getCursorY() + 5;
-
-  M5.Display.drawRect(barX, barY, barWidth, barHeight, COLOR_TEXT);
-  int fillWidth = (barWidth * percent) / 100;
-  M5.Display.fillRect(barX + 2, barY + 2, fillWidth - 4, barHeight - 4, COLOR_OK);
-
-  M5.Display.setCursor(barX + barWidth + 10, barY + 5);
-  M5.Display.printf("%d%%", percent);
-
-  M5.Display.setCursor(10, barY + barHeight + 20);
+  M5.Display.setTextSize(TEXT_SIZE_MEDIUM);
   M5.Display.println();
 
   // Pump status
@@ -406,7 +383,7 @@ void setupWiFi() {
   M5.Display.fillScreen(COLOR_BACKGROUND);
   M5.Display.setCursor(10, 10);
   M5.Display.setTextColor(COLOR_WARNING);
-  M5.Display.setTextSize(TEXT_SIZE_SMALL);
+  M5.Display.setTextSize(TEXT_SIZE_MEDIUM);
   M5.Display.println("WiFi Setup Mode");
   M5.Display.println();
   M5.Display.setTextColor(COLOR_INFO);
