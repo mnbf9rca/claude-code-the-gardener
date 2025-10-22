@@ -6,6 +6,7 @@ These test the moisture sensor functions with mocked HTTP responses
 import os
 import pytest
 import pytest_asyncio
+import httpx
 from fastmcp import FastMCP
 from utils.shared_state import reset_cycle, current_cycle_status
 
@@ -50,9 +51,9 @@ async def test_read_moisture_success(httpx_mock):
 @pytest.mark.asyncio
 async def test_read_moisture_timeout(httpx_mock):
     """Test moisture reading with ESP32 timeout"""
-    # Mock timeout response
+    # Mock timeout response using httpx.TimeoutException
     httpx_mock.add_exception(
-        Exception("Connection timeout"),
+        httpx.TimeoutException("Connection timeout"),
         url="http://192.168.1.100:80/moisture"
     )
 
@@ -60,10 +61,9 @@ async def test_read_moisture_timeout(httpx_mock):
     ms_module.setup_moisture_sensor_tools(test_mcp)
     read_tool = test_mcp._tool_manager._tools["read_moisture"]
 
-    # Should handle timeout gracefully
-    result = await read_tool.run(arguments={})
-    # FastMCP wraps errors, check that result indicates error
-    assert "error" in result.content[0].text.lower() or "timeout" in result.content[0].text.lower()
+    # Should raise ValueError with timeout message
+    with pytest.raises(ValueError, match="timeout"):
+        await read_tool.run(arguments={})
 
 
 @pytest.mark.asyncio
@@ -80,9 +80,9 @@ async def test_read_moisture_http_error(httpx_mock):
     ms_module.setup_moisture_sensor_tools(test_mcp)
     read_tool = test_mcp._tool_manager._tools["read_moisture"]
 
-    # Should handle HTTP error gracefully
-    result = await read_tool.run(arguments={})
-    assert "error" in result.content[0].text.lower() or "500" in result.content[0].text.lower()
+    # Should raise ValueError with HTTP error
+    with pytest.raises(ValueError, match="500|HTTP error"):
+        await read_tool.run(arguments={})
 
 
 @pytest.mark.asyncio
@@ -98,9 +98,9 @@ async def test_read_moisture_invalid_json(httpx_mock):
     ms_module.setup_moisture_sensor_tools(test_mcp)
     read_tool = test_mcp._tool_manager._tools["read_moisture"]
 
-    # Should handle invalid JSON gracefully
-    result = await read_tool.run(arguments={})
-    assert "error" in result.content[0].text.lower()
+    # Should raise ValueError with JSON error
+    with pytest.raises(ValueError):
+        await read_tool.run(arguments={})
 
 
 @pytest.mark.asyncio
