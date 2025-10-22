@@ -1,0 +1,64 @@
+{
+  "description": "Arduino library dependencies for Gardener Controller",
+  "note": "This file is for documentation only. Arduino IDE requires manual library installation.",
+  "dependencies": [
+    {
+      "name": "M5Unified",
+      "version": ">=0.1.0",
+      "author": "M5Stack",
+      "install_via": "Library Manager",
+      "purpose": "M5Stack hardware abstraction (display, GPIO, power management)"
+    },
+    {
+      "name": "WiFiManager",
+      "version": ">=2.0.0",
+      "author": "tzapu",
+      "install_via": "Library Manager",
+      "purpose": "Captive portal WiFi configuration"
+    },
+    {
+      "name": "ESPAsyncWebServer",
+      "version": "latest",
+      "author": "me-no-dev",
+      "install_via": "Library Manager",
+      "github": "https://github.com/me-no-dev/ESPAsyncWebServer",
+      "purpose": "Async HTTP web server"
+    },
+    {
+      "name": "AsyncTCP",
+      "version": "latest",
+      "author": "me-no-dev",
+      "install_via": "Library Manager",
+      "github": "https://github.com/me-no-dev/AsyncTCP",
+      "purpose": "Required dependency for ESPAsyncWebServer"
+    },
+    {
+      "name": "ArduinoJson",
+      "version": "^6.0.0",
+      "version_constraint": "<7.0.0",
+      "author": "Benoit Blanchon",
+      "install_via": "Library Manager",
+      "purpose": "JSON parsing and serialization",
+      "important": "Must use version 6.x - version 7.x breaks backward compatibility with StaticJsonDocument API"
+    }
+  ],
+  "included_with_esp32": [
+    {
+      "name": "WiFi",
+      "purpose": "WiFi connectivity"
+    },
+    {
+      "name": "ESPmDNS",
+      "purpose": "mDNS hostname resolution"
+    },
+    {
+      "name": "ArduinoOTA",
+      "purpose": "Over-the-air firmware updates"
+    }
+  ],
+  "board": {
+    "platform": "M5Stack ESP32",
+    "board": "M5Stack-CoreS3",
+    "board_manager_url": "https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json"
+  }
+}
