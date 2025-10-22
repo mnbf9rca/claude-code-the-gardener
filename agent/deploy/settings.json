@@ -39,7 +39,7 @@
       "mcp__plant-tools__list_messages_from_human",
       "Read",
       "WebSearch",
-      "WebFetch",
+      "WebFetch(domain:*)",
       "Write(/home/gardener/workspace/**)"
     ]
   },

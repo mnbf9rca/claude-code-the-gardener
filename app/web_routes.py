@@ -1,6 +1,6 @@
 """
 Web Routes for Plant Care System
-Provides HTTP endpoints and HTML UI for human-agent messaging
+Provides HTTP endpoints and HTML UI for human-agent messaging and photo gallery
 """
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
@@ -8,9 +8,11 @@ from starlette.requests import Request
 from starlette.routing import Route
 from datetime import datetime, timezone
 from typing import Dict, Any, List
+from pathlib import Path
 import json
 import tools.human_messages as human_messages
 from tools.human_messages import _generate_message_id, MAX_MESSAGE_LENGTH
+from tools.camera import capture_real_photo, CAMERA_CONFIG
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -31,18 +33,74 @@ def _get_all_messages() -> List[Dict[str, Any]]:
     to_human = human_messages.messages_to_human.get_all()
     from_human = human_messages.messages_from_human.get_all()
 
-    # Add direction field
-    for msg in to_human:
-        msg['direction'] = 'to_human'
-
-    for msg in from_human:
-        msg['direction'] = 'from_human'
+    # Add direction field (make copies to avoid modifying originals)
+    to_human_with_dir = [{**msg, 'direction': 'to_human'} for msg in to_human]
+    from_human_with_dir = [{**msg, 'direction': 'from_human'} for msg in from_human]
 
     # Combine and sort by timestamp (newest first)
-    all_messages = to_human + from_human
+    all_messages = to_human_with_dir + from_human_with_dir
     all_messages.sort(key=lambda x: x['timestamp'], reverse=True)
 
     return all_messages
+
+
+def _get_photos_from_directory(limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+    """
+    List photos from the photos directory with pagination.
+
+    Args:
+        limit: Maximum number of photos to return
+        offset: Number of photos to skip
+
+    Returns:
+        Dict with 'total', 'photos' (list), 'limit', and 'offset'
+    """
+    photos_dir = CAMERA_CONFIG["save_path"]
+
+    # Get all photo files matching the pattern
+    all_photos = []
+    if photos_dir.exists() and photos_dir.is_dir():
+        photo_files = sorted(
+            photos_dir.glob("plant_*.jpg"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True  # Newest first
+        )
+
+        for photo_path in photo_files:
+            # Extract timestamp from filename
+            # Format: plant_YYYYMMDD_HHMMSS_mmm.jpg
+            filename = photo_path.name
+            try:
+                parts = filename.replace('.jpg', '').split('_')
+                if len(parts) >= 4:
+                    date_part = parts[1]  # YYYYMMDD
+                    time_part = parts[2]  # HHMMSS
+                    ms_part = parts[3] if len(parts) > 3 else "000"
+
+                    # Reconstruct ISO timestamp
+                    timestamp = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}T{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}.{ms_part}+00:00"
+                else:
+                    # Fallback to file modification time
+                    timestamp = datetime.fromtimestamp(photo_path.stat().st_mtime, tz=timezone.utc).isoformat()
+            except Exception:
+                timestamp = datetime.fromtimestamp(photo_path.stat().st_mtime, tz=timezone.utc).isoformat()
+
+            all_photos.append({
+                "filename": filename,
+                "url": f"/photos/{filename}",
+                "timestamp": timestamp
+            })
+
+    # Apply pagination
+    total = len(all_photos)
+    paginated_photos = all_photos[offset:offset + limit]
+
+    return {
+        "total": total,
+        "photos": paginated_photos,
+        "limit": limit,
+        "offset": offset
+    }
 
 
 async def get_messages_api(request: Request) -> JSONResponse:
@@ -105,7 +163,7 @@ async def post_reply(request: Request) -> JSONResponse:
             in_reply_to_field = form.get('in_reply_to')
             in_reply_to = in_reply_to_field if isinstance(in_reply_to_field, str) else None
 
-        # Validate content
+        # Validate content (strip() already handled whitespace-only content)
         if not content:
             return JSONResponse(
                 {'error': 'Message content is required'},
@@ -140,7 +198,7 @@ async def post_reply(request: Request) -> JSONResponse:
             'timestamp': timestamp
         })
 
-    except (json.JSONDecodeError, ValueError, KeyError, AttributeError) as e:
+    except (json.JSONDecodeError, ValueError) as e:
         # Handle expected errors from parsing/validation
         logger.error(f"Error processing reply: {e}")
         return JSONResponse(
@@ -152,6 +210,86 @@ async def post_reply(request: Request) -> JSONResponse:
         logger.error(f"Error storing reply: {e}")
         return JSONResponse(
             {'error': 'Failed to store message'},
+            status_code=500
+        )
+    except Exception:
+        # Log unexpected errors with full stack trace
+        logger.exception("Unexpected error processing reply")
+        return JSONResponse(
+            {'error': 'Internal server error'},
+            status_code=500
+        )
+
+
+async def get_photos_api(request: Request) -> JSONResponse:
+    """
+    GET /api/photos
+    Returns list of captured photos as JSON with pagination
+
+    Query parameters:
+        - limit: Maximum number of photos to return (default: 20, max: 100)
+        - offset: Number of photos to skip for pagination (default: 0)
+    """
+    # Get and validate query parameters
+    try:
+        limit = int(request.query_params.get('limit', 20))
+        offset = int(request.query_params.get('offset', 0))
+
+        # Validate limit (clamp between 1 and 100)
+        limit = max(1, min(limit, 100))
+
+        # Validate offset (prevent negative values)
+        offset = max(offset, 0)
+
+    except ValueError:
+        return JSONResponse(
+            {'error': 'Invalid limit or offset parameter'},
+            status_code=400
+        )
+
+    # Get photos from directory
+    result = _get_photos_from_directory(limit=limit, offset=offset)
+
+    return JSONResponse(result)
+
+
+async def post_capture_photo(request: Request) -> JSONResponse:  # noqa: ARG001
+    """
+    POST /api/capture
+    Trigger camera to capture a new photo
+
+    Returns:
+        JSON with photo URL and timestamp on success
+    """
+    try:
+        # Capture photo using camera tool
+        photo_path, timestamp = capture_real_photo()
+
+        # Convert file path to URL
+        filename = Path(photo_path).name
+        photo_url = f"/photos/{filename}"
+
+        logger.info(f"Photo captured via web route: {filename}")
+
+        return JSONResponse({
+            'success': True,
+            'url': photo_url,
+            'timestamp': timestamp,
+            'filename': filename
+        })
+
+    except ValueError as e:
+        # Camera error (not available, capture failed, etc.)
+        logger.error(f"Camera capture failed: {e}")
+        return JSONResponse(
+            {'success': False, 'error': str(e)},
+            status_code=500
+        )
+    except Exception as e:
+        # Unexpected error
+        logger.error(f"Unexpected error during photo capture: {e}")
+        return JSONResponse(
+            {'success': False, 'error': 'Internal server error'},
             status_code=500
         )
 
@@ -525,6 +663,10 @@ async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
             <p>Communication between you and your plant care agent</p>
         </header>
 
+        <div class="nav-links" style="background: #f8f9fa; padding: 15px 30px; border-bottom: 2px solid #e9ecef;">
+            <a href="/gallery" style="color: #667eea; text-decoration: none; font-weight: 500;">View Photos →</a>
+        </div>
+
         <div class="content">
             <div class="reply-form">
                 <h2>Send Message to Agent</h2>
@@ -701,24 +843,417 @@ async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
     return HTMLResponse(content=html)
 
 
+async def get_gallery_ui(request: Request) -> HTMLResponse:
+    """
+    GET /gallery
+    Serve simple HTML UI for viewing and capturing photos
+    """
+    # Get photos with pagination
+    limit = 20
+    offset = int(request.query_params.get('offset', 0))
+
+    # Validate offset (prevent negative values)
+    offset = max(offset, 0)
+
+    photos_data = _get_photos_from_directory(limit=limit, offset=offset)
+
+    photos = photos_data['photos']
+    total = photos_data['total']
+    has_more = (offset + limit) < total
+
+    # Build HTML
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📷 Plant Photos</title>
+    <style>
+        * {{
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }}
+
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }}
+
+        header {{
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }}
+
+        header h1 {{
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }}
+
+        header p {{
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }}
+
+        .nav-links {{
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 2px solid #e9ecef;
+        }}
+
+        .nav-links a {{
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            margin-right: 20px;
+        }}
+
+        .nav-links a:hover {{
+            text-decoration: underline;
+        }}
+
+        .content {{
+            padding: 30px;
+        }}
+
+        .capture-section {{
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }}
+
+        .capture-btn {{
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+
+        .capture-btn:hover {{
+            background: #45a049;
+        }}
+
+        .capture-btn:disabled {{
+            background: #ccc;
+            cursor: not-allowed;
+        }}
+
+        .status-message {{
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            display: none;
+        }}
+
+        .status-message.success {{
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: block;
+        }}
+
+        .status-message.error {{
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            display: block;
+        }}
+
+        .gallery {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+
+        .photo-card {{
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }}
+
+        .photo-card:hover {{
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }}
+
+        .photo-card img {{
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+        }}
+
+        .photo-info {{
+            padding: 15px;
+        }}
+
+        .photo-timestamp {{
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }}
+
+        .photo-filename {{
+            font-size: 0.85rem;
+            color: #495057;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }}
+
+        .no-photos {{
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }}
+
+        .no-photos p {{
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }}
+
+        .load-more {{
+            text-align: center;
+            padding: 20px;
+        }}
+
+        .load-more-btn {{
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }}
+
+        .load-more-btn:hover {{
+            background: #5568d3;
+        }}
+
+        .photo-count {{
+            text-align: center;
+            color: #6c757d;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }}
+
+        @media (max-width: 600px) {{
+            body {{
+                padding: 10px;
+            }}
+
+            header {{
+                padding: 20px;
+            }}
+
+            header h1 {{
+                font-size: 1.5rem;
+            }}
+
+            .content {{
+                padding: 15px;
+            }}
+
+            .gallery {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📷 Plant Photos</h1>
+            <p>Photo gallery and camera controls</p>
+        </header>
+
+        <div class="nav-links">
+            <a href="/messages">← Back to Messages</a>
+        </div>
+
+        <div class="content">
+            <div class="capture-section">
+                <h2>Capture New Photo</h2>
+                <button id="captureBtn" class="capture-btn">📸 Take Photo</button>
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+
+            <div class="photo-count">
+                Showing {len(photos)} of {total} photos
+            </div>
+
+            <div class="gallery" id="gallery">"""
+
+    if not photos:
+        html += """
+                <div class="no-photos" style="grid-column: 1 / -1;">
+                    <p>📷 No photos yet</p>
+                    <p style="font-size: 0.9rem;">Click "Take Photo" above to capture your first plant photo!</p>
+                </div>"""
+    else:
+        for photo in photos:
+            # Format timestamp
+            try:
+                dt = datetime.fromisoformat(photo['timestamp'])
+                timestamp_str = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+            except (ValueError, KeyError):
+                timestamp_str = photo['timestamp']
+
+            html += f"""
+                <div class="photo-card">
+                    <a href="{photo['url']}" target="_blank">
+                        <img src="{photo['url']}" alt="{photo['filename']}" loading="lazy">
+                    </a>
+                    <div class="photo-info">
+                        <div class="photo-timestamp">📅 {timestamp_str}</div>
+                        <div class="photo-filename">{photo['filename']}</div>
+                    </div>
+                </div>"""
+
+    html += """
+            </div>"""
+
+    # Add "Load More" button if there are more photos
+    if has_more:
+        next_offset = offset + limit
+        html += f"""
+            <div class="load-more">
+                <a href="/gallery?offset={next_offset}" class="load-more-btn">Load More Photos</a>
+            </div>"""
+
+    html += """
+        </div>
+    </div>
+
+    <script>
+        // Handle photo capture
+        document.getElementById('captureBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('captureBtn');
+            const statusMsg = document.getElementById('statusMessage');
+
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.textContent = '📸 Capturing...';
+            statusMsg.style.display = 'none';
+            statusMsg.className = 'status-message';
+
+            try {
+                const response = await fetch('/api/capture', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    statusMsg.textContent = '✓ Photo captured successfully! Refreshing page...';
+                    statusMsg.classList.add('success');
+
+                    // Refresh page after 1 second to show new photo
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    statusMsg.textContent = '✗ Error: ' + (data.error || 'Failed to capture photo');
+                    statusMsg.classList.add('error');
+                    btn.disabled = false;
+                    btn.textContent = '📸 Take Photo';
+                }
+            } catch (error) {
+                statusMsg.textContent = '✗ Network error: ' + error.message;
+                statusMsg.classList.add('error');
+                btn.disabled = false;
+                btn.textContent = '📸 Take Photo';
+            }
+        });
+    </script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)
+
+
 def add_message_routes(app: Starlette):
     """
-    Add message routes to the Starlette app.
+    Add message and photo routes to the Starlette app.
+
+    Note: This function should only be called once during app initialization
+    to avoid duplicate routes.
 
     Args:
         app: The Starlette application instance
     """
     # Define routes
-    # Human-facing UI at /messages
+    # Human-facing UI at /messages and /gallery
     # API endpoints under /api/ for programmatic access
-    routes = [
+    new_routes = [
+        # Message routes
         Route('/messages', get_messages_ui, methods=['GET']),
         Route('/api/messages', get_messages_api, methods=['GET']),
         Route('/api/messages/reply', post_reply, methods=['POST']),
+        # Photo routes
+        Route('/gallery', get_gallery_ui, methods=['GET']),
+        Route('/api/photos', get_photos_api, methods=['GET']),
+        Route('/api/capture', post_capture_photo, methods=['POST']),
     ]
 
-    # Add routes to app
-    for route in routes:
-        app.router.routes.append(route)
+    # Check for existing routes to prevent duplicates (consider both path and methods)
+    existing_routes = set()
+    for route in app.router.routes:
+        path = getattr(route, 'path', None)
+        methods = getattr(route, 'methods', None)
+        if path and methods:
+            # Add tuples of (path, method) for each method
+            for method in methods:
+                existing_routes.add((path, method))
 
-    logger.info("Message routes added to Starlette app")
+    # Add only new routes
+    routes_added = 0
+    for route in new_routes:
+        # Check if any method for this path already exists
+        route_exists = False
+        if route.methods:
+            route_exists = any(
+                (route.path, method) in existing_routes
+                for method in route.methods
+            )
+
+        if not route_exists:
+            app.router.routes.append(route)
+            routes_added += 1
+        else:
+            logger.warning(f"Route {route.path} {route.methods} already exists, skipping")
+
+    logger.info(f"Added {routes_added} message and photo routes to Starlette app")
