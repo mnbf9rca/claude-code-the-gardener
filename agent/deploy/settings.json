@@ -1,5 +1,11 @@
 {
   "permissions": {
+    "deny": [
+      "Read(prompt.txt)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(settings.json)"
+    ],
     "allow": [
       "mcp__plant-tools__write_plant_status",
       "mcp__plant-tools__get_current_plant_status",
@@ -33,10 +39,7 @@
       "Read",
       "WebSearch",
       "WebFetch",
-      "Glob",
-      "Grep",
-      "Task"
-
+      "Write(/home/gardener/workspace/**)"
     ]
   },
   "outputStyle": "Explanatory",
