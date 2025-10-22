@@ -17,6 +17,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "integration: Mark test as integration test (may require external services)"
     )
+    config.addinivalue_line(
+        "markers", "use_real_hardware: Skip hardware config mocking - use real credentials from .env"
+    )
 
 
 @pytest.fixture
@@ -192,11 +195,18 @@ def allow_camera_capture(reset_cycle_state):
 
 
 @pytest.fixture(autouse=True)
-def mock_hardware_config(monkeypatch):
+def mock_hardware_config(request, monkeypatch):
     """
     Mock Home Assistant and ESP32 environment variables for all tests.
     This ensures tests don't depend on .env file or real credentials/hardware.
+
+    To use real hardware credentials, mark test with @pytest.mark.use_real_hardware
     """
+    # Skip mocking for tests that need real hardware credentials
+    if "use_real_hardware" in request.keywords:
+        yield
+        return
+
     # Mock Home Assistant config (for light tools)
     monkeypatch.setenv("HOME_ASSISTANT_URL", "http://homeassistant.local:8123")
     monkeypatch.setenv("HOME_ASSISTANT_TOKEN", "test-token-12345")

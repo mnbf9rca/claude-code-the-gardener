@@ -81,12 +81,15 @@ class HAConfig:
         self.url = url  # type: ignore[assignment]
         self.token = token  # type: ignore[assignment]
         self.entity_id = entity_id  # type: ignore[assignment]
+        self._client: Optional[httpx.AsyncClient] = None
 
     def get_client(self) -> httpx.AsyncClient:
-        """Get HTTP client with authorization header"""
+        """Get HTTP client with authorization header (creates fresh client each time)"""
+        # Create a fresh client for each request to avoid connection state issues
         return httpx.AsyncClient(
             timeout=10.0,
-            headers={"Authorization": f"Bearer {self.token}"}
+            headers={"Authorization": f"Bearer {self.token}"},
+            http2=False  # Disable HTTP/2 to avoid connection issues
         )
 
 
@@ -108,6 +111,10 @@ def reset_ha_config() -> None:
     This is primarily intended for test isolation.
     """
     global _ha_config
+    if _ha_config is not None and _ha_config._client is not None:
+        # Note: We can't await here since this is a sync function
+        # The client will be closed when Python GC collects it
+        _ha_config._client = None
     _ha_config = None
 
 

@@ -19,7 +19,6 @@ To run these tests, ensure:
 import pytest
 import pytest_asyncio
 import json
-import httpx
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 import tools.light as light_module
@@ -33,11 +32,10 @@ load_dotenv()
 async def check_ha_available() -> bool:
     """Check if Home Assistant is reachable"""
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            url = f"{light_module.HA_URL}/api/"
-            headers = {"Authorization": f"Bearer {light_module.HA_TOKEN}"}
-            response = await client.get(url, headers=headers)
-            return response.status_code == 200
+        # Use get_ha_entity_state which properly handles HA requests
+        config = light_module.get_ha_config()
+        state = await light_module.get_ha_entity_state(config.entity_id)
+        return state is not None
     except Exception:
         return False
 
@@ -57,6 +55,9 @@ async def setup_integration_state(ha_availability):
     # Reset cycle state
     reset_cycle()
     current_cycle_status["written"] = True
+
+    # Note: NOT resetting HAConfig - reuse the same client across tests
+    # Resetting causes "Server disconnected" errors with Home Assistant
 
     # Reset light state
     # Set last_off to None so each test starts fresh (bypasses cooldown check at light.py:56)
@@ -79,8 +80,9 @@ async def setup_integration_state(ha_availability):
     setup_light_tools(mcp)
 
     # Ensure light is off before starting tests by calling HA directly
+    config = light_module.get_ha_config()
     try:
-        await light_module.call_ha_service("turn_off", light_module.LIGHT_ENTITY_ID)
+        await light_module.call_ha_service("turn_off", config.entity_id)
     except Exception:
         pass  # Ignore errors if already off
 
@@ -88,7 +90,7 @@ async def setup_integration_state(ha_availability):
 
     # Cleanup - ensure light is off after tests by calling HA directly
     try:
-        await light_module.call_ha_service("turn_off", light_module.LIGHT_ENTITY_ID)
+        await light_module.call_ha_service("turn_off", config.entity_id)
     except Exception:
         pass
 
@@ -97,9 +99,11 @@ async def setup_integration_state(ha_availability):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.use_real_hardware
 async def test_real_ha_entity_state_query(setup_integration_state):
     """Test querying real Home Assistant entity state"""
-    state = await get_ha_entity_state(light_module.LIGHT_ENTITY_ID)
+    config = light_module.get_ha_config()
+    state = await get_ha_entity_state(config.entity_id)
 
     # Should return a valid state
     assert state is not None
@@ -108,6 +112,7 @@ async def test_real_ha_entity_state_query(setup_integration_state):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.use_real_hardware
 async def test_real_turn_on_and_status(setup_integration_state):
     """Test turning on the real light and checking status"""
     import asyncio
@@ -135,6 +140,7 @@ async def test_real_turn_on_and_status(setup_integration_state):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.use_real_hardware
 async def test_real_turn_off(setup_integration_state):
     """Test turning off the real light"""
     import asyncio
@@ -172,6 +178,7 @@ async def test_real_turn_off(setup_integration_state):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.use_real_hardware
 async def test_real_state_sync(setup_integration_state):
     """Test that status syncs with real Home Assistant state"""
     import asyncio
@@ -198,6 +205,7 @@ async def test_real_state_sync(setup_integration_state):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.use_real_hardware
 async def test_real_timing_constraints(setup_integration_state):
     """Test that one timing constraint works with real HA (exhaustive testing in mocked tests)"""
     mcp = setup_integration_state
