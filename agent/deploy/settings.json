@@ -17,6 +17,7 @@
       "mcp__plant-tools__get_water_history",
       "mcp__plant-tools__turn_on_light",
       "mcp__plant-tools__turn_off_light",
+      "mcp__plant-tools__get_light_history",
       "mcp__plant-tools__get_light_status",
       "mcp__plant-tools__capture_photo",
       "mcp__plant-tools__get_recent_photos",

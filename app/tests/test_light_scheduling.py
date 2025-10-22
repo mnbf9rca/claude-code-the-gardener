@@ -65,20 +65,26 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
     # Reset HTTP client
     light_module.http_client = None
 
+    # Reset HAConfig singleton
+    light_module._ha_config = None
+
+    # Get config for test
+    ha_config = light_module.get_ha_config()
+
     # Setup default Home Assistant mocks
     def mock_turn_on(request):
-        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"}])
+        return httpx.Response(200, json=[{"entity_id": ha_config.entity_id, "state": "on"}])
 
     def mock_turn_off(request):
-        return httpx.Response(200, json=[{"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"}])
+        return httpx.Response(200, json=[{"entity_id": ha_config.entity_id, "state": "off"}])
 
     def mock_get_state(request):
-        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": light_module.light_state["status"]})
+        return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": light_module.light_state["status"]})
 
     for _ in range(20):
-        httpx_mock.add_callback(mock_turn_on, url=f"{light_module.HA_URL}/api/services/switch/turn_on")
-        httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
-        httpx_mock.add_callback(mock_get_state, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+        httpx_mock.add_callback(mock_turn_on, url=f"{ha_config.url}/api/services/switch/turn_on")
+        httpx_mock.add_callback(mock_turn_off, url=f"{ha_config.url}/api/services/switch/turn_off")
+        httpx_mock.add_callback(mock_get_state, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
 
     # Create MCP instance
     mcp = FastMCP("test-scheduling")
@@ -373,14 +379,17 @@ async def test_reconciliation_past_scheduled_off_turns_off_light(setup_schedulin
         # Setup mock to show light is still on in HA
         httpx_mock.reset()
 
+        ha_config = light_module.get_ha_config()
+
         def mock_get_state_on(request):
-            return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"})
+            return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": "on"})
 
         def mock_turn_off(request):
             return httpx.Response(200, json=[])
 
-        httpx_mock.add_callback(mock_get_state_on, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
-        httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
+        ha_config = light_module.get_ha_config()
+        httpx_mock.add_callback(mock_get_state_on, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
+        httpx_mock.add_callback(mock_turn_off, url=f"{ha_config.url}/api/services/switch/turn_off")
 
         # Run reconciliation
         await light_module.reconcile_state_on_startup()
@@ -408,16 +417,17 @@ async def test_reconciliation_future_scheduled_off_reschedules_task(setup_schedu
         # Setup mock to show light is on in HA
         httpx_mock.reset()
 
+        ha_config = light_module.get_ha_config()
+
         def mock_get_state_on(request):
-            return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"})
+            return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": "on"})
 
         # Add turn_off mock for cleanup (task may execute during teardown)
         def mock_turn_off(request):
             return httpx.Response(200, json=[])
-
-        httpx_mock.add_callback(mock_get_state_on, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+        httpx_mock.add_callback(mock_get_state_on, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
         for _ in range(10):
-            httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
+            httpx_mock.add_callback(mock_turn_off, url=f"{ha_config.url}/api/services/switch/turn_off")
 
         # Run reconciliation
         await light_module.reconcile_state_on_startup()
@@ -447,10 +457,12 @@ async def test_reconciliation_clears_schedule_if_light_manually_turned_off(setup
         # Setup mock to show light is OFF in HA (manual turn-off)
         httpx_mock.reset()
 
-        def mock_get_state_off(request):
-            return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"})
+        ha_config = light_module.get_ha_config()
 
-        httpx_mock.add_callback(mock_get_state_off, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+        def mock_get_state_off(request):
+            return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": "off"})
+
+        httpx_mock.add_callback(mock_get_state_off, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
 
         # Run reconciliation
         await light_module.reconcile_state_on_startup()
@@ -478,10 +490,12 @@ async def test_reconciliation_no_scheduled_off_syncs_with_ha(setup_scheduling_te
     # Setup mock
     httpx_mock.reset()
 
-    def mock_get_state(request):
-        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"})
+    ha_config = light_module.get_ha_config()
 
-    httpx_mock.add_callback(mock_get_state, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+    def mock_get_state(request):
+        return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": "off"})
+
+    httpx_mock.add_callback(mock_get_state, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
 
     # Run reconciliation
     await light_module.reconcile_state_on_startup()
@@ -500,10 +514,12 @@ async def test_reconciliation_handles_missing_state_file(setup_scheduling_test_s
     # Setup HA mock
     httpx_mock.reset()
 
-    def mock_get_state(request):
-        return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "off"})
+    ha_config = light_module.get_ha_config()
 
-    httpx_mock.add_callback(mock_get_state, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+    def mock_get_state(request):
+        return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": "off"})
+
+    httpx_mock.add_callback(mock_get_state, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
 
     # Run reconciliation - should not crash
     await light_module.reconcile_state_on_startup()
@@ -572,16 +588,19 @@ async def test_crash_recovery_simulation(setup_scheduling_test_state, httpx_mock
         # Step 4: Server "restarts" - reconciliation runs
         httpx_mock.reset()
 
+        ha_config = light_module.get_ha_config()
+
         def mock_get_state_on(request):
-            return httpx.Response(200, json={"entity_id": light_module.LIGHT_ENTITY_ID, "state": "on"})
+            return httpx.Response(200, json={"entity_id": ha_config.entity_id, "state": "on"})
 
         # Add turn_off mock for cleanup
         def mock_turn_off(request):
             return httpx.Response(200, json=[])
 
-        httpx_mock.add_callback(mock_get_state_on, url=f"{light_module.HA_URL}/api/states/{light_module.LIGHT_ENTITY_ID}")
+        ha_config = light_module.get_ha_config()
+        httpx_mock.add_callback(mock_get_state_on, url=f"{ha_config.url}/api/states/{ha_config.entity_id}")
         for _ in range(10):
-            httpx_mock.add_callback(mock_turn_off, url=f"{light_module.HA_URL}/api/services/switch/turn_off")
+            httpx_mock.add_callback(mock_turn_off, url=f"{ha_config.url}/api/services/switch/turn_off")
 
         await light_module.reconcile_state_on_startup()
 
