@@ -23,6 +23,8 @@ MCP_HOME="/home/$MCP_USER"
 MCP_APP_DIR="$MCP_HOME/plant-care-app"
 SERVICE_NAME="plant-care-mcp.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
+CAMERA_SERVICE_NAME="camera-focus.service"
+CAMERA_SERVICE_FILE="/etc/systemd/system/$CAMERA_SERVICE_NAME"
 
 echo "Repository root: $REPO_ROOT"
 echo "App directory: $APP_DIR"
@@ -102,13 +104,18 @@ fi
 
 echo "✓ Required environment variables present (DATA_DIR, CAMERA_SAVE_PATH)"
 
-# Check for systemd service file
+# Check for systemd service files
 if [ ! -f "$SCRIPT_DIR/$SERVICE_NAME" ]; then
     echo "ERROR: Missing systemd service file at $SCRIPT_DIR/$SERVICE_NAME"
     exit 1
 fi
 
-echo "✓ Systemd service file present"
+if [ ! -f "$SCRIPT_DIR/$CAMERA_SERVICE_NAME" ]; then
+    echo "ERROR: Missing camera systemd service file at $SCRIPT_DIR/$CAMERA_SERVICE_NAME"
+    exit 1
+fi
+
+echo "✓ Systemd service files present"
 
 # Check for pyproject.toml
 if [ ! -f "$APP_DIR/pyproject.toml" ]; then
@@ -302,7 +309,40 @@ else
     SERVICE_IS_RUNNING=false
 fi
 
-# 11. Summary
+# 11. Install camera focus service
+echo "Installing camera focus systemd service..."
+CAMERA_SERVICE_UPDATED=false
+if [ -f "$CAMERA_SERVICE_FILE" ]; then
+    if ! cmp -s "$SCRIPT_DIR/$CAMERA_SERVICE_NAME" "$CAMERA_SERVICE_FILE"; then
+        echo "  Camera service file differs - updating..."
+        cp "$SCRIPT_DIR/$CAMERA_SERVICE_NAME" "$CAMERA_SERVICE_FILE"
+        chmod 644 "$CAMERA_SERVICE_FILE"
+        systemctl daemon-reload
+        CAMERA_SERVICE_UPDATED=true
+        echo "✓ Camera service updated"
+    else
+        echo "  Camera service file unchanged - skipping update"
+    fi
+else
+    cp "$SCRIPT_DIR/$CAMERA_SERVICE_NAME" "$CAMERA_SERVICE_FILE"
+    chmod 644 "$CAMERA_SERVICE_FILE"
+    systemctl daemon-reload
+    echo "✓ Camera service installed"
+fi
+
+# Enable and start camera service (always, it's lightweight and idempotent)
+if ! systemctl is-enabled --quiet "$CAMERA_SERVICE_NAME" 2>/dev/null; then
+    systemctl enable "$CAMERA_SERVICE_NAME"
+    echo "✓ Camera service enabled"
+fi
+
+# Start camera service if not already running or if updated
+if ! systemctl is-active --quiet "$CAMERA_SERVICE_NAME" 2>/dev/null || [ "$CAMERA_SERVICE_UPDATED" = true ]; then
+    systemctl start "$CAMERA_SERVICE_NAME"
+    echo "✓ Camera service started"
+fi
+
+# 12. Summary
 echo ""
 echo "=== Installation Complete ==="
 echo ""
@@ -321,21 +361,37 @@ SERVICE_STATUS=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inacti
 SERVICE_STATUS=$(echo "$SERVICE_STATUS" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
 if [ "$SERVICE_STATUS" = "active" ]; then
-    echo "Service Status: RUNNING"
-    echo ""
+    echo "MCP Service Status: RUNNING"
+else
+    # Service is not active (inactive, failed, or unknown)
+    echo "MCP Service Status: NOT RUNNING ($SERVICE_STATUS)"
+fi
+
+# Check camera service status
+CAMERA_SERVICE_STATUS=$(systemctl is-active "$CAMERA_SERVICE_NAME" 2>/dev/null || echo "inactive")
+CAMERA_SERVICE_STATUS=$(echo "$CAMERA_SERVICE_STATUS" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+if [ "$CAMERA_SERVICE_STATUS" = "active" ]; then
+    echo "Camera Focus Service: CONFIGURED"
+else
+    echo "Camera Focus Service: NOT RUNNING ($CAMERA_SERVICE_STATUS)"
+fi
+
+echo ""
+
+if [ "$SERVICE_STATUS" = "active" ]; then
     echo "Next steps:"
     echo "  1. Check service status: sudo systemctl status $SERVICE_NAME"
     echo "  2. View logs: journalctl -u $SERVICE_NAME -f"
     echo "  3. Test endpoint: curl http://localhost:8000/mcp"
+    echo "  4. Camera focus: See docs/camera_setup.md for calibration"
 else
-    # Service is not active (inactive, failed, or unknown)
-    echo "Service Status: NOT RUNNING ($SERVICE_STATUS)"
-    echo ""
     echo "Next steps:"
     echo "  1. Enable and start service: sudo systemctl enable --now $SERVICE_NAME"
     echo "  2. Check service status: sudo systemctl status $SERVICE_NAME"
     echo "  3. View logs: journalctl -u $SERVICE_NAME -f"
     echo "  4. Test endpoint: curl http://localhost:8000/mcp"
+    echo "  5. Camera focus: See docs/camera_setup.md for calibration"
 fi
 
 echo ""

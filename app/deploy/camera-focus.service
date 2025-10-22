@@ -1,0 +1,35 @@
+[Unit]
+Description=Configure Logitech C930e camera focus for plant monitoring
+After=multi-user.target
+# Run after system is fully initialized to ensure camera device is ready
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+# Wait for camera device to be fully initialized
+ExecStartPre=/bin/sleep 2
+
+# Disable continuous autofocus (makes focus_absolute active)
+ExecStart=/usr/bin/v4l2-ctl -d /dev/video0 --set-ctrl focus_automatic_continuous=0
+
+# Set manual focus value
+# DEFAULT: 10 (calibrated for close-up plant monitoring ~10-20cm)
+# TO RECALIBRATE: Edit this value and run:
+#   sudo systemctl daemon-reload
+#   sudo systemctl restart camera-focus.service
+#
+# Typical values:
+#   10-40:  Close-up (10-40cm) - plant on desk
+#   60-80:  Medium (50-80cm) - shelf camera
+#   80-120: Far (80-120cm) - wall-mounted
+ExecStart=/usr/bin/v4l2-ctl -d /dev/video0 --set-ctrl focus_absolute=10
+
+# Keep service marked as active after execution (doesn't exit)
+RemainAfterExit=yes
+
+# Restart on failure (e.g., camera not ready)
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

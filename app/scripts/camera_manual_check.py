@@ -48,6 +48,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Set up test environment with defaults if not already set
+os.environ["DATA_DIR"] = "data"
 os.environ["CAMERA_ENABLED"] = "true"
 os.environ.setdefault("CAMERA_DEVICE_INDEX", "0")  # Override: CAMERA_DEVICE_INDEX=1 uv run python camera_manual_check.py
 os.environ.setdefault("CAMERA_SAVE_PATH", "./test_photos")  # Override: CAMERA_SAVE_PATH=/your/path uv run python camera_manual_check.py
@@ -100,29 +101,29 @@ async def check_capture():
         result = await capture_tool.run(arguments={})
         photo = extract_tool_result(result)
 
-        print(f"   Success: {photo['success']}")
-
-        if photo and photo['success']:
+        # CaptureResponse has 'url' and 'timestamp' fields
+        # If we get here, capture was successful (exceptions would be caught below)
+        if photo and 'url' in photo:
             photo_url = photo['url']
             print(f"   HTTP URL: {photo_url}")
+            print(f"   Timestamp: {photo.get('timestamp', 'N/A')}")
 
             # Extract filename from URL and get local path from camera config
-
             filename = photo_url.split('/')[-1]
-
-            save_path = os.environ.get("CAMERA_SAVE_PATH")
+            save_path = os.environ.get("CAMERA_SAVE_PATH", "./test_photos")
             local_path = Path(save_path) / filename
 
             print(f"   Local path: {local_path}")
-            print("\n✅ Camera capture successful!")
 
             if local_path.exists():
                 file_size = local_path.stat().st_size / 1024
                 print(f"   File size: {file_size:.1f} KB")
+                print("\n✅ Camera capture successful!")
             else:
                 print(f"   ⚠️  Warning: File not found at {local_path}")
+                print("   (Photo may have been captured but saved to different location)")
         else:
-            print(f"\n⚠️  Capture failed: {photo.get('error', 'Unknown error')}")
+            print(f"\n⚠️  Unexpected response format: {photo}")
 
     except Exception as e:
         print(f"\n❌ Capture failed: {e}")
@@ -172,9 +173,8 @@ async def check_camera_hardware():
     print("DIAGNOSTIC CHECK COMPLETE")
     print("=" * 60)
 
-    # Cleanup camera resources
-    import tools.camera as camera_module
-    camera_module.cleanup_camera()
+    # Note: Camera cleanup is automatic with per-capture pattern
+    # Camera is opened and closed for each capture
 
 if __name__ == "__main__":
     """
