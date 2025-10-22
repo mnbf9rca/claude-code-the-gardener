@@ -87,30 +87,19 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         hours: int = Field(24, description="Number of hours of history to return")
     ) -> list[list[Any]]:
         """
-        Get historical moisture sensor readings.
-        Returns array of [timestamp, value] pairs at 10-minute intervals.
+        Get moisture sensor readings from the last N hours.
+        Returns up to 6 samples per hour (e.g., 144 for 24 hours).
+        Samples are evenly distributed across time using time-bucketed sampling.
 
-        Note: Internal storage uses dict format for consistency with JSONL persistence,
-        but API returns [timestamp, value] pairs for easier plotting/visualization.
+        Returns array of [timestamp, value] pairs for plotting/visualization.
         """
-        entries_needed = hours * 6  # 6 readings per hour (every 10 min)
+        # Use time-bucketed sampling for proper temporal distribution
+        sampled_readings = sensor_history.get_time_bucketed_sample(
+            hours=hours,
+            samples_per_hour=6,
+            timestamp_key="timestamp",
+            aggregation="middle"  # Use reading closest to bucket center
+        )
 
-        # Get all entries from history
-        all_readings = sensor_history.get_all()
-
-        if not all_readings:
-            return []
-
-        # Return all available entries if we don't have enough
-        if len(all_readings) <= entries_needed:
-            return [[r["timestamp"], r["value"]] for r in all_readings[-entries_needed:]]
-
-        # Sample evenly from available history
-        # Ensure step is at least 1 to avoid division by zero or infinite loops
-        step = max(1, len(all_readings) // entries_needed)
-        sampled = []
-        indices = list(range(0, len(all_readings), step))[:entries_needed]
-        for i in indices:
-            reading = all_readings[i]
-            sampled.append([reading["timestamp"], reading["value"]])
-        return sampled
+        # Convert to [timestamp, value] format for API
+        return [[r["timestamp"], r["value"]] for r in sampled_readings]

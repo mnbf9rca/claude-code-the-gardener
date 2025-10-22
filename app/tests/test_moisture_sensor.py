@@ -132,41 +132,51 @@ async def test_read_moisture_invalid_json(httpx_mock, esp32_base_url):
 @pytest.mark.asyncio
 async def test_sensor_history_sampling():
     """Test that history sampling works correctly"""
+    from freezegun import freeze_time
+    from datetime import datetime, timezone, timedelta
+
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
     history_tool = test_mcp._tool_manager._tools["get_moisture_history"]
 
-    # Add exactly 60 entries (1 hour of data)
-    for i in range(60):
-        ms_module.sensor_history.append({
-            "value": 2000 + i,
-            "timestamp": f"2024-01-01T00:{i:02d}:00"
-        })
+    with freeze_time("2024-01-01 01:00:00"):
+        # Add exactly 60 entries (1 hour of data) - all within last hour
+        base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        for i in range(60):
+            ms_module.sensor_history.append({
+                "value": 2000 + i,
+                "timestamp": (base_time + timedelta(minutes=i)).isoformat()
+            })
 
-    # Request 1 hour of history (should get 6 samples - every 10 min)
-    result = await history_tool.run(arguments={"hours": 1})
-    # Result is in tool format, verify it executed without error
-    assert result.content is not None
+        # Request 1 hour of history (should get samples with time-bucketing)
+        result = await history_tool.run(arguments={"hours": 1})
+        # Result is in tool format, verify it executed without error
+        assert result.content is not None
 
 
 @pytest.mark.asyncio
 async def test_history_sampling_with_more_data_than_needed():
     """Test sampling when we have more data points than requested"""
+    from freezegun import freeze_time
+    from datetime import datetime, timezone, timedelta
+
     test_mcp = FastMCP("Test")
     ms_module.setup_moisture_sensor_tools(test_mcp)
     history_tool = test_mcp._tool_manager._tools["get_moisture_history"]
 
-    # Add 120 entries (2 hours of data)
-    for i in range(120):
-        ms_module.sensor_history.append({
-            "value": 2000 + i,
-            "timestamp": f"2024-01-01T{i//60:02d}:{i%60:02d}:00"
-        })
+    with freeze_time("2024-01-01 02:00:00"):
+        # Add 120 entries (2 hours of data) - all within last 2 hours
+        base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        for i in range(120):
+            ms_module.sensor_history.append({
+                "value": 2000 + i,
+                "timestamp": (base_time + timedelta(minutes=i)).isoformat()
+            })
 
-    # Request only 1 hour (should sample from all 120 to get 6 points)
-    result = await history_tool.run(arguments={"hours": 1})
-    # The sampling should pick evenly distributed points
-    assert result.content is not None
+        # Request only 1 hour - should filter to last hour, then sample
+        result = await history_tool.run(arguments={"hours": 1})
+        # The sampling should pick evenly distributed points from last hour
+        assert result.content is not None
 
 
 @pytest.mark.asyncio
@@ -192,3 +202,51 @@ async def test_read_moisture_uses_esp32_timestamp(httpx_mock, esp32_base_url):
     all_readings = ms_module.sensor_history.get_all()
     assert len(all_readings) == 1
     assert all_readings[0]["timestamp"] == "2025-01-23T18:45:30Z"
+
+
+@pytest.mark.asyncio
+async def test_moisture_history_respects_time_window():
+    """Test that get_moisture_history actually filters by time window"""
+    from freezegun import freeze_time
+    from datetime import datetime, timezone, timedelta
+
+    test_mcp = FastMCP("Test")
+    ms_module.setup_moisture_sensor_tools(test_mcp)
+    history_tool = test_mcp._tool_manager._tools["get_moisture_history"]
+
+    # Use freezegun to fix current time
+    with freeze_time("2025-01-24 12:00:00"):
+        # Add old data (25 hours ago - outside 24h window)
+        old_time = datetime(2025, 1, 23, 11, 0, 0, tzinfo=timezone.utc)
+        for i in range(10):
+            ms_module.sensor_history.append({
+                "timestamp": (old_time + timedelta(minutes=i)).isoformat(),
+                "value": 1000 + i
+            })
+
+        # Add recent data (within last hour)
+        recent_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+        for i in range(10):
+            ms_module.sensor_history.append({
+                "timestamp": (recent_time + timedelta(minutes=i)).isoformat(),
+                "value": 2000 + i
+            })
+
+        # Request last 1 hour - should only get recent data
+        result = await history_tool.run(arguments={"hours": 1})
+        # Result is in tool format, extract content
+        import json
+        readings = json.loads(result.content[0].text)
+
+        # Should have some results (the recent data)
+        assert len(readings) > 0
+
+        # All returned timestamps should be within last hour
+        for timestamp, value in readings:
+            dt = datetime.fromisoformat(timestamp)
+            age_hours = (datetime(2025, 1, 24, 12, 0, 0, tzinfo=timezone.utc) - dt).total_seconds() / 3600
+            assert age_hours <= 1.0, f"Reading at {timestamp} is older than 1 hour"
+
+        # All returned values should be from recent data (2000-2010 range)
+        for timestamp, value in readings:
+            assert 2000 <= value < 2010, f"Got value {value}, expected 2000-2010 (recent data)"
