@@ -61,6 +61,7 @@ def setup_action_log_tools(mcp: FastMCP):
         """
         Log an action taken by Claude.
         This creates a record of all actions for review and analysis.
+        It is not proactively reviewed by a human.
         """
         # Create action entry
         timestamp = datetime.now(timezone.utc).isoformat()

@@ -52,6 +52,7 @@ def setup_plant_status_tools(mcp: FastMCP):
         """
         Write plant status - MUST be called first each cycle.
         This is the gatekeeper that enables non-observational tool calls.
+        This information is periodically shared with the owner of the plant to keep them informed of the plant's condition. Note that this person is different than the human caretaker.
         """
         global current_status
 

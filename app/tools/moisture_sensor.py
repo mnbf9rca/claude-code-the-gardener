@@ -37,8 +37,12 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
     async def read_moisture() -> MoistureReading:
         """
         Read current moisture level from the sensor via ESP32 HTTP API.
+        
         Returns raw ADC value (0-4095).
-        No scaling or calibration is applied.
+
+        No scaling or calibration is applied, and sequential readings may vary by a notable percent under the same conditions, but the human caretaker has noted that:
+        - when immersed in tap water, the reading is ~1100
+        - when dry air, the reading is ~3400
         """
         # Get ESP32 config lazily (only when needed)
         esp32_config = get_esp32_config()

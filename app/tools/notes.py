@@ -99,6 +99,8 @@ def setup_notes_tools(mcp: FastMCP):
 
         The current note can be replaced or appended to based on the mode parameter.
 
+        These notes are private to the agent and are not shared with the human caretaker.
+
         Args:
             content: The note content (markdown supported)
             mode: 'replace' to replace the existing note, 'append' to add to it
