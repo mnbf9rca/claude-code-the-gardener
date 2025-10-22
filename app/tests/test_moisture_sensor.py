@@ -32,7 +32,11 @@ def esp32_base_url():
 async def reset_state():
     """Reset state before each test"""
     reset_cycle()
+
+    # Clear history and delete disk file to ensure clean state
     ms_module.sensor_history.clear()
+    if ms_module.sensor_history.file_path.exists():
+        ms_module.sensor_history.file_path.unlink()
 
     # Reset ESP32 config singleton
     import utils.esp32_config
@@ -40,7 +44,9 @@ async def reset_state():
 
     yield
 
-    # Clean up singleton after test
+    # Clean up disk file and singleton after test
+    if ms_module.sensor_history.file_path.exists():
+        ms_module.sensor_history.file_path.unlink()
     utils.esp32_config._config = None
 
 
@@ -62,9 +68,10 @@ async def test_read_moisture_success(httpx_mock, esp32_base_url):
     result = await read_tool.run(arguments={})
     assert result.content is not None
 
-    # Check history was updated
-    assert len(ms_module.sensor_history) == 1
-    assert ms_module.sensor_history[0]["value"] == 2047
+    # Check history was updated (JsonlHistory)
+    all_readings = ms_module.sensor_history.get_all()
+    assert len(all_readings) == 1
+    assert all_readings[0]["value"] == 2047
 
 
 @pytest.mark.asyncio
@@ -120,36 +127,6 @@ async def test_read_moisture_invalid_json(httpx_mock, esp32_base_url):
     # Should raise ValueError with JSON error
     with pytest.raises(ValueError):
         await read_tool.run(arguments={})
-
-
-@pytest.mark.asyncio
-async def test_sensor_history_limit(httpx_mock, esp32_base_url):
-    """Test that sensor history is limited to prevent memory issues"""
-    # Mock ESP32 response
-    httpx_mock.add_response(
-        url=f"{esp32_base_url}/moisture",
-        method="GET",
-        json={"value": 3000, "timestamp": "2025-01-23T14:30:00Z", "status": "ok"}
-    )
-
-    test_mcp = FastMCP("Test")
-    ms_module.setup_moisture_sensor_tools(test_mcp)
-    read_tool = test_mcp._tool_manager._tools["read_moisture"]
-
-    # Add MAX_SENSOR_HISTORY_LENGTH entries directly first
-    for i in range(ms_module.MAX_SENSOR_HISTORY_LENGTH):
-        ms_module.sensor_history.append({
-            "value": 2000 + i,
-            "timestamp": f"2024-01-01T{i//60:02d}:{i%60:02d}:00"
-        })
-
-    # Now read one more through the tool - it should keep at max length
-    await read_tool.run(arguments={})
-
-    # Verify sensor_history does not exceed the maximum allowed length
-    assert len(ms_module.sensor_history) <= ms_module.MAX_SENSOR_HISTORY_LENGTH
-    # Should be capped at MAX_SENSOR_HISTORY_LENGTH (oldest removed, newest added)
-    assert len(ms_module.sensor_history) == ms_module.MAX_SENSOR_HISTORY_LENGTH
 
 
 @pytest.mark.asyncio
@@ -211,6 +188,7 @@ async def test_read_moisture_uses_esp32_timestamp(httpx_mock, esp32_base_url):
 
     await read_tool.run(arguments={})
 
-    # Verify ESP32's timestamp was stored
-    assert len(ms_module.sensor_history) == 1
-    assert ms_module.sensor_history[0]["timestamp"] == "2025-01-23T18:45:30Z"
+    # Verify ESP32's timestamp was stored (JsonlHistory)
+    all_readings = ms_module.sensor_history.get_all()
+    assert len(all_readings) == 1
+    assert all_readings[0]["timestamp"] == "2025-01-23T18:45:30Z"

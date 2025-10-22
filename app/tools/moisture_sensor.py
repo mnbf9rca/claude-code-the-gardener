@@ -8,6 +8,8 @@ import httpx
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from utils.esp32_config import get_esp32_config
+from utils.jsonl_history import JsonlHistory
+from utils.paths import get_app_dir
 
 
 class MoistureReading(BaseModel):
@@ -17,14 +19,12 @@ class MoistureReading(BaseModel):
     status: str = Field(..., description="Sensor status")
 
 
-# Store recent readings for history
-# Note: Thread-safety is not needed here as MCP server runs in a single-threaded
-# async event loop. All accesses to this list are via async functions that won't
-# execute concurrently within the same event loop.
-sensor_history = []
-
-# Maximum sensor history entries (24 hours at 1 reading/minute)
-MAX_SENSOR_HISTORY_LENGTH = 1440
+# State persistence - JSONL format for append-only history
+# Keeps 10,000 readings in memory (~7 days at 1/min), unlimited on disk
+sensor_history = JsonlHistory(
+    file_path=get_app_dir("data") / "moisture_sensor_history.jsonl",
+    max_memory_entries=10000
+)
 
 # HTTP client timeout (seconds)
 HTTP_TIMEOUT = 5.0
@@ -63,15 +63,11 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
                 status=status
             )
 
-            # Store in history
+            # Store in history (JsonlHistory handles memory limits and disk persistence)
             sensor_history.append({
                 "value": value,
                 "timestamp": timestamp
             })
-
-            # Keep history limited
-            if len(sensor_history) > MAX_SENSOR_HISTORY_LENGTH:
-                sensor_history.pop(0)
 
             return reading
 
@@ -99,19 +95,22 @@ def setup_moisture_sensor_tools(mcp: FastMCP):
         """
         entries_needed = hours * 6  # 6 readings per hour (every 10 min)
 
-        if not sensor_history:
+        # Get all entries from history
+        all_readings = sensor_history.get_all()
+
+        if not all_readings:
             return []
 
         # Return all available entries if we don't have enough
-        if len(sensor_history) <= entries_needed:
-            return [[r["timestamp"], r["value"]] for r in sensor_history[-entries_needed:]]
+        if len(all_readings) <= entries_needed:
+            return [[r["timestamp"], r["value"]] for r in all_readings[-entries_needed:]]
 
         # Sample evenly from available history
         # Ensure step is at least 1 to avoid division by zero or infinite loops
-        step = max(1, len(sensor_history) // entries_needed)
+        step = max(1, len(all_readings) // entries_needed)
         sampled = []
-        indices = list(range(0, len(sensor_history), step))[:entries_needed]
+        indices = list(range(0, len(all_readings), step))[:entries_needed]
         for i in indices:
-            reading = sensor_history[i]
+            reading = all_readings[i]
             sampled.append([reading["timestamp"], reading["value"]])
         return sampled
