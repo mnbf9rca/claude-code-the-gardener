@@ -50,7 +50,7 @@ class JsonlHistory:
         self.auto_create = auto_create
 
         # In-memory storage (deque for efficient operations)
-        self._history: deque = deque()
+        self._history: deque[Dict[str, Any]] = deque()
 
         # Lazy loading flag
         self._loaded = False
@@ -195,7 +195,11 @@ class JsonlHistory:
                 entry_time = datetime.fromisoformat(entry[timestamp_key])
                 if start_time <= entry_time <= end_time:
                     matching.append(entry)
-            except (KeyError, ValueError):
+            except (KeyError, ValueError) as e:
+                logger.warning(
+                    "Skipping entry in get_by_time_range due to timestamp issue: %s | Entry: %s",
+                    e, entry
+                )
                 continue
 
         return matching
@@ -225,7 +229,11 @@ class JsonlHistory:
                 entry_time = datetime.fromisoformat(entry[timestamp_key])
                 if entry_time >= cutoff_time:
                     matching.append(entry)
-            except (KeyError, ValueError):
+            except (KeyError, ValueError) as e:
+                logger.warning(
+                    "Skipping entry in get_by_time_window due to timestamp issue: %s | Entry: %s",
+                    e, entry
+                )
                 continue
 
         return matching
@@ -272,6 +280,107 @@ class JsonlHistory:
                 matching.append(entry)
 
         return matching
+
+    def get_time_bucketed_sample(
+        self,
+        hours: int,
+        samples_per_hour: int = 6,
+        timestamp_key: str = "timestamp",
+        aggregation: str = "middle",
+        end_time: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Sample entries evenly across time, not by index.
+
+        Divides the time window into equal-sized buckets and returns
+        one sample per bucket, ensuring proper temporal distribution.
+        Empty buckets (no readings) are skipped.
+
+        Args:
+            hours: Time window in hours backwards from end_time
+            samples_per_hour: Target number of samples per hour (default 6)
+            timestamp_key: Dict key containing ISO8601 timestamp
+            aggregation: Strategy when multiple entries in bucket
+                - "first": Earliest entry in bucket
+                - "last": Latest entry in bucket
+                - "middle": Entry closest to bucket midpoint
+            end_time: End of time window (defaults to now if None)
+
+        Returns:
+            List of sampled entries with proper temporal distribution
+        """
+        # Default to now if no end_time specified
+        if end_time is None:
+            end_time = datetime.now(timezone.utc)
+
+        # Calculate time window
+        start_time = end_time - timedelta(hours=hours)
+
+        # Get entries in the time range
+        entries = self.get_by_time_range(
+            start_time=start_time,
+            end_time=end_time,
+            timestamp_key=timestamp_key
+        )
+
+        if not entries:
+            return []
+
+        # Sort entries by timestamp to ensure chronological order
+        # (JSONL load order doesn't guarantee temporal order)
+        entries_with_time = []
+        for entry in entries:
+            try:
+                entry_time = datetime.fromisoformat(entry[timestamp_key])
+                entries_with_time.append((entry_time, entry))
+            except (KeyError, ValueError) as e:
+                logger.warning(
+                    "Skipping entry in get_time_bucketed_sample during sort: %s | Entry: %s",
+                    e, entry
+                )
+
+        entries_with_time.sort(key=lambda x: x[0])
+
+        # Calculate bucket size
+        bucket_duration = timedelta(hours=1) / samples_per_hour
+
+        # Create buckets
+        total_buckets = hours * samples_per_hour
+        sampled = []
+
+        for i in range(total_buckets):
+            bucket_start = start_time + (bucket_duration * i)
+            bucket_end = bucket_start + bucket_duration
+
+            # Find entries in this bucket (already sorted and parsed)
+            bucket_entries = [
+                entry for entry_time, entry in entries_with_time
+                if bucket_start <= entry_time < bucket_end
+            ]
+
+            # Skip empty buckets
+            if not bucket_entries:
+                continue
+
+            # Apply aggregation strategy
+            if aggregation == "first":
+                sampled.append(bucket_entries[0])
+            elif aggregation == "last":
+                sampled.append(bucket_entries[-1])
+            elif aggregation == "middle":
+                # Find entry closest to bucket midpoint
+                bucket_midpoint = bucket_start + (bucket_duration / 2)
+                closest_entry = min(
+                    bucket_entries,
+                    key=lambda e: abs(
+                        datetime.fromisoformat(e[timestamp_key]) - bucket_midpoint
+                    )
+                )
+                sampled.append(closest_entry)
+            else:
+                raise ValueError(f"Unknown aggregation strategy: '{aggregation}'. Must be 'first', 'last', or 'middle'.")
+
+        return sampled
 
     def clear(self):
         """Clear the in-memory cache (for testing)."""

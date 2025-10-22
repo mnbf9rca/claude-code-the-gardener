@@ -472,3 +472,330 @@ def test_search_empty(temp_history_file):
 
     result = history.search("anything")
     assert result == []
+
+
+# Time-bucketed sampling tests
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_uniform_distribution(temp_history_file):
+    """Test time-bucketed sampling with uniformly distributed data"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add 60 entries, one per minute for 1 hour
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(60):
+        entry_time = base_time + timedelta(minutes=i)
+        history.append({
+            "timestamp": entry_time.isoformat(),
+            "value": 1000 + i
+        })
+
+    # Request 1 hour with 6 samples/hour
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Should return 6 samples (one per 10-min bucket)
+    assert len(result) == 6
+
+    # Each sample should be ~10 minutes apart
+    for i in range(len(result) - 1):
+        t1 = datetime.fromisoformat(result[i]["timestamp"])
+        t2 = datetime.fromisoformat(result[i + 1]["timestamp"])
+        gap = (t2 - t1).total_seconds() / 60  # Convert to minutes
+        assert 9 <= gap <= 11  # Allow 1-minute tolerance
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_with_gaps(temp_history_file):
+    """Test time-bucketed sampling with missing data (gaps)"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add data only for first 10 minutes and last 10 minutes (40-min gap)
+    for i in range(10):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 1000 + i
+        })
+
+    for i in range(50, 60):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 1000 + i
+        })
+
+    # Request 1 hour with 6 samples/hour
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Should only return samples from buckets with data (likely 2)
+    assert len(result) <= 6
+    assert len(result) >= 2  # At least one from each filled bucket
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_dense_data(temp_history_file):
+    """Test time-bucketed sampling with multiple entries per bucket"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add 10 entries per minute for first 10 minutes (100 total)
+    for minute in range(10):
+        for second in range(0, 60, 6):  # Every 6 seconds
+            entry_time = base_time + timedelta(minutes=minute, seconds=second)
+            history.append({
+                "timestamp": entry_time.isoformat(),
+                "value": 1000 + minute * 10 + second
+            })
+
+    # Request 1 hour with 6 samples/hour
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Should return samples, at most one per bucket
+    assert len(result) <= 6
+    assert len(result) >= 1  # At least one bucket should have data
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_empty_window(temp_history_file):
+    """Test time-bucketed sampling with no data in time window"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add data from 5 hours ago (outside 1-hour window)
+    old_time = datetime(2025, 1, 24, 7, 0, 0, tzinfo=timezone.utc)
+    history.append({
+        "timestamp": old_time.isoformat(),
+        "value": 1000
+    })
+
+    # Request last 1 hour
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    assert result == []
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_aggregation_first(temp_history_file):
+    """Test 'first' aggregation strategy"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add 3 entries in first 10-minute bucket
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "value": 100})
+    history.append({"timestamp": (base_time + timedelta(minutes=5)).isoformat(), "value": 200})
+    history.append({"timestamp": (base_time + timedelta(minutes=9)).isoformat(), "value": 300})
+
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6, aggregation="first")
+
+    # Should return first entry (value=100)
+    assert len(result) == 1
+    assert result[0]["value"] == 100
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_aggregation_last(temp_history_file):
+    """Test 'last' aggregation strategy"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add 3 entries in first 10-minute bucket
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "value": 100})
+    history.append({"timestamp": (base_time + timedelta(minutes=5)).isoformat(), "value": 200})
+    history.append({"timestamp": (base_time + timedelta(minutes=9)).isoformat(), "value": 300})
+
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6, aggregation="last")
+
+    # Should return last entry (value=300)
+    assert len(result) == 1
+    assert result[0]["value"] == 300
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_aggregation_middle(temp_history_file):
+    """Test 'middle' aggregation strategy"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add 3 entries in first 10-minute bucket
+    # Bucket is 11:00-11:10, midpoint is 11:05
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "value": 100})
+    history.append({"timestamp": (base_time + timedelta(minutes=5)).isoformat(), "value": 200})  # Closest to midpoint
+    history.append({"timestamp": (base_time + timedelta(minutes=9)).isoformat(), "value": 300})
+
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6, aggregation="middle")
+
+    # Should return entry closest to bucket midpoint (value=200 at 11:05)
+    assert len(result) == 1
+    assert result[0]["value"] == 200
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_single_entry(temp_history_file):
+    """Test time-bucketed sampling with only one entry"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add single entry in last hour
+    recent_time = datetime(2025, 1, 24, 11, 30, 0, tzinfo=timezone.utc)
+    history.append({
+        "timestamp": recent_time.isoformat(),
+        "value": 1000
+    })
+
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Should return the one entry
+    assert len(result) == 1
+    assert result[0]["value"] == 1000
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_custom_samples_per_hour(temp_history_file):
+    """Test time-bucketed sampling with different samples_per_hour"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add 60 entries (one per minute)
+    for i in range(60):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 1000 + i
+        })
+
+    # Request 1 hour with 12 samples/hour (5-minute buckets)
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=12)
+
+    # Should return 12 samples
+    assert len(result) == 12
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_returns_chronological(temp_history_file):
+    """Test that results are returned in chronological order"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Add entries in random order
+    for i in [30, 10, 50, 20, 40, 0]:
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 1000 + i
+        })
+
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Verify chronological order
+    for i in range(len(result) - 1):
+        t1 = datetime.fromisoformat(result[i]["timestamp"])
+        t2 = datetime.fromisoformat(result[i + 1]["timestamp"])
+        assert t1 < t2  # Should be strictly increasing
+
+
+def test_time_bucketed_sample_with_custom_end_time(temp_history_file):
+    """Test time-bucketed sampling with custom end_time (historical data)"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add data spanning multiple days
+    base_time = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    for day in range(5):
+        for hour in range(24):
+            entry_time = base_time + timedelta(days=day, hours=hour)
+            history.append({
+                "timestamp": entry_time.isoformat(),
+                "value": 1000 + day * 100 + hour
+            })
+
+    # Sample from Jan 2, 00:00 to Jan 3, 00:00 (24 hours on day 2)
+    end_time = datetime(2025, 1, 3, 0, 0, 0, tzinfo=timezone.utc)
+    result = history.get_time_bucketed_sample(
+        hours=24,
+        samples_per_hour=1,
+        end_time=end_time
+    )
+
+    # Should get samples from day 2 only (values 1100-1123)
+    assert len(result) > 0
+    for entry in result:
+        value = entry["value"]
+        assert 1100 <= value < 1200, f"Expected values 1100-1199 (day 2), got {value}"
+
+
+def test_time_bucketed_sample_end_time_defaults_to_now(temp_history_file):
+    """Test that end_time=None behaves same as explicit now"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add recent data
+    with freeze_time("2025-01-24 12:00:00"):
+        base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+        for i in range(60):
+            history.append({
+                "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                "value": 1000 + i
+            })
+
+        # Both calls should return same results
+        result_default = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+        result_explicit = history.get_time_bucketed_sample(
+            hours=1,
+            samples_per_hour=6,
+            end_time=datetime.now(timezone.utc)
+        )
+
+        assert len(result_default) == len(result_explicit)
+        # Timestamps should match
+        for default_entry, explicit_entry in zip(result_default, result_explicit):
+            assert default_entry["timestamp"] == explicit_entry["timestamp"]
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_invalid_aggregation(temp_history_file):
+    """Test that invalid aggregation strategy raises ValueError"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add some data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(10):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 1000 + i
+        })
+
+    # Invalid aggregation should raise ValueError
+    with pytest.raises(ValueError, match="Unknown aggregation strategy"):
+        history.get_time_bucketed_sample(
+            hours=1,
+            samples_per_hour=6,
+            aggregation="invalid"
+        )
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_sample_with_malformed_timestamps(temp_history_file):
+    """Test that malformed timestamps are skipped with logging"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add good data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i * 10)).isoformat(),
+            "value": 1000 + i
+        })
+
+    # Manually add malformed entry to the history
+    history._history.append({"timestamp": "not-a-timestamp", "value": 9999})
+    history._history.append({"bad_key": "no timestamp", "value": 8888})
+
+    # Should skip malformed entries and return only valid ones
+    result = history.get_time_bucketed_sample(hours=1, samples_per_hour=6)
+
+    # Verify all returned entries have valid values (not the malformed ones)
+    for entry in result:
+        assert entry["value"] != 9999, "Malformed timestamp entry should be skipped"
+        assert entry["value"] != 8888, "Missing timestamp entry should be skipped"
+
+    # Should have results from valid entries
+    assert len(result) > 0
