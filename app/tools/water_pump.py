@@ -4,6 +4,7 @@ Integrates with ESP32 pump via HTTP API with ML-to-seconds conversion.
 """
 from datetime import datetime, timezone
 import os
+from urllib.parse import urlunparse
 import httpx
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -22,7 +23,15 @@ if not ESP32_HOST:
     raise ValueError("ESP32_HOST environment variable is required but not set")
 
 ESP32_PORT = int(os.getenv("ESP32_PORT", "80"))
-ESP32_BASE_URL = f"http://{ESP32_HOST}:{ESP32_PORT}"
+
+# Construct base URL properly using urllib
+# Strip any protocol prefix from host if present
+esp32_host_clean = ESP32_HOST.removeprefix("http://").removeprefix("https://")
+# Remove any port suffix from host if present
+if ":" in esp32_host_clean:
+    esp32_host_clean = esp32_host_clean.split(":")[0]
+
+ESP32_BASE_URL = urlunparse(("http", f"{esp32_host_clean}:{ESP32_PORT}", "", "", "", ""))
 
 # Pump calibration - ML dispensed per second of pump operation
 # This value should be calibrated by running the pump for a known duration
@@ -109,7 +118,8 @@ def setup_water_pump_tools(mcp: FastMCP):
         actual_ml = min(ml, remaining)
 
         # Convert ML to seconds based on calibrated pump rate
-        seconds = round(actual_ml / PUMP_ML_PER_SECOND, 1)
+        seconds_float = actual_ml / PUMP_ML_PER_SECOND
+        seconds = int(round(seconds_float))
 
         # Ensure we're within ESP32 safety limits (1-30 seconds)
         if seconds < 1:
@@ -122,7 +132,7 @@ def setup_water_pump_tools(mcp: FastMCP):
             async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                 response = await client.post(
                     f"{ESP32_BASE_URL}/pump",
-                    json={"seconds": int(seconds)},
+                    json={"seconds": seconds},
                     headers={"Content-Type": "application/json"}
                 )
                 response.raise_for_status()
@@ -139,7 +149,8 @@ def setup_water_pump_tools(mcp: FastMCP):
             try:
                 error_data = e.response.json()
                 error_msg = error_data.get("error", error_msg)
-            except:
+            except Exception:
+                # JSON parsing failed, use raw text
                 pass
             raise ValueError(f"ESP32 HTTP error ({e.response.status_code}): {error_msg}")
         except httpx.RequestError as e:

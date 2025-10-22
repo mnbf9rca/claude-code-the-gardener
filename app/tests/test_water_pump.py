@@ -13,6 +13,7 @@ import os
 import pytest
 import pytest_asyncio
 import json
+import httpx
 from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from fastmcp import FastMCP
@@ -77,7 +78,9 @@ async def test_dispense_basic(setup_pump_state, httpx_mock):
     assert len(wp_module.water_history) == 1
 
     # Verify ML-to-seconds conversion (50ml / 3.5 ml/s = ~14s)
-    assert wp_module.water_history._entries[0]["seconds"] == 14
+    # Access via public API
+    history = list(wp_module.water_history.get_all())
+    assert history[0]["seconds"] == 14
 
 
 @pytest.mark.asyncio
@@ -296,9 +299,9 @@ async def test_esp32_timeout(setup_pump_state, httpx_mock):
     """Test handling of ESP32 timeout"""
     mcp = setup_pump_state
 
-    # Mock timeout
+    # Mock timeout using httpx.TimeoutException
     httpx_mock.add_exception(
-        Exception("Connection timeout"),
+        httpx.TimeoutException("Connection timeout"),
         url="http://192.168.1.100:80/pump"
     )
 
