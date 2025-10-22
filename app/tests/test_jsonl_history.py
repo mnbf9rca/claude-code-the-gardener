@@ -799,3 +799,329 @@ def test_time_bucketed_sample_with_malformed_timestamps(temp_history_file):
 
     # Should have results from valid entries
     assert len(result) > 0
+
+
+# ============================================================================
+# Tests for aggregation strategies (count, sum, mean)
+# ============================================================================
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_count(temp_history_file):
+    """Test count aggregation returns bucket counts"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add data with varying density across buckets
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Bucket 1: 3 entries
+    for i in range(3):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "value": 100 + i
+        })
+
+    # Bucket 2: 5 entries
+    for i in range(5):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=10 + i)).isoformat(),
+            "value": 200 + i
+        })
+
+    # Bucket 3: 1 entry
+    history.append({
+        "timestamp": (base_time + timedelta(minutes=20)).isoformat(),
+        "value": 300
+    })
+
+    # Get count aggregation (6 samples per hour = 10 min buckets)
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="count"
+    )
+
+    # Should have 3 buckets (empty buckets skipped)
+    assert len(result) == 3
+
+    # Verify structure and counts
+    assert result[0]["value"] == 3
+    assert result[0]["count"] == 3
+    assert "bucket_start" in result[0]
+    assert "bucket_end" in result[0]
+
+    assert result[1]["value"] == 5
+    assert result[1]["count"] == 5
+
+    assert result[2]["value"] == 1
+    assert result[2]["count"] == 1
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_sum(temp_history_file):
+    """Test sum aggregation returns summed values"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Bucket 1: ml=10, 20, 30 → sum=60
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "ml": 10})
+    history.append({"timestamp": (base_time + timedelta(minutes=5)).isoformat(), "ml": 20})
+    history.append({"timestamp": (base_time + timedelta(minutes=9)).isoformat(), "ml": 30})
+
+    # Bucket 2: ml=100, 150 → sum=250
+    history.append({"timestamp": (base_time + timedelta(minutes=10)).isoformat(), "ml": 100})
+    history.append({"timestamp": (base_time + timedelta(minutes=15)).isoformat(), "ml": 150})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="sum",
+        value_field="ml"
+    )
+
+    assert len(result) == 2
+    assert result[0]["value"] == 60
+    assert result[0]["count"] == 3
+    assert result[1]["value"] == 250
+    assert result[1]["count"] == 2
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_mean(temp_history_file):
+    """Test mean aggregation returns average values"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Bucket 1: readings=100, 200, 300 → mean=200
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "reading": 100})
+    history.append({"timestamp": (base_time + timedelta(minutes=5)).isoformat(), "reading": 200})
+    history.append({"timestamp": (base_time + timedelta(minutes=9)).isoformat(), "reading": 300})
+
+    # Bucket 2: readings=50, 150 → mean=100
+    history.append({"timestamp": (base_time + timedelta(minutes=10)).isoformat(), "reading": 50})
+    history.append({"timestamp": (base_time + timedelta(minutes=15)).isoformat(), "reading": 150})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="mean",
+        value_field="reading"
+    )
+
+    assert len(result) == 2
+    assert result[0]["value"] == 200.0
+    assert result[0]["count"] == 3
+    assert result[1]["value"] == 100.0
+    assert result[1]["count"] == 2
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_sum_with_missing_field(temp_history_file):
+    """Test sum aggregation handles missing value_field gracefully"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Mix of entries with and without the field
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "ml": 10})
+    history.append({"timestamp": (base_time + timedelta(minutes=2)).isoformat()})  # missing ml
+    history.append({"timestamp": (base_time + timedelta(minutes=4)).isoformat(), "ml": 20})
+    history.append({"timestamp": (base_time + timedelta(minutes=6)).isoformat(), "ml": None})  # null value
+    history.append({"timestamp": (base_time + timedelta(minutes=8)).isoformat(), "ml": 30})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="sum",
+        value_field="ml"
+    )
+
+    # Should sum only valid numeric values: 10 + 20 + 30 = 60
+    # Count should be 3 (only entries with valid ml values)
+    assert len(result) == 1
+    assert result[0]["value"] == 60
+    assert result[0]["count"] == 3
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_mean_with_non_numeric(temp_history_file):
+    """Test mean aggregation handles non-numeric values gracefully"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Mix of numeric and non-numeric values
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "temp": 20.5})
+    history.append({"timestamp": (base_time + timedelta(minutes=2)).isoformat(), "temp": "invalid"})
+    history.append({"timestamp": (base_time + timedelta(minutes=4)).isoformat(), "temp": 30.5})
+    history.append({"timestamp": (base_time + timedelta(minutes=6)).isoformat(), "temp": [1, 2, 3]})
+    history.append({"timestamp": (base_time + timedelta(minutes=8)).isoformat(), "temp": 10.0})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="mean",
+        value_field="temp"
+    )
+
+    # Should average only numeric values: (20.5 + 30.5 + 10.0) / 3 = 20.33...
+    assert len(result) == 1
+    assert abs(result[0]["value"] - 20.333333) < 0.001
+    assert result[0]["count"] == 3
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_mean_empty_bucket(temp_history_file):
+    """Test mean aggregation with no valid numeric values returns 0"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # Bucket with no valid numeric values
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "temp": "invalid"})
+    history.append({"timestamp": (base_time + timedelta(minutes=2)).isoformat(), "temp": None})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="mean",
+        value_field="temp"
+    )
+
+    # Should have one bucket with mean=0 and count=0 (no valid values)
+    assert len(result) == 1
+    assert result[0]["value"] == 0
+    assert result[0]["count"] == 0
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_sum_all_entries_missing_field(temp_history_file):
+    """Test sum aggregation when all entries are missing the value_field"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+
+    # All entries missing the value_field entirely
+    history.append({"timestamp": (base_time + timedelta(minutes=0)).isoformat(), "other": "data"})
+    history.append({"timestamp": (base_time + timedelta(minutes=2)).isoformat(), "other": "more"})
+    history.append({"timestamp": (base_time + timedelta(minutes=4)).isoformat()})
+
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="sum",
+        value_field="ml"
+    )
+
+    # Should have one bucket with sum=0 and count=0 (no valid values)
+    assert len(result) == 1
+    assert result[0]["value"] == 0
+    assert result[0]["count"] == 0
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_requires_value_field_for_sum(temp_history_file):
+    """Test that sum aggregation requires value_field parameter"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    history.append({"timestamp": base_time.isoformat(), "value": 10})
+
+    with pytest.raises(ValueError, match="value_field is required"):
+        history.get_time_bucketed_sample(
+            hours=1,
+            samples_per_hour=6,
+            aggregation="sum"
+            # Missing value_field
+        )
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_requires_value_field_for_mean(temp_history_file):
+    """Test that mean aggregation requires value_field parameter"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    history.append({"timestamp": base_time.isoformat(), "value": 10})
+
+    with pytest.raises(ValueError, match="value_field is required"):
+        history.get_time_bucketed_sample(
+            hours=1,
+            samples_per_hour=6,
+            aggregation="mean"
+            # Missing value_field
+        )
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_with_end_time(temp_history_file):
+    """Test aggregation with custom end_time parameter"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add historical data
+    base_time = datetime(2025, 1, 24, 10, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        history.append({
+            "timestamp": (base_time + timedelta(minutes=i * 10)).isoformat(),
+            "ml": 10 * (i + 1)
+        })
+
+    # Query with end_time set to 11:00 (1 hour after base_time)
+    custom_end = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    result = history.get_time_bucketed_sample(
+        hours=1,
+        samples_per_hour=6,
+        aggregation="sum",
+        value_field="ml",
+        end_time=custom_end
+    )
+
+    # Should include all 5 entries (they're all within the 10:00-11:00 window)
+    # 10 + 20 + 30 + 40 + 50 = 150
+    total_sum = sum(bucket["value"] for bucket in result)
+    assert total_sum == 150
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_validates_strategy(temp_history_file):
+    """Test that invalid aggregation strategy is caught"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    history.append({"timestamp": base_time.isoformat(), "value": 10})
+
+    with pytest.raises(ValueError, match="Unknown aggregation strategy"):
+        history.get_time_bucketed_sample(
+            hours=1,
+            samples_per_hour=6,
+            aggregation="invalid_strategy"
+        )
+
+
+@freeze_time("2025-01-24 12:00:00")
+def test_time_bucketed_aggregation_fractional_samples_per_hour(temp_history_file):
+    """Test aggregation with fractional samples_per_hour for daily buckets"""
+    history = JsonlHistory(file_path=temp_history_file)
+
+    # Add data spanning 7 days to test weekly aggregation
+    base_time = datetime(2025, 1, 17, 12, 0, 0, tzinfo=timezone.utc)
+    for day in range(7):
+        history.append({
+            "timestamp": (base_time + timedelta(days=day)).isoformat(),
+            "ml": 10 * (day + 1)
+        })
+
+    # Use 0.006 samples_per_hour for approximately weekly buckets
+    # 168 hours (7 days) * 0.006 = ~1 bucket
+    result = history.get_time_bucketed_sample(
+        hours=168,  # 7 days
+        samples_per_hour=0.006,
+        aggregation="sum",
+        value_field="ml"
+    )
+
+    # Should create 1 bucket containing all entries
+    assert len(result) == 1
+    assert result[0]["value"] == 10 + 20 + 30 + 40 + 50 + 60 + 70  # Sum of all values
+    assert result[0]["count"] == 7

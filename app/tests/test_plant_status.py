@@ -5,19 +5,28 @@ These test the plant_status functions directly without going through MCP server
 """
 import pytest
 import pytest_asyncio
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from fastmcp import FastMCP
 import tools.plant_status as ps_module
 from utils.shared_state import reset_cycle, current_cycle_status
+from utils.jsonl_history import JsonlHistory
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def reset_state():
-    """Reset state before each test"""
+async def reset_state(tmp_path):
+    """Reset state before each test with a temporary file"""
     reset_cycle()
-    ps_module.status_history.clear()
+
+    # Create a new temporary JsonlHistory for each test
+    temp_file = tmp_path / "test_plant_status.jsonl"
+    ps_module.status_history = JsonlHistory(file_path=temp_file, max_memory_entries=1000)
     ps_module.current_status = None
+
     yield
+
+    # Cleanup
+    ps_module.status_history.clear()
 
 
 @pytest.mark.asyncio
@@ -77,7 +86,9 @@ async def test_write_status_duplicate_prevention():
     # Should be rejected
     assert current_cycle_status["written"] is True
     assert len(ps_module.status_history) == 1  # Should still be just 1
-    assert ps_module.status_history[0]["sensor_reading"] == 2000  # Original value
+    # Verify original value is preserved
+    history = ps_module.status_history.get_all()
+    assert history[0]["sensor_reading"] == 2000  # Original value
 
 
 @pytest.mark.asyncio
@@ -112,8 +123,9 @@ async def test_status_history_limit():
 
     # Should still be capped at 1000 (oldest removed, newest added)
     assert len(ps_module.status_history) == 1000
-    # Verify the newest entry is there
-    assert ps_module.status_history[-1]["sensor_reading"] == 3000
+    # Verify the newest entry is there (get most recent)
+    most_recent = ps_module.status_history.get_recent(n=1)
+    assert most_recent[0]["sensor_reading"] == 3000
 
 
 @pytest.mark.asyncio

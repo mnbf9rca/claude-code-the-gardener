@@ -49,8 +49,11 @@ async def reset_server_state(httpx_mock: HTTPXMock):
     utils.esp32_config._config = None
 
     # Reset plant status history and current status
-    ps_module.status_history.clear()
+    # Reinitialize with the correct file path (in case other tests changed it)
+    from utils.jsonl_history import JsonlHistory
+    ps_module.status_history = JsonlHistory(file_path=ps_module.STATE_FILE, max_memory_entries=1000)
     ps_module.current_status = None
+    ps_module.STATE_FILE.unlink(missing_ok=True)
 
     # Reset moisture sensor history and mock value
     ms_module.sensor_history.clear()

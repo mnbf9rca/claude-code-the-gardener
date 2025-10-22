@@ -10,7 +10,7 @@ These tests verify the camera functionality including:
 """
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 
 import pytest
@@ -422,3 +422,85 @@ class TestCameraWithSamplePhotos:
             assert parsed_time.year == 2024
             assert parsed_time.month == 12
             assert parsed_time.day == 31
+
+
+class TestCameraHistoryBucketed:
+    """Tests for time-bucketed camera usage queries"""
+
+    @pytest.mark.asyncio
+    @freeze_time("2025-01-24 12:00:00")
+    async def test_get_camera_history_bucketed_sampling(self, reset_camera_module):
+        """Test get_camera_history_bucketed with sampling mode"""
+        mcp = FastMCP("test")
+        setup_camera_tools(mcp)
+
+        # Add test data to usage_history
+        from datetime import datetime, timezone, timedelta
+        base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+        for i in range(5):
+            camera_module.usage_history.append({
+                "timestamp": (base_time + timedelta(minutes=i*10)).isoformat(),
+                "tool": "capture_photo",
+                "result": "success"
+            })
+
+        # Test sampling mode
+        history_tool = mcp._tool_manager._tools["get_camera_history_bucketed"]
+        result = await history_tool.run(arguments={
+            "hours": 1,
+            "samples_per_hour": 6,
+            "aggregation": "middle"
+        })
+
+        history = extract_json_from_result(result)
+
+        # Unwrap FastMCP result wrapper if present
+        if isinstance(history, dict) and "result" in history:
+            history = history["result"]
+
+        # Should return sampled entries
+        assert isinstance(history, list)
+        assert len(history) > 0
+        for entry in history:
+            assert "timestamp" in entry
+            assert "tool" in entry
+
+    @pytest.mark.asyncio
+    @freeze_time("2025-01-24 12:00:00")
+    async def test_get_camera_history_bucketed_count(self, reset_camera_module):
+        """Test get_camera_history_bucketed with count aggregation"""
+        mcp = FastMCP("test")
+        setup_camera_tools(mcp)
+
+        # Add test data
+        from datetime import datetime, timezone, timedelta
+        base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+        for i in range(3):
+            camera_module.usage_history.append({
+                "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                "tool": "capture_photo",
+                "result": "success"
+            })
+
+        # Test count aggregation
+        history_tool = mcp._tool_manager._tools["get_camera_history_bucketed"]
+        result = await history_tool.run(arguments={
+            "hours": 1,
+            "samples_per_hour": 6,
+            "aggregation": "count"
+        })
+
+        history = extract_json_from_result(result)
+
+        # Unwrap FastMCP result wrapper if present
+        if isinstance(history, dict) and "result" in history:
+            history = history["result"]
+
+        # Should return bucket statistics
+        assert isinstance(history, list)
+        # Check that we have buckets with entries
+        assert len(history) > 0
+        # Verify structure
+        for bucket in history:
+            assert "value" in bucket
+            assert "count" in bucket

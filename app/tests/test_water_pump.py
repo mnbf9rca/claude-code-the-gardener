@@ -547,3 +547,140 @@ async def test_state_loads_only_once(setup_pump_state, httpx_mock, esp32_base_ur
 
     # Should still have the original loaded state plus the new dispense
     assert len(wp_module.water_history) == 2
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_water_history_sampling(setup_pump_state):
+    """Test get_water_history with sampling mode"""
+    mcp = setup_pump_state
+
+    # Add some test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        wp_module.water_history.append({
+            "timestamp": (base_time + timedelta(minutes=i*10)).isoformat(),
+            "ml": 100 + i*10
+        })
+
+    # Test sampling mode (middle)
+    history_tool = mcp._tool_manager._tools["get_water_history"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "middle"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return sampled entries with original structure
+    assert isinstance(history, list)
+    assert len(history) > 0
+    for entry in history:
+        assert "timestamp" in entry
+        assert "ml" in entry
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_water_history_aggregation_count(setup_pump_state):
+    """Test get_water_history with count aggregation"""
+    mcp = setup_pump_state
+
+    # Add test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(3):
+        wp_module.water_history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "ml": 50
+        })
+
+    # Test count aggregation
+    history_tool = mcp._tool_manager._tools["get_water_history"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "count"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return bucket statistics
+    assert isinstance(history, list)
+    assert len(history) > 0
+    for bucket in history:
+        assert "bucket_start" in bucket
+        assert "bucket_end" in bucket
+        assert "value" in bucket
+        assert "count" in bucket
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_water_history_aggregation_sum(setup_pump_state):
+    """Test get_water_history with sum aggregation"""
+    mcp = setup_pump_state
+
+    # Add test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(3):
+        wp_module.water_history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "ml": 100
+        })
+
+    # Test sum aggregation
+    history_tool = mcp._tool_manager._tools["get_water_history"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "sum",
+        "value_field": "ml"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return bucket statistics with summed values
+    assert isinstance(history, list)
+    assert len(history) == 1  # All entries in one bucket
+    assert history[0]["value"] == 300  # 3 * 100ml
+    assert history[0]["count"] == 3
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_water_history_aggregation_mean(setup_pump_state):
+    """Test get_water_history with mean aggregation"""
+    mcp = setup_pump_state
+
+    # Add test data with varying amounts
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    wp_module.water_history.append({
+        "timestamp": (base_time + timedelta(minutes=0)).isoformat(),
+        "ml": 50
+    })
+    wp_module.water_history.append({
+        "timestamp": (base_time + timedelta(minutes=1)).isoformat(),
+        "ml": 100
+    })
+    wp_module.water_history.append({
+        "timestamp": (base_time + timedelta(minutes=2)).isoformat(),
+        "ml": 150
+    })
+
+    # Test mean aggregation
+    history_tool = mcp._tool_manager._tools["get_water_history"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "mean",
+        "value_field": "ml"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return bucket statistics with averaged values
+    assert isinstance(history, list)
+    assert len(history) == 1  # All entries in one bucket
+    assert history[0]["value"] == 100.0  # (50 + 100 + 150) / 3
+    assert history[0]["count"] == 3

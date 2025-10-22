@@ -13,7 +13,7 @@ These tests verify the action logging functionality including:
 import pytest
 import pytest_asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from freezegun import freeze_time
 from fastmcp import FastMCP
 import tools.action_log as action_log_module
@@ -471,3 +471,68 @@ async def test_mixed_action_types(setup_action_log_state):
     assert "light" in types
     assert "observe" in types
     assert "alert" in types
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_action_history_bucketed_sampling(setup_action_log_state):
+    """Test get_action_history_bucketed with sampling mode"""
+    mcp = setup_action_log_state
+
+    # Add test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(5):
+        action_log_module.action_history.append({
+            "timestamp": (base_time + timedelta(minutes=i*10)).isoformat(),
+            "type": "water",
+            "details": {"ml": 100}
+        })
+
+    # Test sampling mode
+    history_tool = mcp._tool_manager._tools["get_action_history_bucketed"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "middle"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return sampled entries
+    assert isinstance(history, list)
+    assert len(history) > 0
+    for entry in history:
+        assert "timestamp" in entry
+        assert "type" in entry
+
+
+@pytest.mark.asyncio
+@freeze_time("2025-01-24 12:00:00")
+async def test_get_action_history_bucketed_count(setup_action_log_state):
+    """Test get_action_history_bucketed with count aggregation"""
+    mcp = setup_action_log_state
+
+    # Add test data
+    base_time = datetime(2025, 1, 24, 11, 0, 0, tzinfo=timezone.utc)
+    for i in range(3):
+        action_log_module.action_history.append({
+            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "type": "observe",
+            "details": {}
+        })
+
+    # Test count aggregation
+    history_tool = mcp._tool_manager._tools["get_action_history_bucketed"]
+    result = await history_tool.run(arguments={
+        "hours": 1,
+        "samples_per_hour": 6,
+        "aggregation": "count"
+    })
+
+    history = json.loads(result.content[0].text)
+
+    # Should return bucket statistics
+    assert isinstance(history, list)
+    assert len(history) == 1  # All in one bucket
+    assert history[0]["value"] == 3
+    assert history[0]["count"] == 3

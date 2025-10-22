@@ -48,10 +48,11 @@ camera: Optional[cv2.VideoCapture] = None
 camera_available: bool = False
 camera_error: Optional[str] = None
 
-# State persistence - audit log for camera usage (write-only)
+# State persistence - audit log for camera usage
+# Used for time-bucketed queries via get_camera_history_bucketed()
 usage_history = JsonlHistory(
     file_path=get_app_dir("data") / "camera_usage.jsonl",
-    max_memory_entries=100  # Small cache since we don't query it
+    max_memory_entries=1000  # Standard cache size for querying
 )
 
 
@@ -402,6 +403,55 @@ def setup_camera_tools(mcp: FastMCP):
         })
 
         return status
+
+    @mcp.tool()
+    async def get_camera_history_bucketed(
+        hours: int = Field(24, description="Time window in hours (how far back to query)", ge=1),
+        samples_per_hour: float = Field(6, description="Bucket density (6 = every 10min, 1 = hourly, 0.042 = daily)", gt=0),
+        aggregation: str = Field("middle", description="Strategy: first|last|middle (sampling) or count|sum|mean (aggregation)"),
+        value_field: Optional[str] = Field(None, description="Field to aggregate (required for sum/mean)"),
+        end_time: Optional[str] = Field(None, description="End of time window (ISO8601 UTC). Defaults to now.")
+    ) -> list[dict]:
+        """
+        Get time-bucketed camera usage history for temporal analysis.
+
+        Queries the usage_history (JSONL audit log) to analyze photo capture patterns.
+
+        Supports two query modes:
+        1. Sampling (first/last/middle): Returns sample capture events from each bucket
+        2. Aggregation (count/sum/mean): Returns computed statistics per bucket
+
+        Examples:
+            - Photo capture rate per hour (last 24h):
+              hours=24, samples_per_hour=1, aggregation="count"
+            - Photos per day (last month):
+              hours=720, samples_per_hour=0.042, aggregation="count"
+            - Sample capture events every 10 minutes (last 24h):
+              hours=24, samples_per_hour=6, aggregation="middle"
+
+        Returns:
+            For sampling: List of usage event dicts with full context
+            For aggregation: List of {"bucket_start": str, "bucket_end": str, "value": number, "count": int}
+        """
+        # Parse end_time if provided
+        end_dt = None
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid end_time format. Expected ISO8601 like '2025-01-15T12:00:00Z'. Error: {str(e)}"
+                )
+
+        # Call time-bucketed sample on usage_history (JSONL audit log)
+        return usage_history.get_time_bucketed_sample(
+            hours=hours,
+            samples_per_hour=samples_per_hour,
+            timestamp_key="timestamp",
+            aggregation=aggregation,
+            end_time=end_dt,
+            value_field=value_field
+        )
 
 
 # Register cleanup on module unload

@@ -6,9 +6,16 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from utils.shared_state import current_cycle_status
+from utils.jsonl_history import JsonlHistory
+from utils.paths import get_app_dir
 
-# Storage for plant status
-status_history = []
+# State persistence (JSONL format for append-only history)
+STATE_FILE = get_app_dir("data") / "plant_status_history.jsonl"
+
+# History manager (1000 entries in memory)
+status_history = JsonlHistory(file_path=STATE_FILE, max_memory_entries=1000)
+
+# Current status for fast gatekeeper access (single dict in memory)
 current_status = None
 
 
@@ -70,15 +77,11 @@ def setup_plant_status_tools(mcp: FastMCP):
 
         # Store the status
         current_status = status
-        status_history.append(status)
+        status_history.append(status)  # JsonlHistory handles memory limits and disk persistence
 
         # Mark as written for this cycle
         current_cycle_status["written"] = True
         current_cycle_status["timestamp"] = timestamp
-
-        # Keep history limited to prevent memory issues
-        if len(status_history) > 1000:
-            status_history.pop(0)
 
         return PlantStatusResponse(
             proceed=True,
@@ -93,6 +96,11 @@ def setup_plant_status_tools(mcp: FastMCP):
         return None
 
     @mcp.tool()
-    async def get_plant_status_history(limit: int = Field(10, description="Number of records to return")) -> List[Dict[str, Any]]:
-        """Get recent plant status history"""
-        return status_history[-limit:] if status_history else []
+    async def get_plant_status_history(
+        limit: int = Field(10, description="Number of records to return", ge=1, le=100)
+    ) -> List[Dict[str, Any]]:
+        """
+        Get recent plant status history.
+        Returns the most recent N status records with gatekeeper decisions.
+        """
+        return status_history.get_recent(n=limit)
