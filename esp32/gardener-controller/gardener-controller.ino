@@ -253,7 +253,19 @@ void handlePostPumpBody(AsyncWebServerRequest *request, uint8_t *data, size_t le
     return;
   }
 
-  int seconds = doc["seconds"];
+  // Validate seconds is an integer
+  if (!doc["seconds"].is<int>()) {
+    StaticJsonDocument<JSON_BUFFER_SIZE> errorDoc;
+    errorDoc["success"] = false;
+    errorDoc["error"] = "'seconds' parameter must be an integer";
+
+    String response;
+    serializeJson(errorDoc, response);
+    request->send(400, "application/json", response);
+    return;
+  }
+
+  int seconds = doc["seconds"].as<int>();
 
   // Check if pump already active
   if (pumpActive) {
@@ -309,8 +321,17 @@ void handlePostPumpBody(AsyncWebServerRequest *request, uint8_t *data, size_t le
 void handleGetStatus(AsyncWebServerRequest *request) {
   StaticJsonDocument<JSON_BUFFER_SIZE> doc;
   doc["rtc_time"] = getTimestamp();
-  doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
-  doc["wifi_rssi"] = WiFi.RSSI();
+
+  bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+  doc["wifi_connected"] = wifiConnected;
+
+  // Only include RSSI when WiFi is connected
+  if (wifiConnected) {
+    doc["wifi_rssi"] = WiFi.RSSI();
+  } else {
+    doc["wifi_rssi"] = nullptr;
+  }
+
   doc["free_heap"] = ESP.getFreeHeap();
   doc["pump_active"] = pumpActive;
   doc["moisture"] = lastMoistureReading;
@@ -619,6 +640,6 @@ void loop() {
     lastWiFiCheck = now;
   }
 
-  // Small delay to prevent watchdog timeout
-  delay(10);
+  // Yield to allow background tasks and prevent watchdog timeout
+  yield();
 }
