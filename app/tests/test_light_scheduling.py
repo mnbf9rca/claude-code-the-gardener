@@ -62,11 +62,8 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
     light_module.STATE_FILE = tmp_path / "light_state.json"
     light_module.light_history.file_path = tmp_path / "light_history.jsonl"
 
-    # Reset HTTP client
-    light_module.http_client = None
-
     # Reset HAConfig singleton
-    light_module._ha_config = None
+    light_module.reset_ha_config()
 
     # Get config for test
     ha_config = light_module.get_ha_config()
@@ -100,10 +97,6 @@ async def setup_scheduling_test_state(httpx_mock: HTTPXMock, tmp_path):
         except asyncio.CancelledError:
             pass
     light_module.scheduled_task = None
-
-    if light_module.http_client:
-        await light_module.http_client.aclose()
-        light_module.http_client = None
 
     # Restore original file paths
     light_module.STATE_FILE = original_state_file

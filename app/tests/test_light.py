@@ -47,11 +47,8 @@ async def setup_light_state(httpx_mock: HTTPXMock):
     light_module.STATE_FILE.unlink(missing_ok=True)
     light_module.light_history.file_path.unlink(missing_ok=True)
 
-    # Reset HTTP client to ensure clean state
-    light_module.http_client = None
-
     # Reset HAConfig singleton to ensure clean state
-    light_module._ha_config = None
+    light_module.reset_ha_config()
 
     # Get config for test (will validate environment)
     config = light_module.get_ha_config()
@@ -80,9 +77,7 @@ async def setup_light_state(httpx_mock: HTTPXMock):
     yield mcp
 
     # Cleanup
-    if light_module.http_client:
-        await light_module.http_client.aclose()
-        light_module.http_client = None
+    pass  # No global http_client to clean up anymore
 
 
 @pytest.mark.asyncio

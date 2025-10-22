@@ -72,10 +72,7 @@ async def setup_integration_state(ha_availability):
     light_module.light_history.clear()
     light_module.light_history._loaded = False
 
-    # Reset HTTP client
-    if light_module.http_client:
-        await light_module.http_client.aclose()
-    light_module.http_client = None
+    # HTTP client cleanup no longer needed (using async context managers)
 
     # Create MCP instance
     mcp = FastMCP("test-integration")
@@ -95,9 +92,7 @@ async def setup_integration_state(ha_availability):
     except Exception:
         pass
 
-    if light_module.http_client:
-        await light_module.http_client.aclose()
-        light_module.http_client = None
+    # HTTP client cleanup no longer needed (using async context managers)
 
 
 @pytest.mark.asyncio
