@@ -140,7 +140,7 @@ async def test_dispense_validation(setup_pump_state):
 
     # Test above maximum
     with pytest.raises(Exception):  # Will be a Pydantic validation error
-        await dispense_tool.run(arguments={"ml": 20})
+        await dispense_tool.run(arguments={"ml": 26})
 
 
 @pytest.mark.asyncio
