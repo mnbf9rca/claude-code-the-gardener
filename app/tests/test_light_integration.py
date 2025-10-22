@@ -154,7 +154,7 @@ async def test_real_turn_on_and_status(setup_integration_state):
     assert result["duration_minutes"] == 30
 
     # Small delay to let Home Assistant process the state change
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(2.0)
 
     # Verify with status check
     tool_result = await status_tool.run(arguments={})
@@ -180,7 +180,7 @@ async def test_real_turn_off(setup_integration_state):
     await turn_on_tool.run(arguments={"minutes": 60})
 
     # Small delay for HA state propagation
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(2.0)
 
     # Verify it's on
     tool_result = await status_tool.run(arguments={})
@@ -195,7 +195,7 @@ async def test_real_turn_off(setup_integration_state):
     assert "turned_off_at" in result
 
     # Small delay for HA state propagation
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(2.0)
 
     # Verify with status check
     tool_result = await status_tool.run(arguments={})
