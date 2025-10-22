@@ -30,12 +30,18 @@
       "mcp__plant-tools__fetch_notes",
       "mcp__plant-tools__send_message_to_human",
       "mcp__plant-tools__list_messages_from_human",
-      "Bash(curl:*)",
-      "Read(//tmp/**)",
+      "Read",
       "WebSearch",
       "WebFetch",
-      "Bash(curl -L:*)"
+      "Glob",
+      "Grep",
+      "Task"
+
     ]
   },
-  "outputStyle": "Explanatory"
+  "outputStyle": "Explanatory",
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  }
 }
