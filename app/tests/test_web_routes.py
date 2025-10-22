@@ -496,3 +496,263 @@ def test_post_reply_with_manual_message_id(client, clean_message_history):
     assert len(messages) == 1
     assert messages[0]["content"] == "Manual reply test"
     assert messages[0]["in_reply_to"] == "msg_20251020_100000_001"
+
+
+# ====================================
+# Photo Gallery Tests
+# ====================================
+
+
+def test_get_photos_api_empty(client, tmp_path, monkeypatch):
+    """Test /api/photos returns empty list when no photos exist"""
+    # Mock CAMERA_CONFIG to use temp directory
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': tmp_path / 'empty_photos'})
+    (tmp_path / 'empty_photos').mkdir()
+
+    response = client.get("/api/photos")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['total'] == 0
+    assert data['photos'] == []
+    assert data['limit'] == 20
+    assert data['offset'] == 0
+
+
+def test_get_photos_api_with_photos(client, tmp_path, monkeypatch):
+    """Test /api/photos returns list of photos"""
+    # Create temp photos directory with test photos
+    photos_dir = tmp_path / 'test_photos'
+    photos_dir.mkdir()
+
+    # Create test photo files with proper naming
+    import time
+    for i in range(3):
+        photo_path = photos_dir / f'plant_20251022_12000{i}_000.jpg'
+        photo_path.write_bytes(b'fake image data')
+        # Sleep to ensure different modification times
+        time.sleep(0.01)
+
+    # Mock CAMERA_CONFIG
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    response = client.get("/api/photos")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['total'] == 3
+    assert len(data['photos']) == 3
+    assert data['limit'] == 20
+    assert data['offset'] == 0
+
+    # Check photo structure
+    photo = data['photos'][0]
+    assert 'filename' in photo
+    assert 'url' in photo
+    assert 'timestamp' in photo
+    assert photo['url'].startswith('/photos/')
+
+
+def test_get_photos_api_with_pagination(client, tmp_path, monkeypatch):
+    """Test /api/photos respects pagination parameters"""
+    # Create temp photos directory with multiple photos
+    photos_dir = tmp_path / 'test_photos_paginated'
+    photos_dir.mkdir()
+
+    import time
+    for i in range(25):
+        photo_path = photos_dir / f'plant_20251022_1200{i:02d}_000.jpg'
+        photo_path.write_bytes(b'fake image data')
+        time.sleep(0.01)
+
+    # Mock CAMERA_CONFIG
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    # Test limit
+    response = client.get("/api/photos?limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert data['total'] == 25
+    assert len(data['photos']) == 10
+    assert data['limit'] == 10
+
+    # Test offset
+    response = client.get("/api/photos?limit=10&offset=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert data['total'] == 25
+    assert len(data['photos']) == 10
+    assert data['offset'] == 10
+
+
+def test_post_capture_photo_success(client, tmp_path, monkeypatch):
+    """Test /api/capture successfully captures a photo"""
+    photos_dir = tmp_path / 'capture_test'
+    photos_dir.mkdir()
+
+    # Mock capture_real_photo to return a test photo path
+    def mock_capture():
+        photo_path = photos_dir / 'plant_20251022_120000_000.jpg'
+        photo_path.write_bytes(b'captured image')
+        return str(photo_path), '2025-10-22T12:00:00.000+00:00'
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'capture_real_photo', mock_capture)
+
+    response = client.post("/api/capture")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['success'] is True
+    assert 'url' in data
+    assert 'timestamp' in data
+    assert 'filename' in data
+    assert data['url'] == '/photos/plant_20251022_120000_000.jpg'
+
+
+def test_post_capture_photo_camera_failure(client, monkeypatch):
+    """Test /api/capture handles camera errors gracefully"""
+    # Mock capture_real_photo to raise ValueError (camera not available)
+    def mock_capture_fail():
+        raise ValueError("Camera not available")
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'capture_real_photo', mock_capture_fail)
+
+    response = client.post("/api/capture")
+
+    assert response.status_code == 500
+    data = response.json()
+    assert data['success'] is False
+    assert 'error' in data
+    assert 'Camera not available' in data['error']
+
+
+def test_get_gallery_ui_empty(client, tmp_path, monkeypatch):
+    """Test /gallery renders HTML with no photos"""
+    photos_dir = tmp_path / 'gallery_empty'
+    photos_dir.mkdir()
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    response = client.get("/gallery")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Plant Photos" in response.text
+    assert "No photos yet" in response.text
+    assert "Take Photo" in response.text
+
+
+def test_get_gallery_ui_with_photos(client, tmp_path, monkeypatch):
+    """Test /gallery displays photo gallery"""
+    photos_dir = tmp_path / 'gallery_with_photos'
+    photos_dir.mkdir()
+
+    # Create test photos
+    import time
+    for i in range(3):
+        photo_path = photos_dir / f'plant_20251022_12000{i}_000.jpg'
+        photo_path.write_bytes(b'test image')
+        time.sleep(0.01)
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    response = client.get("/gallery")
+
+    assert response.status_code == 200
+    assert "Plant Photos" in response.text
+    assert "photo-card" in response.text
+    assert "/photos/plant_20251022" in response.text
+    assert "Showing 3 of 3 photos" in response.text
+
+
+def test_get_gallery_ui_pagination(client, tmp_path, monkeypatch):
+    """Test /gallery shows load more button with pagination"""
+    photos_dir = tmp_path / 'gallery_paginated'
+    photos_dir.mkdir()
+
+    # Create 25 test photos (more than the 20 per page limit)
+    import time
+    for i in range(25):
+        photo_path = photos_dir / f'plant_20251022_1200{i:02d}_000.jpg'
+        photo_path.write_bytes(b'test image')
+        time.sleep(0.01)
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    response = client.get("/gallery")
+
+    assert response.status_code == 200
+    assert "Showing 20 of 25 photos" in response.text
+    assert "Load More" in response.text
+    assert "/gallery?offset=20" in response.text
+
+
+def test_gallery_has_link_to_messages(client, tmp_path, monkeypatch):
+    """Test /gallery page contains link to /messages"""
+    photos_dir = tmp_path / 'gallery_nav'
+    photos_dir.mkdir()
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    response = client.get("/gallery")
+
+    assert response.status_code == 200
+    assert 'href="/messages"' in response.text
+    assert "Back to Messages" in response.text
+
+
+def test_messages_has_link_to_gallery(client, clean_message_history):
+    """Test /messages page contains link to /gallery"""
+    response = client.get("/messages")
+
+    assert response.status_code == 200
+    assert 'href="/gallery"' in response.text
+    assert "View Photos" in response.text
+
+
+def test_get_photos_api_invalid_parameters(client, tmp_path, monkeypatch):
+    """Test /api/photos handles invalid parameters"""
+    photos_dir = tmp_path / 'api_validation'
+    photos_dir.mkdir()
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    # Invalid limit (non-integer)
+    response = client.get("/api/photos?limit=abc")
+    assert response.status_code == 400
+    assert 'error' in response.json()
+
+    # Invalid offset (non-integer)
+    response = client.get("/api/photos?offset=xyz")
+    assert response.status_code == 400
+    assert 'error' in response.json()
+
+
+def test_gallery_capture_button_present(client, tmp_path, monkeypatch):
+    """Test /gallery contains capture button and JavaScript"""
+    photos_dir = tmp_path / 'capture_button'
+    photos_dir.mkdir()
+
+    import web_routes
+    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+
+    response = client.get("/gallery")
+
+    assert response.status_code == 200
+    # Check for capture button
+    assert 'id="captureBtn"' in response.text
+    assert "Take Photo" in response.text
+    # Check for JavaScript functionality
+    assert "<script>" in response.text
+    assert "fetch('/api/capture'" in response.text
+    assert "POST" in response.text
