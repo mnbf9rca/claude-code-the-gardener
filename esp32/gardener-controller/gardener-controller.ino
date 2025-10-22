@@ -17,6 +17,7 @@
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <time.h>
 #include "config.h"
 
 // ============================================================================
@@ -32,7 +33,7 @@ WiFiManager wifiManager;
 
 // Pump control
 bool pumpActive = false;
-unsigned long pumpStartTime = 0;
+time_t pumpStartTime = 0;  // Unix timestamp from RTC
 int pumpDurationSeconds = 0;
 
 // Display update
@@ -90,7 +91,9 @@ bool activatePump(int seconds) {
   // Activate pump
   digitalWrite(PIN_RELAY_PUMP, HIGH);
   pumpActive = true;
-  pumpStartTime = millis();
+
+  // Record start time (Unix epoch seconds - avoids millis() wraparound)
+  time(&pumpStartTime);
   pumpDurationSeconds = seconds;
 
   #if DEBUG_SERIAL
@@ -116,11 +119,15 @@ void deactivatePump() {
 
 /**
  * Check if pump should be turned off
+ * Uses system time (NTP-synced) to avoid millis() wraparound issues
  */
 void checkPumpTimeout() {
   if (pumpActive) {
-    unsigned long elapsed = millis() - pumpStartTime;
-    if (elapsed >= (pumpDurationSeconds * 1000)) {
+    time_t now;
+    time(&now);
+
+    time_t elapsed = now - pumpStartTime;
+    if (elapsed >= pumpDurationSeconds) {
       deactivatePump();
     }
   }
@@ -140,18 +147,15 @@ int getMoisturePercent(int rawValue) {
 }
 
 /**
- * Get ISO8601 formatted timestamp (UTC)
- * Note: ESP32 doesn't have RTC by default, so this returns elapsed time
- * For production, sync with NTP server
+ * Get ISO8601 formatted timestamp (UTC) from RTC
  */
 String getTimestamp() {
-  unsigned long seconds = millis() / 1000;
-  unsigned long hours = seconds / 3600;
-  unsigned long minutes = (seconds % 3600) / 60;
-  unsigned long secs = seconds % 60;
+  auto dt = M5.Rtc.getDateTime();
 
   char buffer[32];
-  sprintf(buffer, "T%02lu:%02lu:%02lu", hours, minutes, secs);
+  sprintf(buffer, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+          dt.date.year, dt.date.month, dt.date.date,
+          dt.time.hours, dt.time.minutes, dt.time.seconds);
   return String(buffer);
 }
 
@@ -201,8 +205,12 @@ void updateDisplay() {
 
   // Pump status
   if (pumpActive) {
-    unsigned long elapsed = (millis() - pumpStartTime) / 1000;
+    time_t now;
+    time(&now);
+
+    time_t elapsed = now - pumpStartTime;
     int remaining = pumpDurationSeconds - elapsed;
+    if (remaining < 0) remaining = 0;
     M5.Display.setTextColor(COLOR_WARNING);
     M5.Display.printf("Pump: ON (%ds)\n", remaining);
   } else {
@@ -240,7 +248,7 @@ void handleGetMoisture(AsyncWebServerRequest *request) {
  * POST /pump - Activate water pump
  * Body: {"seconds": N}
  */
-void handlePostPump(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+void handlePostPumpBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
   // Parse JSON body
   StaticJsonDocument<JSON_BUFFER_SIZE> doc;
   DeserializationError error = deserializeJson(doc, (char*)data);
@@ -323,7 +331,7 @@ void handlePostPump(AsyncWebServerRequest *request, uint8_t *data, size_t len, s
  */
 void handleGetStatus(AsyncWebServerRequest *request) {
   StaticJsonDocument<JSON_BUFFER_SIZE> doc;
-  doc["uptime"] = millis() / 1000;
+  doc["rtc_time"] = getTimestamp();
   doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
   doc["wifi_rssi"] = WiFi.RSSI();
   doc["free_heap"] = ESP.getFreeHeap();
@@ -398,7 +406,27 @@ void setupWiFi() {
   M5.Display.fillScreen(COLOR_BACKGROUND);
   M5.Display.setCursor(10, 10);
   M5.Display.setTextColor(COLOR_WARNING);
-  M5.Display.println("WiFi Setup...");
+  M5.Display.setTextSize(TEXT_SIZE_SMALL);
+  M5.Display.println("WiFi Setup Mode");
+  M5.Display.println();
+  M5.Display.setTextColor(COLOR_INFO);
+  M5.Display.println("1. Connect to WiFi:");
+  M5.Display.setTextColor(COLOR_TEXT);
+  M5.Display.printf("   %s\n", WIFI_AP_NAME);
+  M5.Display.println();
+  M5.Display.setTextColor(COLOR_INFO);
+  M5.Display.println("2. Browser opens auto");
+  M5.Display.println("   Or go to:");
+  M5.Display.setTextColor(COLOR_TEXT);
+  M5.Display.println("   192.168.4.1");
+  M5.Display.println();
+  M5.Display.setTextColor(COLOR_INFO);
+  M5.Display.println("3. Select your WiFi");
+  M5.Display.println("   and enter password");
+  M5.Display.println();
+  M5.Display.setTextColor(COLOR_WARNING);
+  M5.Display.println("Waiting (3 min)...");
+  M5.Display.setTextSize(TEXT_SIZE_MEDIUM);
 
   // Configure WiFiManager
   wifiManager.setConfigPortalTimeout(180);  // 3 minute timeout
@@ -433,6 +461,49 @@ void setupWiFi() {
   #endif
 
   delay(2000);
+}
+
+void setupNTP() {
+  #if DEBUG_SERIAL
+  Serial.println("Syncing RTC with NTP...");
+  #endif
+
+  // Configure NTP (UTC timezone, no daylight saving)
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+  // Wait for time sync (max 10 seconds)
+  int retries = 0;
+  time_t now = 0;
+  struct tm timeinfo = { 0 };
+
+  while (retries < 10) {
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year > (2020 - 1900)) {
+      // Time is valid (year > 2020)
+      break;
+    }
+    delay(1000);
+    retries++;
+  }
+
+  if (timeinfo.tm_year > (2020 - 1900)) {
+    // NTP sync successful - update RTC
+    M5.Rtc.setDateTime( {
+      { timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday },
+      { timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec }
+    });
+
+    #if DEBUG_SERIAL
+    Serial.printf("RTC synced: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
+                  timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                  timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    #endif
+  } else {
+    #if DEBUG_SERIAL
+    Serial.println("NTP sync failed - using RTC current time");
+    #endif
+  }
 }
 
 void setupMDNS() {
@@ -497,7 +568,14 @@ void setupHTTPServer() {
 
   // Register endpoints
   server.on("/moisture", HTTP_GET, handleGetMoisture);
-  server.on("/pump", HTTP_POST, handlePostPump).onBody(handlePostPump);
+
+  // POST /pump with JSON body handler
+  // Note: Third parameter must be an empty lambda (cannot be NULL)
+  server.on("/pump", HTTP_POST,
+    [](AsyncWebServerRequest *request){},
+    NULL,
+    handlePostPumpBody);
+
   server.on("/status", HTTP_GET, handleGetStatus);
   server.onNotFound(handleNotFound);
 
@@ -518,6 +596,7 @@ void setup() {
   setupM5();
   setupGPIO();
   setupWiFi();
+  setupNTP();   // Sync RTC with NTP after WiFi connects
   setupMDNS();
   setupOTA();
   setupHTTPServer();

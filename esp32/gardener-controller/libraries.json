@@ -17,20 +17,26 @@
       "purpose": "Captive portal WiFi configuration"
     },
     {
-      "name": "ESPAsyncWebServer",
-      "version": "latest",
-      "author": "me-no-dev",
+      "name": "ESP Async WebServer",
+      "library_id": "ESP32Async/ESPAsyncWebServer",
+      "version": ">=3.8.0",
+      "author": "ESP32Async",
       "install_via": "Library Manager",
-      "github": "https://github.com/me-no-dev/ESPAsyncWebServer",
-      "purpose": "Async HTTP web server"
+      "search_term": "ESP32Async/ESPAsyncWebServer",
+      "github": "https://github.com/ESP32Async/ESPAsyncWebServer",
+      "purpose": "Async HTTP web server (maintained fork)",
+      "note": "Search 'ESP32Async/ESPAsyncWebServer' in Library Manager. Original me-no-dev library is archived and incompatible with ESP32 Arduino Core 3.0+"
     },
     {
       "name": "AsyncTCP",
-      "version": "latest",
-      "author": "me-no-dev",
+      "library_id": "ESP32Async/AsyncTCP",
+      "version": ">=3.0.0",
+      "author": "ESP32Async",
       "install_via": "Library Manager",
-      "github": "https://github.com/me-no-dev/AsyncTCP",
-      "purpose": "Required dependency for ESPAsyncWebServer"
+      "search_term": "ESP32Async/AsyncTCP",
+      "github": "https://github.com/ESP32Async/AsyncTCP",
+      "purpose": "Required dependency for ESPAsyncWebServer (maintained fork)",
+      "note": "Search 'ESP32Async/AsyncTCP' in Library Manager"
     },
     {
       "name": "ArduinoJson",

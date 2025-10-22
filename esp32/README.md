@@ -70,15 +70,25 @@ Open **Tools → Manage Libraries** (or **Sketch → Include Library → Manage 
 
 Search for and install each of these libraries:
 
-| Library | Version | Notes |
-|---------|---------|-------|
-| **M5Unified** | 0.1.0+ | M5Stack hardware abstraction |
-| **WiFiManager** | 2.0.0+ | By tzapu - WiFi configuration portal |
-| **ESPAsyncWebServer** | Latest | Async HTTP web server |
-| **AsyncTCP** | Latest | Required for ESPAsyncWebServer |
-| **ArduinoJson** | **6.x only** | ⚠️ **Must be <7.0** - see below |
+| Library | Version | Search Term | Notes |
+|---------|---------|-------------|-------|
+| **M5Unified** | 0.1.0+ | M5Unified | M5Stack hardware abstraction |
+| **WiFiManager** | 2.0.0+ | WiFiManager | By tzapu - WiFi configuration portal |
+| **ESP Async WebServer** | 3.8.0+ | **ESP32Async/ESPAsyncWebServer** | ⚠️ Search for the **ESP32Async** fork (maintained) |
+| **AsyncTCP** | 3.0.0+ | **ESP32Async/AsyncTCP** | ⚠️ Search for the **ESP32Async** fork (maintained) |
+| **ArduinoJson** | **6.x only** | ArduinoJson | ⚠️ **Must be <7.0** - see below |
 
-**⚠️ Important: ArduinoJson Version**
+**⚠️ Important: Library Versions**
+
+**1. ESPAsyncWebServer & AsyncTCP - Use ESP32Async Fork**
+
+The original `me-no-dev` libraries are **archived** (as of January 2025) and **incompatible with ESP32 Arduino Core 3.0+**.
+
+Search for: **`ESP32Async/ESPAsyncWebServer`** and **`ESP32Async/AsyncTCP`**
+
+These are the actively maintained forks compatible with modern ESP32 boards.
+
+**2. ArduinoJson - Must Use Version 6.x**
 
 You **must install ArduinoJson 6.x** (e.g., 6.21.5), **NOT version 7.x**.
 
