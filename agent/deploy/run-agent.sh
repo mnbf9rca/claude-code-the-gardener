@@ -47,10 +47,18 @@ if [ ! -r "$MCP_CONFIG_FILE" ]; then
 fi
 
 # Health check helper function
+# Usage: healthcheck "/endpoint" [data_to_post]
 healthcheck() {
     local endpoint="$1"
+    local data="${2:-}"
     if [ -n "${HEALTHCHECK_URL:-}" ]; then
-        curl -m 5 --retry 2 -fsS "${HEALTHCHECK_URL}${endpoint}" || true
+        if [ -n "$data" ]; then
+            # POST with data (already truncated by caller)
+            echo "$data" | curl -m 10 --retry 2 -fsS --data-binary @- "${HEALTHCHECK_URL}${endpoint}" || true
+        else
+            # Simple ping (GET)
+            curl -m 5 --retry 2 -fsS "${HEALTHCHECK_URL}${endpoint}" || true
+        fi
     fi
 }
 
@@ -97,12 +105,24 @@ while true; do
     # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
     # Runs in isolated workspace so Claude cannot access config files in $HOME
     if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --output-format json --mcp-config "$MCP_CONFIG_FILE" -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
+        EXEC_EXIT_CODE=0
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
-        healthcheck ""  # Success endpoint (no suffix)
     else
-        EXIT_CODE=$?
-        echo "[$(date -Iseconds)] ERROR: Execution failed with exit code $EXIT_CODE" | tee -a "$LOG_FILE"
-        healthcheck "/fail"
+        EXEC_EXIT_CODE=$?
+        echo "[$(date -Iseconds)] ERROR: Execution failed with exit code $EXEC_EXIT_CODE" | tee -a "$LOG_FILE"
+    fi
+
+    # Check for /login in output (indicates authentication failure)
+    if grep -q "/login" "$LOG_FILE"; then
+        echo "[$(date -Iseconds)] ERROR: Detected /login in output - authentication failure" | tee -a "$LOG_FILE"
+        EXEC_EXIT_CODE=1
+    fi
+
+    # Send appropriate healthcheck with log content (last 100KB)
+    if [ "$EXEC_EXIT_CODE" -eq 0 ]; then
+        healthcheck "" "$(tail -c 102400 "$LOG_FILE")"  # Success endpoint with logs
+    else
+        healthcheck "/fail" "$(tail -c 102400 "$LOG_FILE")"  # Failure endpoint with logs
     fi
 
     # Wait 10 minutes before next execution
