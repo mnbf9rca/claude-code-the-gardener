@@ -44,7 +44,7 @@
       "Bash"
     ]
   },
-  "outputStyle": "Explanatory",
+  "outputStyle": "concise",
   "sandbox": {
     "enabled": false,
     "autoAllowBashIfSandboxed": true
