@@ -12,7 +12,8 @@ from pathlib import Path
 import json
 import tools.human_messages as human_messages
 from tools.human_messages import _generate_message_id, MAX_MESSAGE_LENGTH
-from tools.camera import capture_real_photo, CAMERA_CONFIG
+from tools.camera import capture_real_photo
+from utils.paths import get_app_dir
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -55,7 +56,7 @@ def _get_photos_from_directory(limit: int = 20, offset: int = 0) -> Dict[str, An
     Returns:
         Dict with 'total', 'photos' (list), 'limit', and 'offset'
     """
-    photos_dir = CAMERA_CONFIG["save_path"]
+    photos_dir = get_app_dir("photos")
 
     # Get all photo files matching the pattern
     all_photos = []
