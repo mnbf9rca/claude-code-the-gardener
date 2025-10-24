@@ -1,6 +1,8 @@
 [Unit]
 Description=Host Healthcheck Monitor
 Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=oneshot
