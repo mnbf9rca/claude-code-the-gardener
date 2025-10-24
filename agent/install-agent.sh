@@ -90,6 +90,18 @@ else
     echo "✓ User $GARDENER_USER created"
 fi
 
+# Add the sudo user to gardener group for convenient access
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    if id -nG "$SUDO_USER" | grep -qw "$GARDENER_USER"; then
+        echo "✓ User $SUDO_USER already in $GARDENER_USER group"
+    else
+        echo "Adding $SUDO_USER to $GARDENER_USER group..."
+        usermod -a -G "$GARDENER_USER" "$SUDO_USER"
+        echo "✓ User $SUDO_USER added to $GARDENER_USER group"
+        echo "  Note: $SUDO_USER will need to log out and back in for group membership to take effect"
+    fi
+fi
+
 # 2. Create necessary directories
 echo "Creating directories..."
 mkdir -p "$GARDENER_HOME/logs"
@@ -97,6 +109,8 @@ mkdir -p "$GARDENER_WORKSPACE"
 mkdir -p "$GARDENER_CLAUDE_DIR"
 chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_HOME/logs"
 chown -R "$GARDENER_USER:$GARDENER_USER" "$GARDENER_WORKSPACE"
+# Enable group write access to workspace for group members
+chmod -R g+w "$GARDENER_WORKSPACE"
 echo "✓ Directories created"
 
 # 3. Install Claude Code CLI as gardener user
