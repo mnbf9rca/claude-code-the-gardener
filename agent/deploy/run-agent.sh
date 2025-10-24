@@ -126,6 +126,6 @@ while true; do
     fi
 
     # Wait 10 minutes before next execution
-    echo "[$(date -Iseconds)] Sleeping for 10 minutes..." | tee -a "$LOG_FILE"
-    sleep 600
+    echo "[$(date -Iseconds)] Sleeping for 20 minutes..." | tee -a "$LOG_FILE"
+    sleep 1200
 done
