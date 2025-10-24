@@ -162,6 +162,18 @@ else
     echo "✓ User $MCP_USER already in video group"
 fi
 
+# Add the sudo user to mcpserver group for convenient access
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    if id -nG "$SUDO_USER" | grep -qw "$MCP_USER"; then
+        echo "✓ User $SUDO_USER already in $MCP_USER group"
+    else
+        echo "Adding $SUDO_USER to $MCP_USER group..."
+        usermod -a -G "$MCP_USER" "$SUDO_USER"
+        echo "✓ User $SUDO_USER added to $MCP_USER group"
+        echo "  Note: $SUDO_USER will need to log out and back in for group membership to take effect"
+    fi
+fi
+
 # 2. Install uv package manager for mcpserver user
 UV_BIN="$MCP_HOME/.local/bin/uv"
 if [ -x "$UV_BIN" ]; then
@@ -240,6 +252,25 @@ echo "✓ Deployment info written to .deployment-info"
 # 5. Set ownership of app directory
 chown -R "$MCP_USER:$MCP_USER" "$MCP_APP_DIR"
 echo "✓ Set ownership of $MCP_APP_DIR"
+
+# 5b. Set up ACLs for group read access to mcpserver home
+# This allows group members to read logs, configuration files, etc. via SCP
+echo "Setting up ACLs for group access..."
+
+# Check if setfacl is available
+if ! command -v setfacl &> /dev/null; then
+    echo "Installing acl package..."
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends acl
+fi
+
+# Set ACLs for existing files (read + execute on directories only)
+setfacl -R -m g:$MCP_USER:rX "$MCP_HOME"
+
+# Set default ACLs for future files (inherited by new files/directories)
+setfacl -R -d -m g:$MCP_USER:rX "$MCP_HOME"
+
+echo "✓ ACLs configured for group access"
 
 # 6. Install Python dependencies
 echo "Installing Python dependencies..."
