@@ -109,9 +109,26 @@ mkdir -p "$GARDENER_WORKSPACE"
 mkdir -p "$GARDENER_CLAUDE_DIR"
 chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_HOME/logs"
 chown -R "$GARDENER_USER:$GARDENER_USER" "$GARDENER_WORKSPACE"
-# Enable group write access to workspace for group members
-chmod -R g+w "$GARDENER_WORKSPACE"
-echo "✓ Directories created"
+
+# Enable group read+execute access to entire gardener home using ACLs
+# This allows group members to read files (e.g., Claude Code project transcripts) via SCP
+# Default ACLs ensure future files/directories also get group permissions
+echo "Setting up ACLs for group access..."
+
+# Check if setfacl is available
+if ! command -v setfacl &> /dev/null; then
+    echo "Installing acl package..."
+    apt-get update -qq
+    apt-get install -y acl
+fi
+
+# Set ACLs for existing files (read + execute on directories only)
+setfacl -R -m g:$GARDENER_USER:rX "$GARDENER_HOME"
+
+# Set default ACLs for future files (inherited by new files/directories)
+setfacl -R -d -m g:$GARDENER_USER:rX "$GARDENER_HOME"
+
+echo "✓ Directories created and ACLs configured"
 
 # 3. Install Claude Code CLI as gardener user
 CLAUDE_BIN="$GARDENER_HOME/.local/bin/claude"
