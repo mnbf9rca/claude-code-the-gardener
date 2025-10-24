@@ -1,0 +1,15 @@
+[Unit]
+Description=Host Healthcheck Monitor Timer
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+Requires=host-healthcheck.service
+
+[Timer]
+# Start 15 seconds after boot
+OnBootSec=15
+# Run every 15 seconds after the previous execution completes
+OnUnitActiveSec=15
+# Ensure systemd doesn't drift the timing
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

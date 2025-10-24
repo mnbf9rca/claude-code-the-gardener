@@ -1,0 +1,19 @@
+[Unit]
+Description=Host Healthcheck Monitor
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -m 10 -fsS __HEALTHCHECK_URL__
+StandardOutput=null
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
