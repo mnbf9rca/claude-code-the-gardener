@@ -118,8 +118,8 @@ echo "Setting up ACLs for group access..."
 # Check if setfacl is available
 if ! command -v setfacl &> /dev/null; then
     echo "Installing acl package..."
-    apt-get update -qq
-    apt-get install -y acl
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends acl
 fi
 
 # Set ACLs for existing files (read + execute on directories only)
