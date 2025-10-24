@@ -1,0 +1,17 @@
+[Unit]
+Description=Host Healthcheck Monitor
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -m 10 -fsS https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431
+StandardOutput=null
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
