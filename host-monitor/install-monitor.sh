@@ -2,7 +2,10 @@
 set -euo pipefail
 
 # Idempotent installation script for host healthcheck monitor
-# Run with sudo: sudo bash host-monitor/install-monitor.sh
+# Usage: sudo bash host-monitor/install-monitor.sh <healthcheck-url-or-uuid>
+# Examples:
+#   sudo bash host-monitor/install-monitor.sh 6ebf0433-7488-4ab8-90b6-e221b9b4d431
+#   sudo bash host-monitor/install-monitor.sh https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431
 
 echo "=== Host Healthcheck Monitor Installation ==="
 
@@ -11,6 +14,32 @@ if [ "$EUID" -ne 0 ]; then
     echo "ERROR: This script must be run with sudo"
     exit 1
 fi
+
+# Check for healthcheck URL/UUID argument
+if [ $# -eq 0 ]; then
+    echo "ERROR: Missing healthcheck URL or UUID argument"
+    echo ""
+    echo "Usage: sudo bash $0 <healthcheck-url-or-uuid>"
+    echo ""
+    echo "Examples:"
+    echo "  sudo bash $0 6ebf0433-7488-4ab8-90b6-e221b9b4d431"
+    echo "  sudo bash $0 https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431"
+    exit 1
+fi
+
+HEALTHCHECK_INPUT="$1"
+
+# Detect if input is a UUID or full URL and construct the full URL
+if [[ "$HEALTHCHECK_INPUT" =~ ^https?:// ]]; then
+    # Input is already a full URL
+    HEALTHCHECK_URL="$HEALTHCHECK_INPUT"
+else
+    # Input is a UUID, construct the full URL
+    HEALTHCHECK_URL="https://hc-ping.com/${HEALTHCHECK_INPUT}"
+fi
+
+echo "Healthcheck URL: $HEALTHCHECK_URL"
+echo ""
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,8 +86,9 @@ echo ""
 # Install systemd service and timer
 echo "Installing systemd service and timer..."
 
-# Copy service file
-install -m 644 "$SCRIPT_DIR/$SERVICE_FILE" "$SYSTEMD_DIR/$SERVICE_FILE"
+# Generate service file with healthcheck URL substituted
+sed "s|__HEALTHCHECK_URL__|${HEALTHCHECK_URL}|g" "$SCRIPT_DIR/$SERVICE_FILE" > "$SYSTEMD_DIR/$SERVICE_FILE"
+chmod 644 "$SYSTEMD_DIR/$SERVICE_FILE"
 echo "✓ Installed $SERVICE_FILE"
 
 # Copy timer file
@@ -80,7 +110,7 @@ echo ""
 echo "=== Installation Complete ==="
 echo ""
 echo "Monitor healthcheck pings at:"
-echo "  https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431"
+echo "  $HEALTHCHECK_URL"
 echo ""
 echo "Useful commands:"
 echo "  - Check timer status:  systemctl status $TIMER_NAME"

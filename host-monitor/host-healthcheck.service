@@ -6,7 +6,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/curl -m 10 -fsS https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431
+ExecStart=/usr/bin/curl -m 10 -fsS __HEALTHCHECK_URL__
 StandardOutput=null
 StandardError=journal
 

@@ -21,7 +21,7 @@ By monitoring both, we can distinguish between:
 - **Logging**: Only errors logged to journalctl
 
 ### Design Principles (KISS + YAGNI)
-- Hardcoded URL (no configuration files for single value)
+- URL configured at install time (no runtime configuration needed)
 - No retry logic (next ping is only 15s away)
 - No disk logging (journalctl is sufficient)
 - System-wide service (not user-specific)
@@ -39,17 +39,25 @@ By monitoring both, we can distinguish between:
 - Raspberry Pi running Raspbian/Debian with systemd
 - curl installed: `sudo apt-get install curl`
 - Root/sudo access
+- Healthchecks.io check URL or UUID
 
 ### Install
 ```bash
-sudo bash host-monitor/install-monitor.sh
+# Using full URL
+sudo bash host-monitor/install-monitor.sh https://hc-ping.com/your-uuid-here
+
+# Or using just the UUID (automatically constructs full URL)
+sudo bash host-monitor/install-monitor.sh your-uuid-here
 ```
 
 The script will:
 1. Validate prerequisites (curl installed, files present)
-2. Install service and timer to `/etc/systemd/system/`
-3. Enable timer (starts on boot)
-4. Start timer immediately
+2. Substitute your healthcheck URL into the service file
+3. Install service and timer to `/etc/systemd/system/`
+4. Enable timer (starts on boot)
+5. Start timer immediately
+
+**Security Note**: The healthcheck URL is configured at install time and embedded in the systemd service file. The template file in git contains a placeholder (`__HEALTHCHECK_URL__`), keeping your actual URL private.
 
 ### Verify Installation
 ```bash
@@ -66,7 +74,7 @@ systemctl status host-healthcheck.timer
 ## Monitoring
 
 ### Healthchecks.io Dashboard
-Monitor host status at: https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431
+Monitor host status at your healthchecks.io dashboard URL (the URL you provided during installation).
 
 Expected behavior:
 - **Status: UP** - Pings arriving every 15 seconds
@@ -112,8 +120,8 @@ systemctl status host-healthcheck.service
 
 ### Network connectivity issues
 ```bash
-# Test healthcheck URL manually
-curl -v https://hc-ping.com/6ebf0433-7488-4ab8-90b6-e221b9b4d431
+# Test healthcheck URL manually (replace with your URL)
+curl -v https://hc-ping.com/your-uuid-here
 
 # Check DNS resolution
 nslookup hc-ping.com
@@ -174,7 +182,7 @@ This gives you ~75 seconds before alert (1 min period + 1 min grace - 15s last p
 | **Purpose** | Verify host is alive | Verify agent execution succeeds |
 | **Frequency** | Every 15 seconds | Every 10 minutes |
 | **Implementation** | systemd timer + curl | Bash loop with healthcheck() |
-| **Healthcheck URL** | `6ebf0433-7488-4ab8-90b6-e221b9b4d431` | Different slug (in .env.agent) |
+| **Healthcheck URL** | Configured at install time | Different slug (in .env.agent) |
 | **Failure indicates** | Host down or network issue | Agent crash or MCP failure |
 
 ## Lessons Learned
