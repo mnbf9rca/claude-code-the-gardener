@@ -17,6 +17,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEPLOY_DIR="$SCRIPT_DIR/deploy"
 
+# Source shared installation helpers
+source "$REPO_ROOT/scripts/install-helpers.sh"
+
 # Configuration
 GARDENER_USER="gardener"
 GARDENER_HOME="/home/gardener"
@@ -91,16 +94,7 @@ else
 fi
 
 # Add the sudo user to gardener group for convenient access
-if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-    if id -nG "$SUDO_USER" | grep -qw "$GARDENER_USER"; then
-        echo "✓ User $SUDO_USER already in $GARDENER_USER group"
-    else
-        echo "Adding $SUDO_USER to $GARDENER_USER group..."
-        usermod -a -G "$GARDENER_USER" "$SUDO_USER"
-        echo "✓ User $SUDO_USER added to $GARDENER_USER group"
-        echo "  Note: $SUDO_USER will need to log out and back in for group membership to take effect"
-    fi
-fi
+add_sudo_user_to_group "$GARDENER_USER"
 
 # 2. Create necessary directories
 echo "Creating directories..."
@@ -113,20 +107,7 @@ chown -R "$GARDENER_USER:$GARDENER_USER" "$GARDENER_WORKSPACE"
 # Enable group read+execute access to entire gardener home using ACLs
 # This allows group members to read files (e.g., Claude Code project transcripts) via SCP
 # Default ACLs ensure future files/directories also get group permissions
-echo "Setting up ACLs for group access..."
-
-# Check if setfacl is available
-if ! command -v setfacl &> /dev/null; then
-    echo "Installing acl package..."
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends acl
-fi
-
-# Set ACLs for existing files (read + execute on directories only)
-setfacl -R -m g:$GARDENER_USER:rX "$GARDENER_HOME"
-
-# Set default ACLs for future files (inherited by new files/directories)
-setfacl -R -d -m g:$GARDENER_USER:rX "$GARDENER_HOME"
+setup_acl_group_access "$GARDENER_USER" "$GARDENER_HOME"
 
 echo "✓ Directories created and ACLs configured"
 
