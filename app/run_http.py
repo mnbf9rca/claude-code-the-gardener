@@ -5,6 +5,7 @@ Runs the MCP server with HTTP transport for remote access
 import os
 import asyncio
 from pathlib import Path
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import uvicorn
@@ -77,6 +78,38 @@ async def healthcheck_loop(url: str, interval_seconds: int):
         finally:
             logger.info("Healthcheck loop stopped")
 
+@asynccontextmanager
+async def lifespan(app):
+    """
+    Lifespan context manager for Starlette app.
+    Manages startup and shutdown of background tasks.
+    """
+    # Startup: Start healthcheck background task if configured
+    if HEALTHCHECK_URL:
+        app.state.healthcheck_task = asyncio.create_task(
+            healthcheck_loop(HEALTHCHECK_URL, HEALTHCHECK_INTERVAL_SECONDS)
+        )
+        logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)")
+    else:
+        logger.warning("ℹ️  Healthcheck disabled (HEALTHCHECK_URL not set)")
+
+    yield  # App runs here
+
+    # Shutdown: Stop healthcheck background task gracefully
+    task = getattr(app.state, "healthcheck_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            # Expected when task is cancelled
+            # not using contextlib.suppress to avoid masking other exceptions
+            pass
+        except Exception as exc:
+            # Log any unexpected exceptions during shutdown
+            logger.exception("Unexpected exception while cancelling healthcheck task: %s", exc)
+        logger.info("Healthcheck task cancelled")
+
 def main():
     """Start the MCP server with HTTP transport"""
     logger.info("=" * 60)
@@ -105,36 +138,9 @@ def main():
     add_admin_routes(app)
     logger.info("Admin routes added")
 
-    # Set up healthcheck background task lifecycle
-    @app.on_event("startup")
-    async def start_healthcheck():
-        """Start the healthcheck background task if HEALTHCHECK_URL is configured"""
-        if HEALTHCHECK_URL:
-            # Store task reference in app.state (Starlette best practice)
-            app.state.healthcheck_task = asyncio.create_task(
-                healthcheck_loop(HEALTHCHECK_URL, HEALTHCHECK_INTERVAL_SECONDS)
-            )
-            logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)")
-        else:
-            logger.info("ℹ️  Healthcheck disabled (HEALTHCHECK_URL not set)")
-
-    @app.on_event("shutdown")
-    async def stop_healthcheck():
-        """Stop the healthcheck background task gracefully"""
-        # Retrieve task from app.state if it exists
-        task = getattr(app.state, "healthcheck_task", None)
-        if task:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                # Expected when task is cancelled
-                # not using contextlib so as not to obscure other exceptions
-                pass
-            except Exception as exc:
-                # Log any unexpected exceptions during shutdown
-                logger.exception("Unexpected exception while cancelling healthcheck task: %s", exc)
-            logger.info("Healthcheck task cancelled")
+    # Attach lifespan context manager to app router (modern Starlette pattern)
+    app.router.lifespan_context = lifespan
+    logger.info("Lifespan context manager attached")
 
     # Run uvicorn directly with the configured app
     uvicorn.run(app, host=HOST, port=PORT)
