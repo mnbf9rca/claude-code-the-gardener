@@ -5,7 +5,6 @@ Provides HTTP endpoints and HTML UI for human-agent messaging and photo gallery
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.requests import Request
-from starlette.routing import Route
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 from pathlib import Path
@@ -1215,45 +1214,30 @@ def add_message_routes(app: Starlette):
     Args:
         app: The Starlette application instance
     """
-    # Define routes
+    # Define routes to add
     # Human-facing UI at /messages and /gallery
     # API endpoints under /api/ for programmatic access
-    new_routes = [
+    routes_to_add = [
         # Message routes
-        Route('/messages', get_messages_ui, methods=['GET']),
-        Route('/api/messages', get_messages_api, methods=['GET']),
-        Route('/api/messages/reply', post_reply, methods=['POST']),
+        ('/messages', get_messages_ui, ['GET']),
+        ('/api/messages', get_messages_api, ['GET']),
+        ('/api/messages/reply', post_reply, ['POST']),
         # Photo routes
-        Route('/gallery', get_gallery_ui, methods=['GET']),
-        Route('/api/photos', get_photos_api, methods=['GET']),
-        Route('/api/capture', post_capture_photo, methods=['POST']),
+        ('/gallery', get_gallery_ui, ['GET']),
+        ('/api/photos', get_photos_api, ['GET']),
+        ('/api/capture', post_capture_photo, ['POST']),
     ]
 
-    # Check for existing routes to prevent duplicates (consider both path and methods)
-    existing_routes = set()
-    for route in app.router.routes:
-        path = getattr(route, 'path', None)
-        methods = getattr(route, 'methods', None)
-        if path and methods:
-            # Add tuples of (path, method) for each method
-            for method in methods:
-                existing_routes.add((path, method))
-
-    # Add only new routes
+    # Add routes using Starlette's built-in route management
     routes_added = 0
-    for route in new_routes:
-        # Check if any method for this path already exists
-        route_exists = False
-        if route.methods:
-            route_exists = any(
-                (route.path, method) in existing_routes
-                for method in route.methods
-            )
-
-        if not route_exists:
-            app.router.routes.append(route)
+    for path, endpoint, methods in routes_to_add:
+        try:
+            # Starlette's add_route handles deduplication and route compilation
+            app.add_route(path, endpoint, methods=methods)
             routes_added += 1
-        else:
-            logger.warning(f"Route {route.path} {route.methods} already exists, skipping")
+            logger.debug(f"Added route: {methods} {path}")
+        except Exception as exc:
+            # Route may already exist or other registration issue
+            logger.warning(f"Could not add route {methods} {path}: {exc}")
 
     logger.info(f"Added {routes_added} message and photo routes to Starlette app")

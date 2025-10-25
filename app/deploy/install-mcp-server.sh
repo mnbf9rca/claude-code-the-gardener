@@ -307,6 +307,10 @@ fi
 # 10. Restart service if it was running or if we updated files
 if [ "$SERVICE_WAS_ACTIVE" = true ] || [ "$SERVICE_FILE_UPDATED" = true ]; then
     echo "  Restarting service with updated configuration..."
+    echo ""
+    echo "Note: If the service hangs or needs to be force-stopped, use:"
+    echo "  sudo systemctl kill --signal=SIGKILL $SERVICE_NAME"
+    echo ""
     systemctl restart "$SERVICE_NAME"
     echo "✓ Service restarted"
     SERVICE_IS_RUNNING=true
@@ -339,6 +343,9 @@ if [ "$SERVICE_STATUS" = "active" ]; then
     echo "  1. Check service status: sudo systemctl status $SERVICE_NAME"
     echo "  2. View logs: journalctl -u $SERVICE_NAME -f"
     echo "  3. Test endpoint: curl http://localhost:8000/mcp"
+    echo ""
+    echo "Emergency stop (if service hangs):"
+    echo "  sudo systemctl kill --signal=SIGKILL $SERVICE_NAME"
 else
     # Service is not active (inactive, failed, or unknown)
     echo "Service Status: NOT RUNNING ($SERVICE_STATUS)"
@@ -348,6 +355,9 @@ else
     echo "  2. Check service status: sudo systemctl status $SERVICE_NAME"
     echo "  3. View logs: journalctl -u $SERVICE_NAME -f"
     echo "  4. Test endpoint: curl http://localhost:8000/mcp"
+    echo ""
+    echo "Emergency stop (if service hangs):"
+    echo "  sudo systemctl kill --signal=SIGKILL $SERVICE_NAME"
 fi
 
 echo ""

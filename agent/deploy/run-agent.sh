@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Continuous loop agent runner for gardener user
-# Executes Claude Code agent every 10 minutes with health monitoring
+# Single-run agent executor for gardener user
+# Executes Claude Code agent once per invocation (triggered by systemd timer)
+# Timer schedules runs 20 minutes after previous run completes
 
 # Load environment variables from .env.agent
 ENV_FILE="$HOME/.env.agent"
@@ -71,75 +72,72 @@ if ! flock -n 200; then
     exit 1
 fi
 
-echo "[$(date -Iseconds)] Starting gardener agent loop"
+echo "[$(date -Iseconds)] Starting gardener agent run"
 
-# Main execution loop
-while true; do
-    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    LOG_FILE="$LOG_DIR/agent_${TIMESTAMP}.log"
+# Setup log file for this run
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG_FILE="$LOG_DIR/agent_${TIMESTAMP}.log"
 
-    echo "[$(date -Iseconds)] Starting execution cycle" | tee -a "$LOG_FILE"
+echo "[$(date -Iseconds)] Starting execution" | tee -a "$LOG_FILE"
 
-    # Check log directory size (warn if > 1GB)
-    LOG_SIZE_KB=$(du -sk "$LOG_DIR" 2>/dev/null | cut -f1)
-    LOG_SIZE_MB=$((LOG_SIZE_KB / 1024))
-    if [ "$LOG_SIZE_MB" -gt 1024 ]; then
-        echo "[$(date -Iseconds)] WARNING: Log directory exceeds 1GB (${LOG_SIZE_MB}MB)" | tee -a "$LOG_FILE"
-        echo "  Consider cleaning up old logs in: $LOG_DIR" | tee -a "$LOG_FILE"
-        # Send failure notification but continue executing
-        healthcheck "/fail"
-    fi
+# Check log directory size (warn if > 1GB)
+LOG_SIZE_KB=$(du -sk "$LOG_DIR" 2>/dev/null | cut -f1)
+LOG_SIZE_MB=$((LOG_SIZE_KB / 1024))
+if [ "$LOG_SIZE_MB" -gt 1024 ]; then
+    echo "[$(date -Iseconds)] WARNING: Log directory exceeds 1GB (${LOG_SIZE_MB}MB)" | tee -a "$LOG_FILE"
+    echo "  Consider cleaning up old logs in: $LOG_DIR" | tee -a "$LOG_FILE"
+    # Send failure notification but continue executing
+    healthcheck "/fail"
+fi
 
-    # Signal execution start
-    healthcheck "/start"
+# Signal execution start
+healthcheck "/start"
 
-    # Read prompt from file
-    if [ ! -f "$PROMPT_FILE" ]; then
-        echo "[$(date -Iseconds)] ERROR: Prompt file not found: $PROMPT_FILE" | tee -a "$LOG_FILE"
-        healthcheck "/fail"
-        sleep 600
-        continue
-    fi
+# Read prompt from file
+if [ ! -f "$PROMPT_FILE" ]; then
+    echo "[$(date -Iseconds)] ERROR: Prompt file not found: $PROMPT_FILE" | tee -a "$LOG_FILE"
+    healthcheck "/fail"
+    exit 1
+fi
 
-    PROMPT=$(cat "$PROMPT_FILE")
+PROMPT=$(cat "$PROMPT_FILE")
 
-    # Build command arguments array to properly handle spaces and special characters
-    CLAUDE_ARGS=(
-        --output-format json
-        --mcp-config "$MCP_CONFIG_FILE"
-        -p "$PROMPT"
-    )
+# Build command arguments array to properly handle spaces and special characters
+CLAUDE_ARGS=(
+    --output-format json
+    --mcp-config "$MCP_CONFIG_FILE"
+    -p "$PROMPT"
+)
 
-    # Conditionally add system prompt argument if file exists
-    if [ -f "$SYSTEM_PROMPT_FILE" ]; then
-        SYSTEM_PROMPT_EXTENSION=$(cat "$SYSTEM_PROMPT_FILE")
-        CLAUDE_ARGS+=(--append-system-prompt "$SYSTEM_PROMPT_EXTENSION")
-    fi
+# Conditionally add system prompt argument if file exists
+if [ -f "$SYSTEM_PROMPT_FILE" ]; then
+    SYSTEM_PROMPT_EXTENSION=$(cat "$SYSTEM_PROMPT_FILE")
+    CLAUDE_ARGS+=(--append-system-prompt "$SYSTEM_PROMPT_EXTENSION")
+    echo "[$(date -Iseconds)] Using system prompt extension from $SYSTEM_PROMPT_FILE" | tee -a "$LOG_FILE"
+fi
 
-    # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
-    # Runs in isolated workspace so Claude cannot access config files in $HOME
-    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" "${CLAUDE_ARGS[@]}") 2>&1 | tee -a "$LOG_FILE"; then
-        EXEC_EXIT_CODE=0
-        echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
-    else
-        EXEC_EXIT_CODE=$?
-        echo "[$(date -Iseconds)] ERROR: Execution failed with exit code $EXEC_EXIT_CODE" | tee -a "$LOG_FILE"
-    fi
+# Execute Claude Code agent from workspace directory (tee to both terminal and log file)
+# Runs in isolated workspace so Claude cannot access config files in $HOME
+if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" "${CLAUDE_ARGS[@]}") 2>&1 | tee -a "$LOG_FILE"; then
+    EXEC_EXIT_CODE=0
+    echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
+else
+    EXEC_EXIT_CODE=$?
+    echo "[$(date -Iseconds)] ERROR: Execution failed with exit code $EXEC_EXIT_CODE" | tee -a "$LOG_FILE"
+fi
 
-    # Check for /login in output (indicates authentication failure)
-    if grep -q "/login" "$LOG_FILE"; then
-        echo "[$(date -Iseconds)] ERROR: Detected /login in output - authentication failure" | tee -a "$LOG_FILE"
-        EXEC_EXIT_CODE=1
-    fi
+# Check for /login in output (indicates authentication failure)
+if grep -q "/login" "$LOG_FILE"; then
+    echo "[$(date -Iseconds)] ERROR: Detected /login in output - authentication failure" | tee -a "$LOG_FILE"
+    EXEC_EXIT_CODE=1
+fi
 
-    # Send appropriate healthcheck with log content (last 100KB)
-    if [ "$EXEC_EXIT_CODE" -eq 0 ]; then
-        healthcheck "" "$(tail -c 102400 "$LOG_FILE")"  # Success endpoint with logs
-    else
-        healthcheck "/fail" "$(tail -c 102400 "$LOG_FILE")"  # Failure endpoint with logs
-    fi
+# Send appropriate healthcheck with log content (last 100KB)
+if [ "$EXEC_EXIT_CODE" -eq 0 ]; then
+    healthcheck "" "$(tail -c 102400 "$LOG_FILE")"  # Success endpoint with logs
+else
+    healthcheck "/fail" "$(tail -c 102400 "$LOG_FILE")"  # Failure endpoint with logs
+fi
 
-    # Wait 10 minutes before next execution
-    echo "[$(date -Iseconds)] Sleeping for 20 minutes..." | tee -a "$LOG_FILE"
-    sleep 1200
-done
+echo "[$(date -Iseconds)] Agent run complete" | tee -a "$LOG_FILE"
+exit $EXEC_EXIT_CODE

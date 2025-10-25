@@ -16,9 +16,17 @@ RestartSec=30
 StandardOutput=journal
 StandardError=journal
 
+# Treat SIGTERM (exit code 143) as success - this is a graceful shutdown
+SuccessExitStatus=143
+
+# Graceful shutdown timeout (allow MCP server to finish)
+# Emergency override: sudo systemctl kill --signal=SIGKILL plant-care-mcp.service
+TimeoutStopSec=3700
+
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
+
 
 [Install]
 WantedBy=multi-user.target

@@ -53,6 +53,12 @@ fi
 if [ ! -f "$DEPLOY_DIR/run-agent.sh" ]; then
     MISSING_FILES+=("run-agent.sh")
 fi
+if [ ! -f "$DEPLOY_DIR/gardener-agent.service.template" ]; then
+    MISSING_FILES+=("gardener-agent.service.template")
+fi
+if [ ! -f "$DEPLOY_DIR/gardener-agent.timer.template" ]; then
+    MISSING_FILES+=("gardener-agent.timer.template")
+fi
 
 if [ ${#MISSING_FILES[@]} -gt 0 ]; then
     echo "ERROR: Missing required files in $DEPLOY_DIR:"
@@ -169,48 +175,73 @@ install -m 640 -o root -g "$GARDENER_USER" \
     "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
 echo "✓ Copied .env.agent"
 
-# 5. Install systemd service
-echo "Installing systemd service..."
-cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=Claude Code Gardener Agent
-After=network-online.target
-Wants=network-online.target
+# 5. Install systemd service and timer from templates
+echo "Installing systemd service and timer..."
 
-[Service]
-Type=simple
-User=$GARDENER_USER
-Group=$GARDENER_USER
-WorkingDirectory=$GARDENER_HOME
-EnvironmentFile=$GARDENER_HOME/.env.agent
-ExecStart=$GARDENER_HOME/run-agent.sh
-Restart=always
-RestartSec=30
+# Define timer variables
+TIMER_NAME="${SERVICE_NAME%.service}.timer"
+TIMER_FILE="/etc/systemd/system/$TIMER_NAME"
 
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Process service template with variable substitution
+sed -e "s|__GARDENER_USER__|$GARDENER_USER|g" \
+    -e "s|__GARDENER_HOME__|$GARDENER_HOME|g" \
+    "$DEPLOY_DIR/gardener-agent.service.template" > "$SERVICE_FILE"
 
 chmod 644 "$SERVICE_FILE"
+echo "✓ Service file created from template"
+
+# Process timer template with variable substitution
+sed "s|__SERVICE_NAME__|$SERVICE_NAME|g" \
+    "$DEPLOY_DIR/gardener-agent.timer.template" > "$TIMER_FILE"
+
+chmod 644 "$TIMER_FILE"
+echo "✓ Timer file created from template"
+
 systemctl daemon-reload
-echo "✓ Systemd service installed"
+echo "✓ Systemd service and timer installed"
+
+# 6. Enable and start/restart timer
+echo "Configuring timer..."
+echo ""
+echo "Note: If the agent hangs or needs to be force-stopped, use:"
+echo "  sudo systemctl kill --signal=SIGKILL $SERVICE_NAME"
+echo ""
+
+# Check if timer is already active
+if systemctl is-active --quiet "$TIMER_NAME"; then
+    echo "  Timer is active - restarting to apply changes..."
+    systemctl restart "$TIMER_NAME"
+    echo "✓ Timer restarted"
+else
+    echo "  Enabling and starting timer..."
+    systemctl enable "$TIMER_NAME"
+    systemctl start "$TIMER_NAME"
+    echo "✓ Timer enabled and started"
+fi
 
 # 7. Summary
 echo ""
 echo "=== Installation Complete ==="
 echo ""
-echo "Next steps:"
-echo "  1. Test manually: sudo -u $GARDENER_USER $GARDENER_HOME/run-agent.sh"
-echo "     (Press Ctrl+C after observing one cycle)"
-echo "  2. Enable service: sudo systemctl enable --now $SERVICE_NAME"
-echo "  3. Monitor logs: journalctl -u $SERVICE_NAME -f"
-echo "  4. Check health: https://healthchecks.io/checks/"
+echo "The timer is now active and will run the agent:"
+echo "  - First run: 1 minute after boot (if system was just booted)"
+echo "  - Subsequent runs: 15 minutes after each run completes"
+echo ""
+echo "Useful commands:"
+echo "  - Check timer status:    systemctl status $TIMER_NAME"
+echo "  - List timer schedule:   systemctl list-timers $TIMER_NAME"
+echo "  - Monitor agent logs:    journalctl -u $SERVICE_NAME -f"
+echo "  - Check agent status:    systemctl status $SERVICE_NAME"
+echo "  - Test manually:         sudo -u $GARDENER_USER $GARDENER_HOME/run-agent.sh"
+echo "  - Stop timer:            sudo systemctl stop $TIMER_NAME"
+echo "  - Restart timer:         sudo systemctl restart $TIMER_NAME"
+echo "  - Check health:          https://healthchecks.io/checks/"
+echo ""
+echo "Emergency stop (if agent is stuck):"
+echo "  - Force kill agent:      sudo systemctl kill --signal=SIGKILL $SERVICE_NAME"
+echo "  - Note: This interrupts the agent immediately (use only if necessary)"
 echo ""
 echo "To update configuration later:"
 echo "  - Edit files in $DEPLOY_DIR/"
 echo "  - Re-run this script: sudo bash $0"
-echo "  - Restart service: sudo systemctl restart $SERVICE_NAME"
+echo "  - Changes will be applied and timer restarted automatically"

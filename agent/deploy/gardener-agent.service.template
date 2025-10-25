@@ -1,0 +1,32 @@
+[Unit]
+Description=Claude Code Gardener Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__GARDENER_USER__
+Group=__GARDENER_USER__
+WorkingDirectory=__GARDENER_HOME__
+EnvironmentFile=__GARDENER_HOME__/.env.agent
+
+# Defensive reset before run starts (ensures clean state even if previous ExecStopPost failed)
+# The '-' prefix means failure here won't prevent service from starting
+ExecStartPre=-/usr/bin/curl -fsS --retry 3 --retry-delay 1 --max-time 5 -X POST http://localhost:8000/admin/reset-cycle
+
+ExecStart=__GARDENER_HOME__/run-agent.sh
+
+# Reset gatekeeper after run completes (normal cleanup)
+# The '-' prefix means failure here won't mark service as failed
+ExecStopPost=-/usr/bin/curl -fsS --retry 3 --retry-delay 1 --max-time 5 -X POST http://localhost:8000/admin/reset-cycle
+
+# Treat SIGTERM (exit code 143) as success - this is a graceful shutdown
+SuccessExitStatus=143
+
+# Graceful shutdown timeout (allow agent to finish)
+# Emergency override: sudo systemctl kill --signal=SIGKILL gardener-agent.service
+TimeoutStopSec=3600
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true

@@ -1,0 +1,17 @@
+[Unit]
+Description=Claude Code Gardener Agent Timer
+Requires=__SERVICE_NAME__
+
+[Timer]
+# First run: 1 minute after boot
+OnBootSec=1min
+
+# Subsequent runs: 15 minutes after previous run *completes*
+# This ensures a fixed gap between runs, regardless of how long each run takes
+OnUnitInactiveSec=15min
+
+# The service to trigger
+Unit=__SERVICE_NAME__
+
+[Install]
+WantedBy=timers.target
