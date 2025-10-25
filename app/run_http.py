@@ -75,7 +75,6 @@ async def healthcheck_loop(url: str, interval_seconds: int):
                     timestamp = datetime.now(timezone.utc).isoformat()
                     response = await client.post(url, json={"timestamp": timestamp})
                     response.raise_for_status()
-                    logger.debug(f"Healthcheck ping successful: {response.status_code}")
                 except httpx.HTTPStatusError as e:
                     # Server returned error status code (4xx/5xx)
                     logger.warning(
