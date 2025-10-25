@@ -1,6 +1,6 @@
 [Unit]
 Description=Claude Code Gardener Agent Timer
-Requires=gardener-agent.service
+Requires=__SERVICE_NAME__
 
 [Timer]
 # First run: 1 minute after boot
@@ -11,7 +11,7 @@ OnBootSec=1min
 OnUnitInactiveSec=15min
 
 # The service to trigger
-Unit=gardener-agent.service
+Unit=__SERVICE_NAME__
 
 [Install]
 WantedBy=timers.target

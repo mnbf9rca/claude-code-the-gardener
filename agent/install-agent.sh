@@ -53,6 +53,12 @@ fi
 if [ ! -f "$DEPLOY_DIR/run-agent.sh" ]; then
     MISSING_FILES+=("run-agent.sh")
 fi
+if [ ! -f "$DEPLOY_DIR/gardener-agent.service.template" ]; then
+    MISSING_FILES+=("gardener-agent.service.template")
+fi
+if [ ! -f "$DEPLOY_DIR/gardener-agent.timer.template" ]; then
+    MISSING_FILES+=("gardener-agent.timer.template")
+fi
 
 if [ ${#MISSING_FILES[@]} -gt 0 ]; then
     echo "ERROR: Missing required files in $DEPLOY_DIR:"
@@ -169,58 +175,28 @@ install -m 640 -o root -g "$GARDENER_USER" \
     "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
 echo "✓ Copied .env.agent"
 
-# 5. Install systemd service and timer
+# 5. Install systemd service and timer from templates
 echo "Installing systemd service and timer..."
 
-# Service file (oneshot - runs once per timer trigger)
-cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=Claude Code Gardener Agent
-After=network-online.target
-Wants=network-online.target
+# Define timer variables
+TIMER_NAME="${SERVICE_NAME%.service}.timer"
+TIMER_FILE="/etc/systemd/system/$TIMER_NAME"
 
-[Service]
-Type=oneshot
-User=$GARDENER_USER
-Group=$GARDENER_USER
-WorkingDirectory=$GARDENER_HOME
-EnvironmentFile=$GARDENER_HOME/.env.agent
-ExecStart=$GARDENER_HOME/run-agent.sh
-
-# Always reset gatekeeper after run completes (even if agent crashes)
-# The '-' prefix means failure here won't mark service as failed
-ExecStopPost=-/usr/bin/curl -fsS -X POST http://localhost:8000/admin/reset-cycle
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-EOF
+# Process service template with variable substitution
+sed -e "s|__GARDENER_USER__|$GARDENER_USER|g" \
+    -e "s|__GARDENER_HOME__|$GARDENER_HOME|g" \
+    "$DEPLOY_DIR/gardener-agent.service.template" > "$SERVICE_FILE"
 
 chmod 644 "$SERVICE_FILE"
+echo "✓ Service file created from template"
 
-# Timer file (triggers service 20 minutes after previous run completes)
-TIMER_FILE="/etc/systemd/system/gardener-agent.timer"
-cat > "$TIMER_FILE" << EOF
-[Unit]
-Description=Claude Code Gardener Agent Timer
-Requires=gardener-agent.service
-
-[Timer]
-# First run: 1 minute after boot
-OnBootSec=1min
-
-# Subsequent runs: 20 minutes after previous run *completes*
-# This ensures a fixed gap between runs, regardless of how long each run takes
-OnUnitInactiveSec=20min
-
-# The service to trigger
-Unit=gardener-agent.service
-
-[Install]
-WantedBy=timers.target
-EOF
+# Process timer template with variable substitution
+sed "s|__SERVICE_NAME__|$SERVICE_NAME|g" \
+    "$DEPLOY_DIR/gardener-agent.timer.template" > "$TIMER_FILE"
 
 chmod 644 "$TIMER_FILE"
+echo "✓ Timer file created from template"
+
 systemctl daemon-reload
 echo "✓ Systemd service and timer installed"
 
@@ -231,16 +207,16 @@ echo ""
 echo "Next steps:"
 echo "  1. Test manually: sudo -u $GARDENER_USER $GARDENER_HOME/run-agent.sh"
 echo "     (Script will run once and exit - this is expected!)"
-echo "  2. Enable timer: sudo systemctl enable --now gardener-agent.timer"
+echo "  2. Enable timer: sudo systemctl enable --now $TIMER_NAME"
 echo "  3. Monitor logs: journalctl -u $SERVICE_NAME -f"
-echo "  4. Check timer status: systemctl status gardener-agent.timer"
-echo "  5. List timer schedule: systemctl list-timers gardener-agent.timer"
+echo "  4. Check timer status: systemctl status $TIMER_NAME"
+echo "  5. List timer schedule: systemctl list-timers $TIMER_NAME"
 echo "  6. Check health: https://healthchecks.io/checks/"
 echo ""
 echo "Note: The agent now runs via systemd timer, not as a continuous service."
-echo "Timer triggers the service 20 minutes after each run completes."
+echo "Timer triggers the service 15 minutes after each run completes."
 echo ""
 echo "To update configuration later:"
 echo "  - Edit files in $DEPLOY_DIR/"
 echo "  - Re-run this script: sudo bash $0"
-echo "  - Restart timer: sudo systemctl restart gardener-agent.timer"
+echo "  - Restart timer: sudo systemctl restart $TIMER_NAME"
