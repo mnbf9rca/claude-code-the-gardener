@@ -9,6 +9,7 @@ import uvicorn
 from starlette.staticfiles import StaticFiles
 from server import mcp
 from web_routes import add_message_routes
+from admin_routes import add_admin_routes
 from utils.logging_config import get_logger
 
 # Load environment variables
@@ -59,6 +60,10 @@ def main():
     # Add message routes (web UI and API)
     add_message_routes(app)
     logger.info("Message routes added")
+
+    # Add admin routes (localhost-only administrative endpoints)
+    add_admin_routes(app)
+    logger.info("Admin routes added")
 
     # Run uvicorn directly with the configured app
     uvicorn.run(app, host=HOST, port=PORT)
