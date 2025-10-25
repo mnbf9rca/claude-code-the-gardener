@@ -6,9 +6,9 @@ Requires=gardener-agent.service
 # First run: 1 minute after boot
 OnBootSec=1min
 
-# Subsequent runs: 20 minutes after previous run *completes*
+# Subsequent runs: 15 minutes after previous run *completes*
 # This ensures a fixed gap between runs, regardless of how long each run takes
-OnUnitInactiveSec=20min
+OnUnitInactiveSec=15min
 
 # The service to trigger
 Unit=gardener-agent.service
