@@ -78,37 +78,44 @@ async def healthcheck_loop(url: str, interval_seconds: int):
         finally:
             logger.info("Healthcheck loop stopped")
 
-@asynccontextmanager
-async def lifespan(app):
+def wrap_lifespan(original_lifespan, app):
     """
-    Lifespan context manager for Starlette app.
-    Manages startup and shutdown of background tasks.
+    Wraps an existing lifespan to add healthcheck background task.
+    Preserves FastMCP's session manager lifespan while adding custom logic.
     """
-    # Startup: Start healthcheck background task if configured
-    if HEALTHCHECK_URL:
-        app.state.healthcheck_task = asyncio.create_task(
-            healthcheck_loop(HEALTHCHECK_URL, HEALTHCHECK_INTERVAL_SECONDS)
-        )
-        logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)")
-    else:
-        logger.warning("ℹ️  Healthcheck disabled (HEALTHCHECK_URL not set)")
+    @asynccontextmanager
+    async def combined_lifespan(app):
+        # Run FastMCP's original lifespan first (manages session manager)
+        async with original_lifespan(app):
+            # Then add our healthcheck task
+            if HEALTHCHECK_URL:
+                app.state.healthcheck_task = asyncio.create_task(
+                    healthcheck_loop(HEALTHCHECK_URL, HEALTHCHECK_INTERVAL_SECONDS)
+                )
+                logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)")
+            else:
+                logger.warning("ℹ️  Healthcheck disabled (HEALTHCHECK_URL not set)")
 
-    yield  # App runs here
+            yield  # App runs here
 
-    # Shutdown: Stop healthcheck background task gracefully
-    task = getattr(app.state, "healthcheck_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            # Expected when task is cancelled
-            # not using contextlib.suppress to avoid masking other exceptions
-            pass
-        except Exception as exc:
-            # Log any unexpected exceptions during shutdown
-            logger.exception("Unexpected exception while cancelling healthcheck task: %s", exc)
-        logger.info("Healthcheck task cancelled")
+            # Shutdown: Stop healthcheck background task gracefully
+            if task := getattr(app.state, "healthcheck_task", None):
+                task.cancel()
+                try:
+                    # Add timeout to prevent shutdown hangs if task doesn't cancel promptly
+                    await asyncio.wait_for(task, timeout=5.0)
+                except asyncio.CancelledError:
+                    # Expected when task is cancelled
+                    # not using contextlib.suppress to avoid masking other exceptions
+                    pass
+                except asyncio.TimeoutError:
+                    logger.warning("Healthcheck task cancellation timed out after 5 seconds")
+                except Exception as exc:
+                    # Log any unexpected exceptions during shutdown
+                    logger.exception("Unexpected exception while cancelling healthcheck task: %s", exc)
+                logger.info("Healthcheck task cancelled")
+
+    return combined_lifespan
 
 def main():
     """Start the MCP server with HTTP transport"""
@@ -138,9 +145,13 @@ def main():
     add_admin_routes(app)
     logger.info("Admin routes added")
 
-    # Attach lifespan context manager to app router (modern Starlette pattern)
-    app.router.lifespan_context = lifespan
-    logger.info("Lifespan context manager attached")
+    # Wrap FastMCP's existing lifespan to add healthcheck (preserves session manager)
+    original_lifespan = app.router.lifespan_context
+    if original_lifespan:
+        app.router.lifespan_context = wrap_lifespan(original_lifespan, app)
+        logger.info("Healthcheck lifespan wrapped around FastMCP lifespan")
+    else:
+        logger.warning("No existing lifespan found - FastMCP may not work correctly")
 
     # Run uvicorn directly with the configured app
     uvicorn.run(app, host=HOST, port=PORT)
