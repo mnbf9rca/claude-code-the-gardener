@@ -20,6 +20,11 @@ ExecStart=__GARDENER_HOME__/run-agent.sh
 # The '-' prefix means failure here won't mark service as failed
 ExecStopPost=-/usr/bin/curl -fsS --retry 3 --retry-delay 1 --max-time 5 -X POST http://localhost:8000/admin/reset-cycle
 
+# Graceful shutdown timeout (allow agent to finish)
+# Wait indefinitely for agent to complete - never interrupt a running agent
+# Emergency override: sudo systemctl kill --signal=SIGKILL gardener-agent.service
+TimeoutStopSec=3600
+
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true

@@ -20,5 +20,11 @@ StandardError=journal
 NoNewPrivileges=true
 PrivateTmp=true
 
+# Graceful shutdown timeout (allow agent to finish)
+# Wait indefinitely for agent to complete - never interrupt a running agent
+# Emergency override: sudo systemctl kill --signal=SIGKILL plant-care-mcp.service
+TimeoutStopSec=3700
+
+
 [Install]
 WantedBy=multi-user.target
