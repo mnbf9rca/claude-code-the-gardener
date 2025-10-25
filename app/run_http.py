@@ -55,6 +55,11 @@ async def healthcheck_loop(url: str, interval_seconds: int):
     If the event loop is blocked or the server hangs, this task won't fire,
     causing healthchecks.io to alert on the missing pings.
     """
+    # Suppress noisy httpx/httpcore DEBUG logs from healthcheck requests
+    import logging
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     logger.info(f"Healthcheck loop started, pinging every {interval_seconds} seconds: {url}")
 
     # Use context manager to ensure HTTP client cleanup
