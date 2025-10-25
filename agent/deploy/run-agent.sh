@@ -103,17 +103,22 @@ while true; do
 
     PROMPT=$(cat "$PROMPT_FILE")
 
+    # Build command arguments array to properly handle spaces and special characters
+    CLAUDE_ARGS=(
+        --output-format json
+        --mcp-config "$MCP_CONFIG_FILE"
+        -p "$PROMPT"
+    )
 
+    # Conditionally add system prompt argument if file exists
     if [ -f "$SYSTEM_PROMPT_FILE" ]; then
         SYSTEM_PROMPT_EXTENSION=$(cat "$SYSTEM_PROMPT_FILE")
-        SYSTEM_PROMPT_ARGUMENT="--append-system-prompt \"$SYSTEM_PROMPT_EXTENSION\""
-    else
-        SYSTEM_PROMPT_ARGUMENT=""
+        CLAUDE_ARGS+=(--append-system-prompt "$SYSTEM_PROMPT_EXTENSION")
     fi
 
     # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
     # Runs in isolated workspace so Claude cannot access config files in $HOME
-    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --output-format json --mcp-config "$MCP_CONFIG_FILE" -p "$PROMPT" $SYSTEM_PROMPT_ARGUMENT) 2>&1 | tee -a "$LOG_FILE"; then
+    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" "${CLAUDE_ARGS[@]}") 2>&1 | tee -a "$LOG_FILE"; then
         EXEC_EXIT_CODE=0
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
     else
