@@ -169,8 +169,10 @@ install -m 640 -o root -g "$GARDENER_USER" \
     "$DEPLOY_DIR/.env.agent" "$GARDENER_HOME/.env.agent"
 echo "✓ Copied .env.agent"
 
-# 5. Install systemd service
-echo "Installing systemd service..."
+# 5. Install systemd service and timer
+echo "Installing systemd service and timer..."
+
+# Service file (oneshot - runs once per timer trigger)
 cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Claude Code Gardener Agent
@@ -178,26 +180,49 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=oneshot
 User=$GARDENER_USER
 Group=$GARDENER_USER
 WorkingDirectory=$GARDENER_HOME
 EnvironmentFile=$GARDENER_HOME/.env.agent
 ExecStart=$GARDENER_HOME/run-agent.sh
-Restart=always
-RestartSec=30
+
+# Always reset gatekeeper after run completes (even if agent crashes)
+# The '-' prefix means failure here won't mark service as failed
+ExecStopPost=-/usr/bin/curl -fsS -X POST http://localhost:8000/admin/reset-cycle
 
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
 EOF
 
 chmod 644 "$SERVICE_FILE"
+
+# Timer file (triggers service 20 minutes after previous run completes)
+TIMER_FILE="/etc/systemd/system/gardener-agent.timer"
+cat > "$TIMER_FILE" << EOF
+[Unit]
+Description=Claude Code Gardener Agent Timer
+Requires=gardener-agent.service
+
+[Timer]
+# First run: 1 minute after boot
+OnBootSec=1min
+
+# Subsequent runs: 20 minutes after previous run *completes*
+# This ensures a fixed gap between runs, regardless of how long each run takes
+OnUnitInactiveSec=20min
+
+# The service to trigger
+Unit=gardener-agent.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+chmod 644 "$TIMER_FILE"
 systemctl daemon-reload
-echo "✓ Systemd service installed"
+echo "✓ Systemd service and timer installed"
 
 # 7. Summary
 echo ""
@@ -205,12 +230,17 @@ echo "=== Installation Complete ==="
 echo ""
 echo "Next steps:"
 echo "  1. Test manually: sudo -u $GARDENER_USER $GARDENER_HOME/run-agent.sh"
-echo "     (Press Ctrl+C after observing one cycle)"
-echo "  2. Enable service: sudo systemctl enable --now $SERVICE_NAME"
+echo "     (Script will run once and exit - this is expected!)"
+echo "  2. Enable timer: sudo systemctl enable --now gardener-agent.timer"
 echo "  3. Monitor logs: journalctl -u $SERVICE_NAME -f"
-echo "  4. Check health: https://healthchecks.io/checks/"
+echo "  4. Check timer status: systemctl status gardener-agent.timer"
+echo "  5. List timer schedule: systemctl list-timers gardener-agent.timer"
+echo "  6. Check health: https://healthchecks.io/checks/"
+echo ""
+echo "Note: The agent now runs via systemd timer, not as a continuous service."
+echo "Timer triggers the service 20 minutes after each run completes."
 echo ""
 echo "To update configuration later:"
 echo "  - Edit files in $DEPLOY_DIR/"
 echo "  - Re-run this script: sudo bash $0"
-echo "  - Restart service: sudo systemctl restart $SERVICE_NAME"
+echo "  - Restart timer: sudo systemctl restart gardener-agent.timer"
