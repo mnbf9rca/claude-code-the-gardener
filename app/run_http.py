@@ -2,8 +2,10 @@
 HTTP Server Runner for Plant Care MCP
 Runs the MCP server with HTTP transport for remote access
 """
+
 import os
 import asyncio
+import logging as stdlib_logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -39,9 +41,15 @@ try:
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 except Exception as e:
     import sys
+
     error_msg = f"Failed to create photos directory '{PHOTOS_DIR}': {e}"
     logger.error(error_msg)
     sys.exit(1)
+
+# Suppress noisy httpx/httpcore DEBUG logs from healthcheck requests
+stdlib_logging.getLogger("httpx").setLevel(stdlib_logging.WARNING)
+stdlib_logging.getLogger("httpcore").setLevel(stdlib_logging.WARNING)
+
 
 async def healthcheck_loop(url: str, interval_seconds: int):
     """
@@ -55,12 +63,9 @@ async def healthcheck_loop(url: str, interval_seconds: int):
     If the event loop is blocked or the server hangs, this task won't fire,
     causing healthchecks.io to alert on the missing pings.
     """
-    # Suppress noisy httpx/httpcore DEBUG logs from healthcheck requests
-    import logging
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-    logger.info(f"Healthcheck loop started, pinging every {interval_seconds} seconds: {url}")
+    logger.info(
+        f"Healthcheck loop started, pinging every {interval_seconds} seconds: {url}"
+    )
 
     # Use context manager to ensure HTTP client cleanup
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -73,7 +78,9 @@ async def healthcheck_loop(url: str, interval_seconds: int):
                     logger.debug(f"Healthcheck ping successful: {response.status_code}")
                 except httpx.HTTPStatusError as e:
                     # Server returned error status code (4xx/5xx)
-                    logger.warning(f"Healthcheck ping failed: {e.response.status_code} {e.response.text}")
+                    logger.warning(
+                        f"Healthcheck ping failed: {e.response.status_code} {e.response.text}"
+                    )
                 except Exception as e:
                     # Network errors, timeouts, or other exceptions
                     logger.error(f"Healthcheck ping exception: {e}")
@@ -83,11 +90,13 @@ async def healthcheck_loop(url: str, interval_seconds: int):
         finally:
             logger.info("Healthcheck loop stopped")
 
-def wrap_lifespan(original_lifespan, app):
+
+def wrap_lifespan(original_lifespan):
     """
     Wraps an existing lifespan to add healthcheck background task.
     Preserves FastMCP's session manager lifespan while adding custom logic.
     """
+
     @asynccontextmanager
     async def combined_lifespan(app):
         # Run FastMCP's original lifespan first (manages session manager)
@@ -97,7 +106,9 @@ def wrap_lifespan(original_lifespan, app):
                 app.state.healthcheck_task = asyncio.create_task(
                     healthcheck_loop(HEALTHCHECK_URL, HEALTHCHECK_INTERVAL_SECONDS)
                 )
-                logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)")
+                logger.info(
+                    f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)"
+                )
             else:
                 logger.warning("ℹ️  Healthcheck disabled (HEALTHCHECK_URL not set)")
 
@@ -114,13 +125,19 @@ def wrap_lifespan(original_lifespan, app):
                     # not using contextlib.suppress to avoid masking other exceptions
                     pass
                 except asyncio.TimeoutError:
-                    logger.warning("Healthcheck task cancellation timed out after 5 seconds")
+                    logger.warning(
+                        "Healthcheck task cancellation timed out after 5 seconds"
+                    )
                 except Exception as exc:
                     # Log any unexpected exceptions during shutdown
-                    logger.exception("Unexpected exception while cancelling healthcheck task: %s", exc)
+                    logger.exception(
+                        "Unexpected exception while cancelling healthcheck task: %s",
+                        exc,
+                    )
                 logger.info("Healthcheck task cancelled")
 
     return combined_lifespan
+
 
 def main():
     """Start the MCP server with HTTP transport"""
@@ -151,15 +168,15 @@ def main():
     logger.info("Admin routes added")
 
     # Wrap FastMCP's existing lifespan to add healthcheck (preserves session manager)
-    original_lifespan = app.router.lifespan_context
-    if original_lifespan:
-        app.router.lifespan_context = wrap_lifespan(original_lifespan, app)
+    if original_lifespan := app.router.lifespan_context:
+        app.router.lifespan_context = wrap_lifespan(original_lifespan)
         logger.info("Healthcheck lifespan wrapped around FastMCP lifespan")
     else:
         logger.warning("No existing lifespan found - FastMCP may not work correctly")
 
     # Run uvicorn directly with the configured app
     uvicorn.run(app, host=HOST, port=PORT)
+
 
 if __name__ == "__main__":
     main()
