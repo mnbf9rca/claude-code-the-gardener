@@ -5,7 +5,6 @@ Runs the MCP server with HTTP transport for remote access
 import os
 import asyncio
 from pathlib import Path
-from contextlib import suppress
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import uvicorn
@@ -26,6 +25,7 @@ logger = get_logger(__name__)
 HOST = os.getenv("MCP_HOST", "0.0.0.0")
 PORT = int(os.getenv("MCP_PORT", "8000"))
 HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL")
+HEALTHCHECK_INTERVAL_SECONDS = int(os.getenv("HEALTHCHECK_INTERVAL_SECONDS", "30"))
 
 # Photos directory - must match CAMERA_SAVE_PATH for consistency
 PHOTOS_DIR = Path(os.getenv("CAMERA_SAVE_PATH", "./photos"))
@@ -42,18 +42,19 @@ except Exception as e:
     logger.error(error_msg)
     sys.exit(1)
 
-async def healthcheck_loop(url: str):
+async def healthcheck_loop(url: str, interval_seconds: int):
     """
-    Background task that sends healthcheck pings to healthchecks.io every 30 seconds.
+    Background task that sends healthcheck pings to healthchecks.io at regular intervals.
 
     Args:
         url: The healthchecks.io endpoint URL to ping
+        interval_seconds: How often to send pings (in seconds)
 
     This task runs indefinitely, sending POST requests with timestamp payload.
     If the event loop is blocked or the server hangs, this task won't fire,
     causing healthchecks.io to alert on the missing pings.
     """
-    logger.info(f"Healthcheck loop started, pinging every 30 seconds: {url}")
+    logger.info(f"Healthcheck loop started, pinging every {interval_seconds} seconds: {url}")
 
     # Use context manager to ensure HTTP client cleanup
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -61,14 +62,18 @@ async def healthcheck_loop(url: str):
             while True:
                 try:
                     timestamp = datetime.now(timezone.utc).isoformat()
-                    await client.post(url, json={"timestamp": timestamp})
-                    logger.debug(f"Healthcheck ping sent: {timestamp}")
+                    response = await client.post(url, json={"timestamp": timestamp})
+                    response.raise_for_status()
+                    logger.debug(f"Healthcheck ping successful: {response.status_code}")
+                except httpx.HTTPStatusError as e:
+                    # Server returned error status code (4xx/5xx)
+                    logger.warning(f"Healthcheck ping failed: {e.response.status_code} {e.response.text}")
                 except Exception as e:
-                    # Log errors but continue - we don't want healthcheck failures to crash the server
-                    logger.error(f"Healthcheck ping failed: {e}")
+                    # Network errors, timeouts, or other exceptions
+                    logger.error(f"Healthcheck ping exception: {e}")
 
-                # Wait 30 seconds before next ping
-                await asyncio.sleep(30)
+                # Wait before next ping
+                await asyncio.sleep(interval_seconds)
         finally:
             logger.info("Healthcheck loop stopped")
 
@@ -106,8 +111,10 @@ def main():
         """Start the healthcheck background task if HEALTHCHECK_URL is configured"""
         if HEALTHCHECK_URL:
             # Store task reference in app.state (Starlette best practice)
-            app.state.healthcheck_task = asyncio.create_task(healthcheck_loop(HEALTHCHECK_URL))
-            logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL}")
+            app.state.healthcheck_task = asyncio.create_task(
+                healthcheck_loop(HEALTHCHECK_URL, HEALTHCHECK_INTERVAL_SECONDS)
+            )
+            logger.info(f"✅ Healthcheck enabled: {HEALTHCHECK_URL} (interval: {HEALTHCHECK_INTERVAL_SECONDS}s)")
         else:
             logger.info("ℹ️  Healthcheck disabled (HEALTHCHECK_URL not set)")
 
@@ -118,8 +125,15 @@ def main():
         task = getattr(app.state, "healthcheck_task", None)
         if task:
             task.cancel()
-            with suppress(asyncio.CancelledError):
+            try:
                 await task
+            except asyncio.CancelledError:
+                # Expected when task is cancelled
+                # not using contextlib so as not to obscure other exceptions
+                pass
+            except Exception as exc:
+                # Log any unexpected exceptions during shutdown
+                logger.exception("Unexpected exception while cancelling healthcheck task: %s", exc)
             logger.info("Healthcheck task cancelled")
 
     # Run uvicorn directly with the configured app
