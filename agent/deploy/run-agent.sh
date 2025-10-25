@@ -17,6 +17,7 @@ WORKSPACE_DIR="$HOME/workspace"
 LOCK_FILE="$HOME/.gardener-agent.lock"
 LOG_DIR="${LOG_DIR:-$HOME/logs}"
 PROMPT_FILE="$HOME/prompt.txt"
+SYSTEM_PROMPT_FILE="$HOME/system-prompt.txt"
 MCP_CONFIG_FILE="$HOME/.mcp.json"
 
 # Ensure log directory exists and is writable
@@ -102,9 +103,22 @@ while true; do
 
     PROMPT=$(cat "$PROMPT_FILE")
 
+    # Build command arguments array to properly handle spaces and special characters
+    CLAUDE_ARGS=(
+        --output-format json
+        --mcp-config "$MCP_CONFIG_FILE"
+        -p "$PROMPT"
+    )
+
+    # Conditionally add system prompt argument if file exists
+    if [ -f "$SYSTEM_PROMPT_FILE" ]; then
+        SYSTEM_PROMPT_EXTENSION=$(cat "$SYSTEM_PROMPT_FILE")
+        CLAUDE_ARGS+=(--append-system-prompt "$SYSTEM_PROMPT_EXTENSION")
+    fi
+
     # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
     # Runs in isolated workspace so Claude cannot access config files in $HOME
-    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" --output-format json --mcp-config "$MCP_CONFIG_FILE" -p "$PROMPT") 2>&1 | tee -a "$LOG_FILE"; then
+    if (cd "$WORKSPACE_DIR" && "$CLAUDE_BIN" "${CLAUDE_ARGS[@]}") 2>&1 | tee -a "$LOG_FILE"; then
         EXEC_EXIT_CODE=0
         echo "[$(date -Iseconds)] Execution completed successfully" | tee -a "$LOG_FILE"
     else
@@ -126,6 +140,6 @@ while true; do
     fi
 
     # Wait 10 minutes before next execution
-    echo "[$(date -Iseconds)] Sleeping for 10 minutes..." | tee -a "$LOG_FILE"
-    sleep 600
+    echo "[$(date -Iseconds)] Sleeping for 20 minutes..." | tee -a "$LOG_FILE"
+    sleep 1200
 done

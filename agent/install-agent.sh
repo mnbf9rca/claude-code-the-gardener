@@ -17,6 +17,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEPLOY_DIR="$SCRIPT_DIR/deploy"
 
+# Source shared installation helpers
+source "$REPO_ROOT/scripts/install-helpers.sh"
+
 # Configuration
 GARDENER_USER="gardener"
 GARDENER_HOME="/home/gardener"
@@ -90,6 +93,9 @@ else
     echo "✓ User $GARDENER_USER created"
 fi
 
+# Add the sudo user to gardener group for convenient access
+add_sudo_user_to_group "$GARDENER_USER"
+
 # 2. Create necessary directories
 echo "Creating directories..."
 mkdir -p "$GARDENER_HOME/logs"
@@ -97,7 +103,13 @@ mkdir -p "$GARDENER_WORKSPACE"
 mkdir -p "$GARDENER_CLAUDE_DIR"
 chown "$GARDENER_USER:$GARDENER_USER" "$GARDENER_HOME/logs"
 chown -R "$GARDENER_USER:$GARDENER_USER" "$GARDENER_WORKSPACE"
-echo "✓ Directories created"
+
+# Enable group read+execute access to entire gardener home using ACLs
+# This allows group members to read files (e.g., Claude Code project transcripts) via SCP
+# Default ACLs ensure future files/directories also get group permissions
+setup_acl_group_access "$GARDENER_USER" "$GARDENER_HOME"
+
+echo "✓ Directories created and ACLs configured"
 
 # 3. Install Claude Code CLI as gardener user
 CLAUDE_BIN="$GARDENER_HOME/.local/bin/claude"

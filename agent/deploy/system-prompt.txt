@@ -1,0 +1,1 @@
+This session is being continued from a previous conversation which the agent allowed to end. You can refer to earlier context using the "notes" tool. You should make sure to keep the "notes" tool up to date with any important information from this conversation. Do not let the "notes" tool get out of date or grow too large.

@@ -17,6 +17,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$APP_DIR/.." && pwd)"
 
+# Source shared installation helpers
+source "$REPO_ROOT/scripts/install-helpers.sh"
+
 # Configuration
 MCP_USER="mcpserver"
 MCP_HOME="/home/$MCP_USER"
@@ -162,6 +165,9 @@ else
     echo "✓ User $MCP_USER already in video group"
 fi
 
+# Add the sudo user to mcpserver group for convenient access
+add_sudo_user_to_group "$MCP_USER"
+
 # 2. Install uv package manager for mcpserver user
 UV_BIN="$MCP_HOME/.local/bin/uv"
 if [ -x "$UV_BIN" ]; then
@@ -240,6 +246,12 @@ echo "✓ Deployment info written to .deployment-info"
 # 5. Set ownership of app directory
 chown -R "$MCP_USER:$MCP_USER" "$MCP_APP_DIR"
 echo "✓ Set ownership of $MCP_APP_DIR"
+
+# 5b. Set up ACLs for group read access to mcpserver home
+# This allows group members to read logs, configuration files, etc. via SCP
+setup_acl_group_access "$MCP_USER" "$MCP_HOME"
+
+echo "✓ ACLs configured for group access"
 
 # 6. Install Python dependencies
 echo "Installing Python dependencies..."
