@@ -114,6 +114,7 @@ while true; do
     if [ -f "$SYSTEM_PROMPT_FILE" ]; then
         SYSTEM_PROMPT_EXTENSION=$(cat "$SYSTEM_PROMPT_FILE")
         CLAUDE_ARGS+=(--append-system-prompt "$SYSTEM_PROMPT_EXTENSION")
+        echo "[$(date -Iseconds)] Using system prompt extension from $SYSTEM_PROMPT_FILE" | tee -a "$LOG_FILE"
     fi
 
     # Execute Claude Code agent from workspace directory (tee to both terminal and log file)
