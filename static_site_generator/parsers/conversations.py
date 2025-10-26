@@ -4,6 +4,7 @@ Extracts conversations, formats them for display, and calculates token/cost stat
 """
 
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
@@ -57,13 +58,64 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
             continue
 
         if msg_type == "user":
-            conversation["messages"].append({
-                "role": "user",
-                "timestamp": msg.get("timestamp"),
-                "content": msg.get("message", {}).get("content", ""),
-                "uuid": msg.get("uuid"),
-            })
-            conversation["message_count"] += 1
+            # Check if this is a tool result (has toolUseResult key)
+            if "toolUseResult" in msg:
+                tool_result = msg.get("toolUseResult")
+                if isinstance(tool_result, str):
+                    # Parse JSON string
+                    try:
+                        tool_result = json.loads(tool_result)
+                    except Exception:
+                        pass
+
+                # Get tool use ID from the message content
+                tool_use_id = None
+                message_content = msg.get("message", {}).get("content", [])
+                if isinstance(message_content, list):
+                    for item in message_content:
+                        if isinstance(item, dict) and item.get("type") == "tool_result":
+                            tool_use_id = item.get("tool_use_id")
+                            break
+
+                if tool_use_id:
+                    # Search backwards through ALL assistant messages to find the matching tool call
+                    found = False
+                    for assistant_msg in reversed(conversation["messages"]):
+                        if assistant_msg["role"] == "assistant" and not found:
+                            for tool_call in assistant_msg.get("tool_calls", []):
+                                if tool_call.get("id") == tool_use_id:
+                                    content = tool_result if isinstance(tool_result, (dict, list, str)) else str(tool_result)
+                                    tool_call["result"] = {
+                                        "content": content,
+                                        "content_html": format_tool_result(tool_call["name"], content),
+                                        "is_error": False,
+                                    }
+                                    found = True
+                                    break
+            else:
+                # Regular user message (not a tool result)
+                content = msg.get("message", {}).get("content", "")
+
+                # Content can be a string or a list (like assistant messages)
+                if isinstance(content, list):
+                    # Extract text parts from list
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                    content_text = "\n".join(text_parts) if text_parts else ""
+                else:
+                    # It's already a string
+                    content_text = content
+
+                conversation["messages"].append({
+                    "role": "user",
+                    "timestamp": msg.get("timestamp"),
+                    "content": content_text,
+                    "content_html": markdown_to_html(content_text) if content_text else "",
+                    "uuid": msg.get("uuid"),
+                })
+                conversation["message_count"] += 1
 
         elif msg_type == "assistant":
             assistant_msg = msg.get("message", {})
@@ -88,10 +140,17 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
                             conversation["tool_calls"].append(tool_call)
                             conversation["tool_call_count"] += 1
 
+            content_text = "\n".join(text_parts) if text_parts else ""
+
+            # Add formatted HTML for tool calls
+            for tool_call in tool_calls:
+                tool_call["input_html"] = format_tool_input(tool_call["name"], tool_call["input"])
+
             conversation["messages"].append({
                 "role": "assistant",
                 "timestamp": msg.get("timestamp"),
-                "content": "\n".join(text_parts) if text_parts else "",
+                "content": content_text,
+                "content_html": markdown_to_html(content_text) if content_text else "",
                 "tool_calls": tool_calls,
                 "uuid": msg.get("uuid"),
                 "model": assistant_msg.get("model"),
@@ -108,19 +167,6 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
             if isinstance(cache_creation, dict):
                 conversation["tokens"]["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
                 conversation["tokens"]["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
-
-        elif msg_type == "tool_result":
-            # Add tool results to the previous assistant message
-            if conversation["messages"] and conversation["messages"][-1]["role"] == "assistant":
-                if "tool_results" not in conversation["messages"][-1]:
-                    conversation["messages"][-1]["tool_results"] = []
-
-                tool_result = msg.get("toolResult", {})
-                conversation["messages"][-1]["tool_results"].append({
-                    "tool_call_id": tool_result.get("toolUseId"),
-                    "content": tool_result.get("content", []),
-                    "is_error": tool_result.get("isError", False),
-                })
 
     # Calculate cost estimate
     conversation["cost_usd"] = estimate_cost(conversation["tokens"])
@@ -195,6 +241,303 @@ def format_tool_call_for_display(tool_call: Dict[str, Any]) -> str:
   <pre class="tool-input"><code>{formatted_input}</code></pre>
 </div>'''
     return html
+
+
+def markdown_to_html(text: str) -> str:
+    """Convert markdown to HTML for display."""
+    if not text:
+        return ""
+
+    # Code blocks
+    text = re.sub(r'```(\w+)?\n(.*?)```', r'<pre class="code-block"><code>\2</code></pre>', text, flags=re.DOTALL)
+
+    # Bold
+    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+
+    # Headers
+    text = re.sub(r'^### (.*?)$', r'<h4>\1</h4>', text, flags=re.MULTILINE)
+    text = re.sub(r'^## (.*?)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
+    text = re.sub(r'^# (.*?)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
+
+    # Lists
+    lines = text.split('\n')
+    in_list = False
+    result = []
+    for line in lines:
+        if line.strip().startswith('- '):
+            if not in_list:
+                result.append('<ul class="markdown-list">')
+                in_list = True
+            result.append(f'<li>{line.strip()[2:]}</li>')
+        else:
+            if in_list:
+                result.append('</ul>')
+                in_list = False
+            result.append(line)
+    if in_list:
+        result.append('</ul>')
+
+    return '\n'.join(result)
+
+
+def format_tool_input(tool_name: str, tool_input: Dict[str, Any]) -> str:
+    """Format tool input parameters in a human-readable way."""
+    if not tool_input:
+        return '<span class="tool-no-params">No parameters</span>'
+
+    # Plant-specific tools - make them more readable
+    if 'moisture' in tool_name.lower():
+        if 'hours' in tool_input:
+            return f'<span class="tool-param">Last {tool_input["hours"]} hours, {tool_input.get("samples_per_hour", 1)} samples/hour</span>'
+
+    elif 'recent_thoughts' in tool_name or 'recent_actions' in tool_name:
+        if 'n' in tool_input:
+            return f'<span class="tool-param">Last {tool_input["n"]} items</span>'
+
+    elif 'light' in tool_name.lower() and 'activate' in tool_name:
+        if 'duration_minutes' in tool_input:
+            return f'<span class="tool-param">Duration: {tool_input["duration_minutes"]} minutes</span>'
+
+    elif 'dispense_water' in tool_name:
+        if 'ml' in tool_input:
+            return f'<span class="tool-param">Amount: {tool_input["ml"]}ml</span>'
+
+    # For other tools, show params as key-value pairs
+    params = []
+    for key, value in tool_input.items():
+        params.append(f'<span class="tool-param-key">{key}:</span> <span class="tool-param-value">{value}</span>')
+    return '<br>'.join(params)
+
+
+def format_tool_result(tool_name: str, result_content: Any) -> str:
+    """Format tool result based on tool type for better readability."""
+    if isinstance(result_content, str):
+        try:
+            result_content = json.loads(result_content)
+        except (json.JSONDecodeError, TypeError):
+            # If it's markdown or plain text, render it
+            if '\n' in result_content or '#' in result_content:
+                return f'<div class="tool-result-markdown">{markdown_to_html(result_content)}</div>'
+            return f'<div class="tool-result-text">{result_content}</div>'
+
+    if not isinstance(result_content, dict):
+        return f'<pre class="tool-result-raw"><code>{json.dumps(result_content, indent=2)}</code></pre>'
+
+    # Plant tool results
+    if 'read_moisture' in tool_name:
+        value = result_content.get('value', 'N/A')
+        status = result_content.get('status', 'unknown')
+        timestamp = result_content.get('timestamp', '')
+        return f'''<div class="tool-result-structured">
+            <div class="result-item"><span class="label">Moisture:</span> <span class="value moisture-value">{value}</span></div>
+            <div class="result-item"><span class="label">Status:</span> <span class="status-{status}">{status}</span></div>
+            <div class="result-item small"><span class="label">Time:</span> {timestamp}</div>
+        </div>'''
+
+    elif 'water_usage' in tool_name:
+        used = result_content.get('used_ml', 0)
+        remaining = result_content.get('remaining_ml', 0)
+        events = result_content.get('events', 0)
+        return f'''<div class="tool-result-structured">
+            <div class="result-item"><span class="label">Used (24h):</span> <span class="value">{used}ml</span></div>
+            <div class="result-item"><span class="label">Remaining:</span> <span class="value">{remaining}ml</span></div>
+            <div class="result-item"><span class="label">Events:</span> {events}</div>
+        </div>'''
+
+    elif 'light_status' in tool_name:
+        status = result_content.get('status', 'unknown')
+        can_activate = result_content.get('can_activate', False)
+        minutes = result_content.get('minutes_until_available', 0)
+        return f'''<div class="tool-result-structured">
+            <div class="result-item"><span class="label">Status:</span> <span class="status-{status}">{status}</span></div>
+            <div class="result-item"><span class="label">Can activate:</span> {can_activate}</div>
+            {f'<div class="result-item"><span class="label">Available in:</span> {minutes} minutes</div>' if minutes > 0 else ''}
+        </div>'''
+
+    elif 'capture_photo' in tool_name or 'camera' in tool_name:
+        url = result_content.get('url', '')
+        timestamp = result_content.get('timestamp', '')
+        if url:
+            return f'''<div class="tool-result-structured">
+                <div class="result-item"><span class="label">Photo captured:</span> {timestamp}</div>
+                <div class="result-item"><a href="{url}" target="_blank" class="photo-link">View Photo</a></div>
+            </div>'''
+
+    elif 'get_current_time' in tool_name:
+        timestamp = result_content.get('timestamp', result_content)
+        return f'<div class="tool-result-structured"><div class="result-item"><span class="value">{timestamp}</span></div></div>'
+
+    elif 'moisture_history' in tool_name and 'result' in result_content:
+        readings = result_content.get('result', [])
+        if readings:
+            rows = []
+            for timestamp, value in readings:
+                rows.append(f'<tr><td>{timestamp}</td><td class="moisture-value">{value}</td></tr>')
+            return f'''<div class="tool-result-table">
+                <table class="moisture-history">
+                    <thead><tr><th>Time</th><th>Value</th></tr></thead>
+                    <tbody>{''.join(rows)}</tbody>
+                </table>
+            </div>'''
+
+    elif 'fetch_notes' in tool_name and 'content' in result_content:
+        content = result_content.get('content', '')
+        return f'<div class="tool-result-notes">{markdown_to_html(content)}</div>'
+
+    # list_messages_from_human - structured message list
+    elif 'list_messages' in tool_name and 'messages' in result_content:
+        messages = result_content.get('messages', [])
+        if messages:
+            items = []
+            for msg in messages:
+                msg_id = msg.get('message_id', 'N/A')
+                timestamp = msg.get('timestamp', '')[:19]  # Trim to readable length
+                content = msg.get('content', '')
+                in_reply_to = msg.get('in_reply_to')
+
+                # Render content as markdown if it looks like formatted text
+                content_html = markdown_to_html(content) if content else '<em>No content</em>'
+                reply_badge = f'<span class="reply-badge">↩ Reply to {in_reply_to}</span>' if in_reply_to else ''
+
+                items.append(f'''<div class="message-item">
+                    <div class="message-meta">
+                        <strong>{msg_id}</strong> · {timestamp} {reply_badge}
+                    </div>
+                    <div class="message-body">{content_html}</div>
+                </div>''')
+
+            return f'''<div class="tool-result-messages">
+                <div class="message-count">{len(messages)} message(s)</div>
+                {''.join(items)}
+            </div>'''
+
+    # get_recent_thoughts - structured thought cards
+    elif 'thoughts' in tool_name and 'thoughts' in result_content:
+        thoughts = result_content.get('thoughts', [])
+        if thoughts:
+            cards = []
+            for i, thought in enumerate(thoughts, 1):
+                timestamp = thought.get('timestamp', '')[:19]
+                observation = markdown_to_html(thought.get('observation', ''))
+                hypothesis = markdown_to_html(thought.get('hypothesis', ''))
+                reasoning = markdown_to_html(thought.get('reasoning', ''))
+                uncertainties = markdown_to_html(thought.get('uncertainties', ''))
+                actions = thought.get('candidate_actions', [])
+                tags = thought.get('tags', [])
+
+                # Format actions as a list
+                if actions:
+                    action_items = [f"<li>{act.get('action', 'unknown')}" +
+                                  (f" ({act.get('value')})" if act.get('value') else "") +
+                                  "</li>" for act in actions]
+                    actions_html = f"<ul class='action-list'>{''.join(action_items)}</ul>"
+                else:
+                    actions_html = "<em>No actions</em>"
+
+                # Format tags
+                tags_html = ' '.join([f'<span class="tag">{tag}</span>' for tag in tags]) if tags else ''
+
+                cards.append(f'''<div class="thought-card">
+                    <div class="thought-header">
+                        <span class="thought-number">#{i}</span>
+                        <span class="thought-time">{timestamp}</span>
+                    </div>
+                    {f'<div class="thought-tags">{tags_html}</div>' if tags_html else ''}
+                    <div class="thought-section">
+                        <div class="section-label">Observation</div>
+                        <div class="section-content">{observation}</div>
+                    </div>
+                    <div class="thought-section">
+                        <div class="section-label">Hypothesis</div>
+                        <div class="section-content">{hypothesis}</div>
+                    </div>
+                    <div class="thought-section">
+                        <div class="section-label">Candidate Actions</div>
+                        <div class="section-content">{actions_html}</div>
+                    </div>
+                    <div class="thought-section">
+                        <div class="section-label">Reasoning</div>
+                        <div class="section-content">{reasoning}</div>
+                    </div>
+                    {f'<div class="thought-section"><div class="section-label">Uncertainties</div><div class="section-content">{uncertainties}</div></div>' if uncertainties else ''}
+                </div>''')
+
+            return f'<div class="tool-result-thoughts">{chr(10).join(cards)}</div>'
+
+    # History tools - handle dict with 'result' wrapper (moisture_history, light_history, etc.)
+    elif isinstance(result_content, dict) and 'result' in result_content:
+        result_list = result_content['result']
+        if isinstance(result_list, list) and result_list:
+            first_item = result_list[0]
+
+            # Bucketed data with aggregation (dicts with bucket_start/bucket_end)
+            if isinstance(first_item, dict) and 'bucket_start' in first_item:
+                rows = []
+                for bucket in result_list:
+                    start = bucket.get('bucket_start', '')[:19]
+                    end = bucket.get('bucket_end', '')[:19]
+                    value = bucket.get('value', 0)
+                    count = bucket.get('count', 0)
+                    rows.append(f'<tr><td>{start}</td><td>{end}</td><td class="value-cell">{value}</td><td>{count}</td></tr>')
+
+                return f'''<div class="tool-result-table">
+                    <table class="history-table">
+                        <thead><tr><th>Bucket Start</th><th>Bucket End</th><th>Value</th><th>Count</th></tr></thead>
+                        <tbody>{''.join(rows)}</tbody>
+                    </table>
+                </div>'''
+
+            # Time series data [[timestamp, value], ...]
+            elif isinstance(first_item, list) and len(first_item) == 2:
+                rows = []
+                for timestamp, value in result_list:
+                    ts_short = timestamp[:19] if isinstance(timestamp, str) else timestamp
+                    rows.append(f'<tr><td>{ts_short}</td><td class="value-cell">{value}</td></tr>')
+
+                return f'''<div class="tool-result-table">
+                    <table class="history-table">
+                        <thead><tr><th>Time</th><th>Value</th></tr></thead>
+                        <tbody>{''.join(rows)}</tbody>
+                    </table>
+                </div>'''
+
+    # History tools - check if it's a list of [timestamp, value] or bucketed data (no wrapper)
+    elif isinstance(result_content, list) and result_content:
+        first_item = result_content[0]
+
+        # Bucketed data with aggregation (dicts with bucket_start/bucket_end)
+        if isinstance(first_item, dict) and 'bucket_start' in first_item:
+            rows = []
+            for bucket in result_content:
+                start = bucket.get('bucket_start', '')[:19]
+                end = bucket.get('bucket_end', '')[:19]
+                value = bucket.get('value', 0)
+                count = bucket.get('count', 0)
+                rows.append(f'<tr><td>{start}</td><td>{end}</td><td class="value-cell">{value}</td><td>{count}</td></tr>')
+
+            return f'''<div class="tool-result-table">
+                <table class="history-table">
+                    <thead><tr><th>Bucket Start</th><th>Bucket End</th><th>Value</th><th>Count</th></tr></thead>
+                    <tbody>{''.join(rows)}</tbody>
+                </table>
+            </div>'''
+
+        # Time series data [[timestamp, value], ...]
+        elif isinstance(first_item, list) and len(first_item) == 2:
+            rows = []
+            for timestamp, value in result_content:
+                ts_short = timestamp[:19] if isinstance(timestamp, str) else timestamp
+                rows.append(f'<tr><td>{ts_short}</td><td class="value-cell">{value}</td></tr>')
+
+            return f'''<div class="tool-result-table">
+                <table class="history-table">
+                    <thead><tr><th>Time</th><th>Value</th></tr></thead>
+                    <tbody>{''.join(rows)}</tbody>
+                </table>
+            </div>'''
+
+    # Default: JSON pretty print
+    return f'<pre class="tool-result-json"><code>{json.dumps(result_content, indent=2)}</code></pre>'
 
 
 def get_highlights(conversations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

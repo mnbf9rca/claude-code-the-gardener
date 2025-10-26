@@ -40,31 +40,39 @@
         {% for message in conversation.messages %}
         <div class="message message-{{ message.role }}">
             <div class="message-header">
-                <span class="message-role">{{ message.role }}</span>
+                <span class="message-role">
+                    {% if message.role == 'assistant' %}
+                    Claude
+                    {% elif message.role == 'user' %}
+                    System
+                    {% else %}
+                    {{ message.role }}
+                    {% endif %}
+                </span>
                 <span class="message-time">{{ message.timestamp }}</span>
             </div>
             <div class="message-content">
                 {% if message.content %}
-                <pre class="message-text">{{ message.content }}</pre>
+                <div class="message-text">{{ message.content_html | safe }}</div>
                 {% endif %}
 
                 {% if message.tool_calls %}
                 <div class="tool-calls">
                     {% for tool in message.tool_calls %}
-                    <div class="tool-call">
-                        <div class="tool-name">=' {{ tool.name }}</div>
-                        <pre class="tool-input"><code>{{ tool.input | tojson(indent=2) }}</code></pre>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                {% if message.tool_results %}
-                <div class="tool-results">
-                    {% for result in message.tool_results %}
-                    <div class="tool-result {% if result.is_error %}tool-error{% endif %}">
-                        <div class="result-header">Result for {{ result.tool_call_id }}</div>
-                        <pre class="result-content"><code>{{ result.content | tojson(indent=2) }}</code></pre>
+                    <div class="tool-call-block">
+                        <div class="tool-call">
+                            <div class="tool-header">
+                                <span class="tool-icon">='</span>
+                                <span class="tool-name">{{ tool.name }}</span>
+                            </div>
+                            <div class="tool-input">{{ tool.input_html | safe }}</div>
+                        </div>
+                        {% if tool.result %}
+                        <div class="tool-result {% if tool.result.is_error %}tool-error{% endif %}">
+                            <div class="result-label">Result:</div>
+                            <div class="result-content">{{ tool.result.content_html | safe }}</div>
+                        </div>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
