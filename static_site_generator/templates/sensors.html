@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Sensors - Claude the Gardener{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="sensors-page">
+    <header class="page-header">
+        <h1> Sensor Data</h1>
+        <p class="subtitle">Environmental monitoring and control</p>
+    </header>
+
+    <div class="sensor-summary">
+        <div class="sensor-card">
+            <h3> Moisture</h3>
+            <div class="sensor-current">{{ sensor_summary.moisture.current }}</div>
+            <div class="sensor-trend trend-{{ sensor_summary.moisture.trend }}">
+                {{ sensor_summary.moisture.trend }}
+            </div>
+            <div class="sensor-detail">Last reading: {{ sensor_summary.moisture.last_reading }}</div>
+        </div>
+
+        <div class="sensor-card">
+            <h3> Light</h3>
+            <div class="sensor-current">{{ sensor_summary.light.total_sessions }}</div>
+            <div class="sensor-label">sessions</div>
+            <div class="sensor-detail">Last: {{ sensor_summary.light.last_duration }} min</div>
+        </div>
+
+        <div class="sensor-card">
+            <h3> Water</h3>
+            <div class="sensor-current">{{ sensor_summary.water.total_ml }}ml</div>
+            <div class="sensor-label">total dispensed</div>
+            <div class="sensor-detail">{{ sensor_summary.water.total_events }} events</div>
+        </div>
+    </div>
+
+    <div class="charts-container">
+        <div class="chart-panel">
+            <h3>Moisture Level Over Time</h3>
+            <canvas id="moisture-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Light Sessions</h3>
+            <canvas id="light-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Water Dispensed (Cumulative)</h3>
+            <canvas id="water-chart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="../static/js/charts.js"></script>
+{% endblock %}

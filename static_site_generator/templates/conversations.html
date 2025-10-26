@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Conversations - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="conversations-page">
+    <header class="page-header">
+        <h1>= Conversation History</h1>
+        <p class="subtitle">{{ conversations|length }} conversations with Claude the Gardener</p>
+    </header>
+
+    <div class="filter-controls">
+        <input type="text" id="search-conversations" placeholder="Search conversations..." class="search-input">
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="highlights">Highlights</button>
+            <button class="filter-btn" data-filter="water">Water Events</button>
+            <button class="filter-btn" data-filter="photos">With Photos</button>
+        </div>
+    </div>
+
+    <div class="conversation-grid">
+        {% for conv in conversations %}
+        <div class="conversation-card"
+             data-tools="{{ conv.tool_calls|map(attribute='name')|join(',') }}"
+             data-highlight="{{ 'yes' if conv in highlights else 'no' }}">
+            <div class="card-header">
+                <div class="card-title">
+                    <a href="{{ conv.session_id }}.html">Session {{ conv.session_id[:8] }}...</a>
+                </div>
+                <div class="card-meta">
+                    {{ conv.start_time[:10] }} " {{ conv.duration_human }}
+                </div>
+            </div>
+
+            <div class="card-stats">
+                <div class="stat-item">
+                    <span class="stat-icon">='</span>
+                    <span class="stat-text">{{ conv.tool_call_count }} tools</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">=</span>
+                    <span class="stat-text">{{ conv.message_count }} messages</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">=</span>
+                    <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output) | format_number }} tokens</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">=</span>
+                    <span class="stat-text">${{ "%.3f"|format(conv.cost_usd) }}</span>
+                </div>
+            </div>
+
+            {% if conv.prompt %}
+            <div class="card-prompt">
+                {{ conv.prompt[:150] }}{% if conv.prompt|length > 150 %}...{% endif %}
+            </div>
+            {% endif %}
+
+            {% if conv in highlights %}
+            <div class="highlight-badges">
+                {% for reason in conv.highlight_reasons %}
+                <span class="badge">{{ reason }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Simple client-side filtering
+document.getElementById('search-conversations').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const cards = document.querySelectorAll('.conversation-card');
+
+    cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(searchTerm) ? 'block' : 'none';
+    });
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        const filter = this.dataset.filter;
+        const cards = document.querySelectorAll('.conversation-card');
+
+        cards.forEach(card => {
+            if (filter === 'all') {
+                card.style.display = 'block';
+            } else if (filter === 'highlights') {
+                card.style.display = card.dataset.highlight === 'yes' ? 'block' : 'none';
+            } else if (filter === 'water') {
+                card.style.display = card.dataset.tools.includes('dispense_water') ? 'block' : 'none';
+            } else if (filter === 'photos') {
+                card.style.display = card.dataset.tools.includes('capture_photo') ? 'block' : 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

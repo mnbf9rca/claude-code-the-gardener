@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Notes Evolution - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="notes-page">
+    <header class="page-header">
+        <h1> Notes Evolution</h1>
+        <p class="subtitle">How Claude's understanding has evolved over time</p>
+    </header>
+
+    <div class="notes-container">
+        <div class="current-notes panel">
+            <h2>Current Notes</h2>
+            <pre class="notes-content">{{ current_notes }}</pre>
+        </div>
+
+        <div class="notes-history">
+            <h2>Historical Versions ({{ versions|length }})</h2>
+            <div class="versions-list">
+                {% for version in versions %}
+                <details class="version-item">
+                    <summary class="version-header">
+                        <span class="version-time">{{ version.timestamp }}</span>
+                        <span class="version-size">{{ version.content|length }} chars</span>
+                    </summary>
+                    <pre class="version-content">{{ version.content }}</pre>
+                </details>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

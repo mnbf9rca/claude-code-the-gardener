@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Timeline - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="timeline-page">
+    <header class="page-header">
+        <h1>= Event Timeline</h1>
+        <p class="subtitle">{{ timeline|length }} events tracked</p>
+    </header>
+
+    <div class="filter-controls">
+        <input type="text" id="search-timeline" placeholder="Search events..." class="search-input">
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="thought">= Thoughts</button>
+            <button class="filter-btn" data-filter="action"> Actions</button>
+            <button class="filter-btn" data-filter="water">= Water</button>
+            <button class="filter-btn" data-filter="light">= Light</button>
+            <button class="filter-btn" data-filter="photo">= Photos</button>
+            <button class="filter-btn" data-filter="message"> Messages</button>
+        </div>
+    </div>
+
+    <div class="timeline">
+        {% for event in timeline %}
+        <div class="timeline-event" data-type="{{ event.type }}" data-unix="{{ event.unix }}">
+            <div class="event-marker event-{{ event.type }}">
+                {% if event.type == 'water' %}=
+                {% elif event.type == 'light' %}=
+                {% elif event.type == 'photo' %}=
+                {% elif event.type == 'message' %}
+                {% elif event.type == 'action' %}
+                {% else %}=
+                {% endif %}
+            </div>
+            <div class="event-content">
+                <div class="event-time">{{ event.timestamp }}</div>
+                <div class="event-summary">{{ event.summary }}</div>
+                {% if event.tags %}
+                <div class="event-tags">
+                    {% for tag in event.tags %}
+                    <span class="tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <button class="annotate-btn" data-event-id="{{ event.unix }}">+ Add Note</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        const filter = this.dataset.filter;
+        const events = document.querySelectorAll('.timeline-event');
+
+        events.forEach(event => {
+            if (filter === 'all') {
+                event.style.display = 'flex';
+            } else {
+                event.style.display = event.dataset.type === filter ? 'flex' : 'none';
+            }
+        });
+    });
+});
+
+document.getElementById('search-timeline').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const events = document.querySelectorAll('.timeline-event');
+
+    events.forEach(event => {
+        const text = event.textContent.toLowerCase();
+        event.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Conversation {{ conversation.session_id[:8] }} - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="conversation-detail">
+    <header class="page-header">
+        <h1>= Conversation Details</h1>
+        <p class="subtitle">Session ID: {{ conversation.session_id }}</p>
+    </header>
+
+    <div class="conversation-meta">
+        <div class="meta-item">
+            <span class="meta-label">Started:</span>
+            <span class="meta-value">{{ conversation.start_time }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Duration:</span>
+            <span class="meta-value">{{ conversation.duration_human }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Messages:</span>
+            <span class="meta-value">{{ conversation.message_count }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Tool Calls:</span>
+            <span class="meta-value">{{ conversation.tool_call_count }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Tokens:</span>
+            <span class="meta-value">{{ (conversation.tokens.input + conversation.tokens.output) | format_number }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Cost:</span>
+            <span class="meta-value">${{ "%.4f"|format(conversation.cost_usd) }}</span>
+        </div>
+    </div>
+
+    <div class="messages">
+        {% for message in conversation.messages %}
+        <div class="message message-{{ message.role }}">
+            <div class="message-header">
+                <span class="message-role">{{ message.role }}</span>
+                <span class="message-time">{{ message.timestamp }}</span>
+            </div>
+            <div class="message-content">
+                {% if message.content %}
+                <pre class="message-text">{{ message.content }}</pre>
+                {% endif %}
+
+                {% if message.tool_calls %}
+                <div class="tool-calls">
+                    {% for tool in message.tool_calls %}
+                    <div class="tool-call">
+                        <div class="tool-name">=' {{ tool.name }}</div>
+                        <pre class="tool-input"><code>{{ tool.input | tojson(indent=2) }}</code></pre>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if message.tool_results %}
+                <div class="tool-results">
+                    {% for result in message.tool_results %}
+                    <div class="tool-result {% if result.is_error %}tool-error{% endif %}">
+                        <div class="result-header">Result for {{ result.tool_call_id }}</div>
+                        <pre class="result-content"><code>{{ result.content | tojson(indent=2) }}</code></pre>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="conversation-nav">
+        <a href="index.html" class="nav-btn"> Back to Conversations</a>
+    </div>
+</div>
+{% endblock %}

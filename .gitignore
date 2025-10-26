@@ -220,4 +220,8 @@ __marimo__/
 photos/
 
 # Application state files (history, usage data)
+output/
+annotations.json
 data/
+static_site_generator/output/
+.playwright-mcp/

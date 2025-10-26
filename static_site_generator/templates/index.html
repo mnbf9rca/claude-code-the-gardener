@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <header class="page-header">
+        <h1><1 Claude the Gardener Dashboard</h1>
+        <p class="subtitle">Autonomous AI Plant Care Journey</p>
+    </header>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.project.duration_days }}</div>
+                <div class="stat-label">Days Alive</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.conversations.total_count }}</div>
+                <div class="stat-label">Conversations</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.water.total_ml_dispensed }}ml</div>
+                <div class="stat-label">Water Dispensed</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.light.total_hours }}h</div>
+                <div class="stat-label">Light Sessions</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.photos.total }}</div>
+                <div class="stat-label">Photos Taken</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.thoughts.total }}</div>
+                <div class="stat-label">Thoughts Logged</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">></div>
+            <div class="stat-content">
+                <div class="stat-value">${{ "%.2f"|format(stats.conversations.estimated_cost_usd.total) }}</div>
+                <div class="stat-label">Estimated Cost</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">=</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ (stats.conversations.total_tokens.input + stats.conversations.total_tokens.output) | format_number }}</div>
+                <div class="stat-label">Total Tokens</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="panel">
+            <h2><? Current Plant Status</h2>
+            <div class="status-info">
+                <div class="status-row">
+                    <span class="status-label">Moisture Level:</span>
+                    <span class="status-value">{{ sensor_summary.moisture.current }}
+                        <span class="trend trend-{{ sensor_summary.moisture.trend }}">{{ sensor_summary.moisture.trend }}</span>
+                    </span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Last Light Session:</span>
+                    <span class="status-value">{{ sensor_summary.light.last_duration }} minutes</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Total Water Used:</span>
+                    <span class="status-value">{{ sensor_summary.water.total_ml }}ml</span>
+                </div>
+            </div>
+            <a href="sensors.html" class="panel-link">View Detailed Sensor Data </a>
+        </div>
+
+        <div class="panel">
+            <h2>P Highlights</h2>
+            <div class="highlights-list">
+                {% for highlight in highlights[:5] %}
+                <div class="highlight-item">
+                    <div class="highlight-icon">
+                        {% if highlight.type == 'water' %}=
+                        {% elif highlight.type == 'light' %}=
+                        {% elif highlight.type == 'photo' %}=
+                        {% elif highlight.type == 'message' %}
+                        {% else %}=
+                        {% endif %}
+                    </div>
+                    <div class="highlight-content">
+                        <div class="highlight-summary">{{ highlight.summary }}</div>
+                        {% if highlight.highlight_reason %}
+                        <div class="highlight-reason">{{ highlight.highlight_reason }}</div>
+                        {% endif %}
+                        <div class="highlight-time">{{ highlight.timestamp }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <a href="timeline.html" class="panel-link">View Full Timeline </a>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="panel">
+            <h2>= Recent Conversations</h2>
+            <div class="conversation-list">
+                {% for conv in recent_conversations[:5] %}
+                <div class="conversation-item">
+                    <div class="conv-header">
+                        <a href="conversations/{{ conv.session_id }}.html" class="conv-link">
+                            Conversation {{ loop.index }}
+                        </a>
+                        <span class="conv-time">{{ conv.duration_human }}</span>
+                    </div>
+                    <div class="conv-stats">
+                        <span class="conv-stat">{{ conv.tool_call_count }} tools</span>
+                        <span class="conv-stat">{{ (conv.tokens.input + conv.tokens.output) | format_number }} tokens</span>
+                        <span class="conv-stat">${{ "%.3f"|format(conv.cost_usd) }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <a href="conversations/index.html" class="panel-link">View All Conversations </a>
+        </div>
+
+        <div class="panel">
+            <h2>= Activity This Week</h2>
+            <div class="daily-activity">
+                {% for day in daily_summary %}
+                <div class="activity-day">
+                    <div class="day-label">{{ day.date }}</div>
+                    <div class="day-bars">
+                        {% if day.conversations > 0 %}
+                        <div class="activity-bar conv-bar" style="width: {{ (day.conversations * 20) }}px" title="{{ day.conversations }} conversations"></div>
+                        {% endif %}
+                        {% if day.actions > 0 %}
+                        <div class="activity-bar action-bar" style="width: {{ (day.actions * 5) }}px" title="{{ day.actions }} actions"></div>
+                        {% endif %}
+                        {% if day.photos > 0 %}
+                        <div class="activity-bar photo-bar" style="width: {{ (day.photos * 10) }}px" title="{{ day.photos }} photos"></div>
+                        {% endif %}
+                    </div>
+                    <div class="day-counts">
+                        {{ day.conversations }}c, {{ day.actions }}a, {{ day.photos }}p
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

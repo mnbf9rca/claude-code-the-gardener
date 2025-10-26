@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Photo Gallery - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="photos-page">
+    <header class="page-header">
+        <h1> Photo Gallery</h1>
+        <p class="subtitle">{{ photos|length }} photos of the plant's journey</p>
+    </header>
+
+    <div class="photos-grid">
+        {% for photo in photos %}
+        {% if photo.photo_path %}
+        <div class="photo-card">
+            <div class="photo-wrapper">
+                <img src="../photos/{{ photo.photo_path.split('/')[-1] }}"
+                     alt="Plant photo from {{ photo.timestamp }}"
+                     loading="lazy"
+                     class="photo-img">
+            </div>
+            <div class="photo-meta">
+                <div class="photo-time">{{ photo.timestamp }}</div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
