@@ -53,6 +53,18 @@
       "cwd": "${workspaceFolder}/app",
       "console": "integratedTerminal",
       "justMyCode": true
+    },
+    {
+      "name": "Serve Static Site (Port 8080)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "python3 -m http.server 8080",
+      "cwd": "${workspaceFolder}/static_site_generator/output",
+      "serverReadyAction": {
+        "pattern": "Serving HTTP on.*port ([0-9]+)",
+        "uriFormat": "http://localhost:%s",
+        "action": "openExternally"
+      }
     }
   ]
 }
