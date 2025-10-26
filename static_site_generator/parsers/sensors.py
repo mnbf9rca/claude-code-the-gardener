@@ -76,13 +76,100 @@ def get_water_data(data_dir: Path) -> List[Dict[str, Any]]:
     return sorted(chart_data, key=lambda x: x["unix"])
 
 
-def get_combined_sensor_data(data_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
-    """Get all sensor data in one call for efficiency."""
+def get_conversation_analytics(conversations: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Generate time-series data from conversations for analytics charts."""
+
+    # Sort conversations by start time
+    sorted_convs = sorted(conversations, key=lambda c: c.get("start_time", ""))
+
+    cost_data = []
+    tokens_data = []
+    thoughts_data = []
+    actions_data = []
+    cumulative_cost = 0
+    cumulative_thoughts = 0
+    cumulative_actions = 0
+
+    for conv in sorted_convs:
+        try:
+            timestamp = parse_timestamp(conv["start_time"])
+            unix_ms = int(timestamp.timestamp() * 1000)
+
+            # Cost accumulation
+            cost = conv.get("cost_usd", 0)
+            cumulative_cost += cost
+            cost_data.append({
+                "timestamp": timestamp.isoformat(),
+                "cost": cost,
+                "cumulative_cost": cumulative_cost,
+                "unix": unix_ms,
+            })
+
+            # Tokens by type
+            tokens = conv.get("tokens", {})
+            tokens_data.append({
+                "timestamp": timestamp.isoformat(),
+                "input": tokens.get("input", 0),
+                "output": tokens.get("output", 0),
+                "cache_read": tokens.get("cache_read", 0),
+                "cache_creation": tokens.get("cache_creation", 0),
+                "unix": unix_ms,
+            })
+
+            # Count thoughts and actions from messages
+            thought_count = 0
+            action_count = 0
+
+            for msg in conv.get("messages", []):
+                for tool_call in msg.get("tool_calls", []):
+                    tool_name = tool_call.get("name", "")
+                    if "log_thought" in tool_name:
+                        thought_count += 1
+                    elif "log_action" in tool_name:
+                        action_count += 1
+
+            cumulative_thoughts += thought_count
+            cumulative_actions += action_count
+
+            thoughts_data.append({
+                "timestamp": timestamp.isoformat(),
+                "count": thought_count,
+                "cumulative": cumulative_thoughts,
+                "unix": unix_ms,
+            })
+
+            actions_data.append({
+                "timestamp": timestamp.isoformat(),
+                "count": action_count,
+                "cumulative": cumulative_actions,
+                "unix": unix_ms,
+            })
+
+        except (ValueError, TypeError, KeyError):
+            continue
+
     return {
+        "cost": cost_data,
+        "tokens": tokens_data,
+        "thoughts": thoughts_data,
+        "actions": actions_data,
+    }
+
+
+def get_combined_sensor_data(data_dir: Path, conversations: List[Dict[str, Any]] = None) -> Dict[str, List[Dict[str, Any]]]:
+    """Get all sensor and conversation analytics data in one call for efficiency."""
+    data = {
         "moisture": get_moisture_data(data_dir),
         "light": get_light_data(data_dir),
         "water": get_water_data(data_dir),
     }
+
+    # Add conversation analytics if provided
+    if conversations:
+        analytics = get_conversation_analytics(conversations)
+        data.update(analytics)
+
+    return data
 
 
 def get_sensor_summary(data_dir: Path) -> Dict[str, Any]:

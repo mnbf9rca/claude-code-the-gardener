@@ -1,35 +1,268 @@
-// Chart.js configuration for sensor data visualization
+// Chart.js configuration for sensor and analytics visualization
+
+// Global variables to store chart instances and data
+let allData = null;
+let chartInstances = {};
 
 document.addEventListener('DOMContentLoaded', async function() {
     try {
         // Load sensor data
         const response = await fetch('../data/sensor_data.json');
-        const sensorData = await response.json();
+        allData = await response.json();
+
+        // Initialize charts with all data
+        renderCharts(allData);
+
+        // Setup date range filter
+        setupDateRangeFilter();
+
+    } catch (error) {
+        console.error('Error loading sensor data:', error);
+    }
+});
+
+/**
+ * Parse Grafana-style relative time expressions using modern Date methods
+ * Supported formats:
+ * - "now" - current time
+ * - "now-3h", "now-7d", "now-1M", "now-2y" - relative past
+ * - "now+1h", "now+3d" - relative future
+ * - "2024-01-15" or "2024-01-15 14:30" - absolute dates
+ * - Empty string - interpreted as no filter (all data)
+ *
+ * Uses Date.prototype methods (setMonth, setDate, etc.) which properly handle:
+ * - Leap years
+ * - Varying month lengths (28-31 days)
+ * - Daylight saving time transitions
+ */
+function parseTimeExpression(expr) {
+    if (!expr || expr.trim() === '') {
+        return null; // No filter
+    }
+
+    const trimmed = expr.trim();
+
+    // Try parsing as absolute date/datetime
+    const absoluteDate = new Date(trimmed);
+    if (!isNaN(absoluteDate.getTime()) && trimmed.match(/\d{4}-\d{2}-\d{2}/)) {
+        return absoluteDate.getTime();
+    }
+
+    // Handle "now" with optional offset
+    if (trimmed === 'now') {
+        return Date.now();
+    }
+
+    // Match: now[+-]<number><unit>
+    const relativeMatch = trimmed.match(/^now\s*([+-])\s*(\d+)\s*([smhdwMy])$/);
+    if (relativeMatch) {
+        const sign = relativeMatch[1] === '+' ? 1 : -1;
+        const amount = parseInt(relativeMatch[2]) * sign;
+        const unit = relativeMatch[3];
+
+        const date = new Date();
+
+        // Use Date methods for accurate calendar arithmetic
+        switch (unit) {
+            case 's': // seconds
+                date.setSeconds(date.getSeconds() + amount);
+                break;
+            case 'm': // minutes
+                date.setMinutes(date.getMinutes() + amount);
+                break;
+            case 'h': // hours
+                date.setHours(date.getHours() + amount);
+                break;
+            case 'd': // days
+                date.setDate(date.getDate() + amount);
+                break;
+            case 'w': // weeks
+                date.setDate(date.getDate() + (amount * 7));
+                break;
+            case 'M': // months (handles varying lengths correctly)
+                date.setMonth(date.getMonth() + amount);
+                break;
+            case 'y': // years (handles leap years correctly)
+                date.setFullYear(date.getFullYear() + amount);
+                break;
+        }
+
+        return date.getTime();
+    }
+
+    // If we can't parse it, return null
+    console.warn(`Could not parse time expression: "${trimmed}"`);
+    return null;
+}
+
+function setupDateRangeFilter() {
+    const presetBtns = document.querySelectorAll('.preset-btn');
+    const applyBtn = document.getElementById('apply-time-range');
+    const fromInput = document.getElementById('time-from');
+    const toInput = document.getElementById('time-to');
+
+    // Preset buttons
+    presetBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            presetBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const fromExpr = this.dataset.from;
+            const toExpr = this.dataset.to;
+
+            fromInput.value = fromExpr;
+            toInput.value = toExpr;
+
+            // Auto-apply
+            applyTimeRange();
+        });
+    });
+
+    // Apply button
+    applyBtn.addEventListener('click', applyTimeRange);
+
+    // Enter key in inputs
+    fromInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applyTimeRange();
+    });
+    toInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applyTimeRange();
+    });
+
+    function applyTimeRange() {
+        const fromExpr = fromInput.value.trim();
+        const toExpr = toInput.value.trim();
+
+        const fromTime = parseTimeExpression(fromExpr);
+        const toTime = parseTimeExpression(toExpr);
+
+        // Clear active preset buttons if manually edited
+        presetBtns.forEach(b => {
+            if (b.dataset.from !== fromExpr || b.dataset.to !== toExpr) {
+                b.classList.remove('active');
+            }
+        });
+
+        // If both are null/empty, show all data
+        if (fromTime === null && toTime === null) {
+            applyFilter('all');
+            return;
+        }
+
+        // Apply custom range
+        const minTime = fromTime || 0;
+        const maxTime = toTime || Date.now() + 86400000;
+
+        applyFilter('custom', minTime, maxTime);
+    }
+}
+
+function applyFilter(range, customStart, customEnd) {
+    if (!allData) return;
+
+    const now = Date.now();
+    let minTime, maxTime;
+
+    if (range === 'all') {
+        minTime = 0;
+        maxTime = now + 86400000; // Add 1 day buffer
+    } else if (range === 'custom') {
+        minTime = customStart;
+        maxTime = customEnd;
+    }
+
+    // Filter all datasets
+    const filteredData = {
+        moisture: allData.moisture.filter(d => d.unix >= minTime && d.unix <= maxTime),
+        light: allData.light.filter(d => d.unix >= minTime && d.unix <= maxTime),
+        water: allData.water.filter(d => d.unix >= minTime && d.unix <= maxTime),
+        cost: allData.cost?.filter(d => d.unix >= minTime && d.unix <= maxTime) || [],
+        tokens: allData.tokens?.filter(d => d.unix >= minTime && d.unix <= maxTime) || [],
+        thoughts: allData.thoughts?.filter(d => d.unix >= minTime && d.unix <= maxTime) || [],
+        actions: allData.actions?.filter(d => d.unix >= minTime && d.unix <= maxTime) || [],
+    };
+
+    // Destroy existing charts
+    Object.values(chartInstances).forEach(chart => chart.destroy());
+    chartInstances = {};
+
+    // Render with filtered data
+    renderCharts(filteredData, minTime, maxTime);
+}
+
+function renderCharts(data, forceMinTime, forceMaxTime) {
+    try {
+
+        // Find min and max timestamps across all datasets for synchronized x-axes
+        const allTimestamps = [
+            ...data.moisture.map(d => d.unix),
+            ...data.light.map(d => d.unix),
+            ...(data.cost || []).map(d => d.unix),
+            ...(data.tokens || []).map(d => d.unix),
+            ...(data.thoughts || []).map(d => d.unix),
+            ...(data.actions || []).map(d => d.unix),
+        ].filter(t => t); // Remove any undefined/null values
+
+        const minTime = forceMinTime !== undefined ? forceMinTime : (allTimestamps.length > 0 ? Math.min(...allTimestamps) : Date.now() - 86400000);
+        const maxTime = forceMaxTime !== undefined ? forceMaxTime : (allTimestamps.length > 0 ? Math.max(...allTimestamps) : Date.now());
+
+        // Common x-axis configuration for all charts
+        const commonXAxis = {
+            type: 'time',
+            time: {
+                unit: 'hour',
+                displayFormats: {
+                    hour: 'MMM d, HH:mm'
+                }
+            },
+            min: minTime,
+            max: maxTime,
+            ticks: {
+                maxRotation: 45,
+                minRotation: 45,
+                font: { size: 10 }
+            }
+        };
+
+        // Common chart options
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { font: { size: 10 } }
+                }
+            }
+        };
 
         // Moisture Chart
         const moistureCtx = document.getElementById('moisture-chart');
-        if (moistureCtx) {
-            new Chart(moistureCtx, {
+        if (moistureCtx && data.moisture.length > 0) {
+            chartInstances.moisture = new Chart(moistureCtx, {
                 type: 'line',
                 data: {
-                    labels: sensorData.moisture.map(d => new Date(d.timestamp)),
                     datasets: [{
                         label: 'Moisture Level',
-                        data: sensorData.moisture.map(d => d.value),
+                        data: data.moisture.map(d => ({ x: d.unix, y: d.value })),
                         borderColor: '#4c9bf5',
                         backgroundColor: 'rgba(76, 155, 245, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
                         tension: 0.4
                     }]
                 },
                 options: {
-                    responsive: true,
+                    ...commonOptions,
                     scales: {
-                        x: {
-                            type: 'time',
-                            time: { unit: 'day' }
-                        },
+                        x: commonXAxis,
                         y: {
-                            title: { display: true, text: 'Sensor Value' }
+                            title: { display: true, text: 'Sensor Value', font: { size: 11 } },
+                            ticks: { font: { size: 10 } }
                         }
                     }
                 }
@@ -38,57 +271,188 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         // Light Chart
         const lightCtx = document.getElementById('light-chart');
-        if (lightCtx) {
-            new Chart(lightCtx, {
+        if (lightCtx && data.light.length > 0) {
+            chartInstances.light = new Chart(lightCtx, {
                 type: 'bar',
                 data: {
-                    labels: sensorData.light.map(d => new Date(d.timestamp)),
                     datasets: [{
-                        label: 'Light Duration (minutes)',
-                        data: sensorData.light.map(d => d.duration_minutes),
-                        backgroundColor: '#ffd60a'
+                        label: 'Duration (min)',
+                        data: data.light.map(d => ({ x: d.unix, y: d.duration_minutes })),
+                        backgroundColor: '#ffd60a',
+                        borderWidth: 0
                     }]
                 },
                 options: {
-                    responsive: true,
+                    ...commonOptions,
                     scales: {
-                        x: {
-                            type: 'time',
-                            time: { unit: 'day' }
-                        },
+                        x: commonXAxis,
                         y: {
-                            title: { display: true, text: 'Minutes' }
+                            title: { display: true, text: 'Minutes', font: { size: 11 } },
+                            ticks: { font: { size: 10 } }
                         }
                     }
                 }
             });
         }
 
-        // Water Chart (Cumulative)
-        const waterCtx = document.getElementById('water-chart');
-        if (waterCtx) {
-            new Chart(waterCtx, {
+        // Cost Chart
+        const costCtx = document.getElementById('cost-chart');
+        if (costCtx && data.cost && data.cost.length > 0) {
+            chartInstances.cost = new Chart(costCtx, {
                 type: 'line',
                 data: {
-                    labels: sensorData.water.map(d => new Date(d.timestamp)),
                     datasets: [{
-                        label: 'Cumulative Water (ml)',
-                        data: sensorData.water.map(d => d.cumulative_ml),
-                        borderColor: '#52b788',
-                        backgroundColor: 'rgba(82, 183, 136, 0.1)',
+                        label: 'Cumulative Cost',
+                        data: data.cost.map(d => ({ x: d.unix, y: d.cumulative_cost })),
+                        borderColor: '#e63946',
+                        backgroundColor: 'rgba(230, 57, 70, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
                         tension: 0.4,
                         fill: true
                     }]
                 },
                 options: {
-                    responsive: true,
+                    ...commonOptions,
+                    scales: {
+                        x: commonXAxis,
+                        y: {
+                            title: { display: true, text: 'USD ($)', font: { size: 11 } },
+                            ticks: {
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Tokens Chart - simple stacked bars per conversation
+        const tokensCtx = document.getElementById('tokens-chart');
+        if (tokensCtx && data.tokens && data.tokens.length > 0) {
+            chartInstances.tokens = new Chart(tokensCtx, {
+                type: 'bar',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Input',
+                            data: data.tokens.map(d => ({ x: d.unix, y: d.input })),
+                            backgroundColor: 'rgba(76, 155, 245, 0.8)',
+                            stack: 'tokens',
+                            barThickness: 4,
+                            maxBarThickness: 8
+                        },
+                        {
+                            label: 'Output',
+                            data: data.tokens.map(d => ({ x: d.unix, y: d.output })),
+                            backgroundColor: 'rgba(46, 204, 113, 0.8)',
+                            stack: 'tokens',
+                            barThickness: 4,
+                            maxBarThickness: 8
+                        },
+                        {
+                            label: 'Cache Read',
+                            data: data.tokens.map(d => ({ x: d.unix, y: d.cache_read })),
+                            backgroundColor: 'rgba(155, 89, 182, 0.8)',
+                            stack: 'tokens',
+                            barThickness: 4,
+                            maxBarThickness: 8
+                        },
+                        {
+                            label: 'Cache Create',
+                            data: data.tokens.map(d => ({ x: d.unix, y: d.cache_creation })),
+                            backgroundColor: 'rgba(241, 196, 15, 0.8)',
+                            stack: 'tokens',
+                            barThickness: 4,
+                            maxBarThickness: 8
+                        }
+                    ]
+                },
+                options: {
+                    ...commonOptions,
                     scales: {
                         x: {
-                            type: 'time',
-                            time: { unit: 'day' }
+                            ...commonXAxis,
+                            stacked: true,
+                            offset: false
                         },
                         y: {
-                            title: { display: true, text: 'Milliliters' }
+                            stacked: true,
+                            title: { display: true, text: 'Tokens', font: { size: 11 } },
+                            ticks: {
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    if (value >= 1000000) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    } else if (value >= 1000) {
+                                        return (value / 1000).toFixed(0) + 'k';
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Thoughts Chart
+        const thoughtsCtx = document.getElementById('thoughts-chart');
+        if (thoughtsCtx && data.thoughts && data.thoughts.length > 0) {
+            chartInstances.thoughts = new Chart(thoughtsCtx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Cumulative Thoughts',
+                        data: data.thoughts.map(d => ({ x: d.unix, y: d.cumulative })),
+                        borderColor: '#9b59b6',
+                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    ...commonOptions,
+                    scales: {
+                        x: commonXAxis,
+                        y: {
+                            title: { display: true, text: 'Count', font: { size: 11 } },
+                            ticks: { font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Actions Chart
+        const actionsCtx = document.getElementById('actions-chart');
+        if (actionsCtx && data.actions && data.actions.length > 0) {
+            chartInstances.actions = new Chart(actionsCtx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Cumulative Actions',
+                        data: data.actions.map(d => ({ x: d.unix, y: d.cumulative })),
+                        borderColor: '#2ecc71',
+                        backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    ...commonOptions,
+                    scales: {
+                        x: commonXAxis,
+                        y: {
+                            title: { display: true, text: 'Count', font: { size: 11 } },
+                            ticks: { font: { size: 10 } }
                         }
                     }
                 }
@@ -96,6 +460,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
     } catch (error) {
-        console.error('Error loading sensor data:', error);
+        console.error('Error rendering charts:', error);
     }
-});
+}

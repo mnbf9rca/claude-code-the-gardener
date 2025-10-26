@@ -871,3 +871,239 @@ body {
         gap: 1rem;
     }
 }
+
+/* Highlight targeted tool call when arriving via anchor link */
+.tool-call-block:target {
+    animation: highlight-fade 2s ease-out;
+    scroll-margin-top: 2rem;
+}
+
+@keyframes highlight-fade {
+    0% {
+        background: rgba(52, 152, 219, 0.2);
+        box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.3);
+    }
+    100% {
+        background: transparent;
+        box-shadow: none;
+    }
+}
+
+/* Date range filter - Grafana style with typed expressions */
+.date-range-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    margin: 1.5rem 0;
+}
+
+/* Time range text inputs */
+.time-range-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 1rem;
+    align-items: start;
+}
+
+.time-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.time-input-wrapper label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.time-expr-input {
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+    transition: all 0.2s;
+}
+
+.time-expr-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(16, 124, 74, 0.1);
+}
+
+.time-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.apply-btn {
+    padding: 0.55rem 1.5rem;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    align-self: flex-start;
+    margin-top: 1.35rem;
+    height: fit-content;
+}
+
+.apply-btn:hover {
+    background: #0f6e42;
+}
+
+/* Quick preset buttons */
+.quick-presets {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.preset-btn {
+    padding: 0.4rem 0.9rem;
+    background: #f5f5f5;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-btn:hover {
+    background: #e8e8e8;
+    border-color: var(--color-primary);
+}
+
+.preset-btn.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+    .time-range-inputs {
+        grid-template-columns: 1fr;
+    }
+
+    .apply-btn {
+        margin-top: 0;
+        width: 100%;
+    }
+}
+
+/* Sensor summary cards */
+.sensor-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.sensor-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.sensor-card h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sensor-current {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0.5rem 0;
+}
+
+.sensor-label {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin: 0.25rem 0;
+}
+
+.sensor-detail {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-top: 0.5rem;
+}
+
+.sensor-trend {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0.5rem 0;
+}
+
+.trend-stable {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.trend-increasing {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.trend-decreasing {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+@media (max-width: 768px) {
+    .sensor-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Charts grid - compact 2-column layout */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.chart-panel {
+    background: white;
+    padding: 1rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.chart-panel h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.chart-panel canvas {
+    max-height: 200px;
+}
+
+@media (max-width: 768px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}

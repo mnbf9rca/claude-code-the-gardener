@@ -19,11 +19,14 @@
         </div>
     </div>
 
+    {% include 'includes/date-filter.html' %}
+
     <div class="conversation-grid">
         {% for conv in conversations %}
         <div class="conversation-card"
              data-tools="{{ conv.tool_calls|map(attribute='name')|join(',') }}"
-             data-highlight="{{ 'yes' if conv in highlights else 'no' }}">
+             data-highlight="{{ 'yes' if conv in highlights else 'no' }}"
+             data-timestamp="{{ conv.start_time }}">
             <div class="card-header">
                 <div class="card-title">
                     <a href="{{ conv.session_id }}.html">Session {{ conv.session_id[:8] }}...</a>
@@ -72,16 +75,52 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/date-filter.js"></script>
 <script>
-// Simple client-side filtering
-document.getElementById('search-conversations').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
+// Store active filters
+let activeTypeFilter = 'all';
+let activeSearchTerm = '';
+let activeDateRange = { from: null, to: null };
+
+function applyAllFilters() {
     const cards = document.querySelectorAll('.conversation-card');
 
     cards.forEach(card => {
-        const text = card.textContent.toLowerCase();
-        card.style.display = text.includes(searchTerm) ? 'block' : 'none';
+        const cardText = card.textContent.toLowerCase();
+        const cardTimestamp = new Date(card.dataset.timestamp).getTime();
+
+        // Type filter
+        let matchesType = false;
+        if (activeTypeFilter === 'all') {
+            matchesType = true;
+        } else if (activeTypeFilter === 'highlights') {
+            matchesType = card.dataset.highlight === 'yes';
+        } else if (activeTypeFilter === 'water') {
+            matchesType = card.dataset.tools.includes('dispense_water');
+        } else if (activeTypeFilter === 'photos') {
+            matchesType = card.dataset.tools.includes('capture_photo');
+        }
+
+        // Search filter
+        const matchesSearch = !activeSearchTerm || cardText.includes(activeSearchTerm);
+
+        // Date range filter
+        let matchesDateRange = true;
+        if (activeDateRange.from !== null || activeDateRange.to !== null) {
+            const fromTime = activeDateRange.from || 0;
+            const toTime = activeDateRange.to || Date.now() + 86400000;
+            matchesDateRange = cardTimestamp >= fromTime && cardTimestamp <= toTime;
+        }
+
+        // Show only if all filters match
+        card.style.display = (matchesType && matchesSearch && matchesDateRange) ? 'block' : 'none';
     });
+}
+
+document.getElementById('search-conversations').addEventListener('input', function(e) {
+    activeSearchTerm = e.target.value.toLowerCase();
+    applyAllFilters();
 });
 
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -89,21 +128,15 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
 
-        const filter = this.dataset.filter;
-        const cards = document.querySelectorAll('.conversation-card');
-
-        cards.forEach(card => {
-            if (filter === 'all') {
-                card.style.display = 'block';
-            } else if (filter === 'highlights') {
-                card.style.display = card.dataset.highlight === 'yes' ? 'block' : 'none';
-            } else if (filter === 'water') {
-                card.style.display = card.dataset.tools.includes('dispense_water') ? 'block' : 'none';
-            } else if (filter === 'photos') {
-                card.style.display = card.dataset.tools.includes('capture_photo') ? 'block' : 'none';
-            }
-        });
+        activeTypeFilter = this.dataset.filter;
+        applyAllFilters();
     });
+});
+
+// Initialize date range filter
+initDateFilter((fromTime, toTime) => {
+    activeDateRange = { from: fromTime, to: toTime };
+    applyAllFilters();
 });
 </script>
 {% endblock %}

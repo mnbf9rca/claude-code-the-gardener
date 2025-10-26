@@ -9,10 +9,12 @@
         <p class="subtitle">{{ photos|length }} photos of the plant's journey</p>
     </header>
 
+    {% include 'includes/date-filter.html' %}
+
     <div class="photos-grid">
         {% for photo in photos %}
         {% if photo.photo_path %}
-        <div class="photo-card">
+        <div class="photo-card" data-timestamp="{{ photo.timestamp }}">
             <div class="photo-wrapper">
                 <img src="../photos/{{ photo.photo_path.split('/')[-1] }}"
                      alt="Plant photo from {{ photo.timestamp }}"
@@ -27,4 +29,36 @@
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/date-filter.js"></script>
+<script>
+let activeDateRange = { from: null, to: null };
+
+function applyDateFilter() {
+    const photos = document.querySelectorAll('.photo-card');
+
+    photos.forEach(photo => {
+        const photoTimestamp = new Date(photo.dataset.timestamp).getTime();
+
+        // Date range filter
+        let matchesDateRange = true;
+        if (activeDateRange.from !== null || activeDateRange.to !== null) {
+            const fromTime = activeDateRange.from || 0;
+            const toTime = activeDateRange.to || Date.now() + 86400000;
+            matchesDateRange = photoTimestamp >= fromTime && photoTimestamp <= toTime;
+        }
+
+        photo.style.display = matchesDateRange ? 'block' : 'none';
+    });
+}
+
+// Initialize date range filter
+initDateFilter((fromTime, toTime) => {
+    activeDateRange = { from: fromTime, to: toTime };
+    applyDateFilter();
+});
+</script>
 {% endblock %}

@@ -28,6 +28,8 @@
         </div>
     </div>
 
+    {% include 'includes/date-filter.html' %}
+
     <div class="timeline">
         {% for event in timeline %}
         <div class="timeline-event" data-type="{{ event.type }}" data-unix="{{ event.unix }}">
@@ -52,7 +54,7 @@
                 {% endif %}
                 <div class="event-actions">
                     {% if event.session_id %}
-                    <a href="conversations/{{ event.session_id }}.html" class="conversation-link" title="View conversation">💬 Conversation</a>
+                    <a href="conversations/{{ event.session_id }}.html{% if event.tool_id %}#tool-{{ event.tool_id }}{% endif %}" class="conversation-link" title="View conversation">💬 Conversation</a>
                     {% endif %}
                     <button class="annotate-btn" data-event-id="{{ event.unix }}">+ Add Note</button>
                 </div>
@@ -64,33 +66,60 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/date-filter.js"></script>
 <script>
+// Store active filters
+let activeTypeFilter = 'all';
+let activeSearchTerm = '';
+let activeDateRange = { from: null, to: null };
+
+function applyAllFilters() {
+    const events = document.querySelectorAll('.timeline-event');
+
+    events.forEach(event => {
+        const eventType = event.dataset.type;
+        const eventText = event.textContent.toLowerCase();
+        const eventUnix = parseInt(event.dataset.unix);
+
+        // Type filter
+        const matchesType = activeTypeFilter === 'all' || eventType === activeTypeFilter;
+
+        // Search filter
+        const matchesSearch = !activeSearchTerm || eventText.includes(activeSearchTerm);
+
+        // Date range filter
+        let matchesDateRange = true;
+        if (activeDateRange.from !== null || activeDateRange.to !== null) {
+            const fromTime = activeDateRange.from || 0;
+            const toTime = activeDateRange.to || Date.now() + 86400000;
+            matchesDateRange = eventUnix >= fromTime && eventUnix <= toTime;
+        }
+
+        // Show only if all filters match
+        event.style.display = (matchesType && matchesSearch && matchesDateRange) ? 'flex' : 'none';
+    });
+}
+
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
 
-        const filter = this.dataset.filter;
-        const events = document.querySelectorAll('.timeline-event');
-
-        events.forEach(event => {
-            if (filter === 'all') {
-                event.style.display = 'flex';
-            } else {
-                event.style.display = event.dataset.type === filter ? 'flex' : 'none';
-            }
-        });
+        activeTypeFilter = this.dataset.filter;
+        applyAllFilters();
     });
 });
 
 document.getElementById('search-timeline').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
-    const events = document.querySelectorAll('.timeline-event');
+    activeSearchTerm = e.target.value.toLowerCase();
+    applyAllFilters();
+});
 
-    events.forEach(event => {
-        const text = event.textContent.toLowerCase();
-        event.style.display = text.includes(searchTerm) ? 'flex' : 'none';
-    });
+// Initialize date range filter
+initDateFilter((fromTime, toTime) => {
+    activeDateRange = { from: fromTime, to: toTime };
+    applyAllFilters();
 });
 
 // Scroll position indicator

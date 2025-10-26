@@ -225,3 +225,8 @@ annotations.json
 data/
 static_site_generator/output/
 .playwright-mcp/
+
+# Backup files
+*.bak
+*.bak[0-9]
+*.bak[0-9][0-9]

@@ -71,11 +71,13 @@ def main():
     print(f"    Found {len(all_conversations)} conversations ({len(conversation_highlights)} highlights)")
 
     print("  - Processing sensor data...")
-    sensor_data = sensors.get_combined_sensor_data(data_dir)
+    sensor_data = sensors.get_combined_sensor_data(data_dir, all_conversations)
     sensor_summary = sensors.get_sensor_summary(data_dir)
     print(f"    Moisture: {len(sensor_data['moisture'])} readings")
     print(f"    Light: {len(sensor_data['light'])} sessions")
     print(f"    Water: {len(sensor_data['water'])} events")
+    print(f"    Cost tracking: {len(sensor_data.get('cost', []))} data points")
+    print(f"    Tokens tracking: {len(sensor_data.get('tokens', []))} data points")
 
     print("  - Building timeline...")
     timeline = actions.get_unified_timeline(data_dir)

@@ -25,7 +25,7 @@ def correlate_timeline_with_conversations(timeline: List[Dict[str, Any]], conver
     Add conversation context to timeline events by matching timestamps.
 
     For each timeline event, finds the conversation that was active at that time
-    and adds session_id for linking.
+    and adds session_id and tool_id for deep linking to the specific tool call.
     """
     for event in timeline:
         event_time = parse_timestamp(event["timestamp"])
@@ -38,6 +38,29 @@ def correlate_timeline_with_conversations(timeline: List[Dict[str, Any]], conver
 
                 if start_time <= event_time <= end_time:
                     event["session_id"] = conv["session_id"]
+
+                    # Find the specific tool call by timestamp (within 5 seconds)
+                    best_match = None
+                    best_delta = None
+
+                    for msg in conv.get("messages", []):
+                        for tool_call in msg.get("tool_calls", []):
+                            try:
+                                tool_time = parse_timestamp(msg["timestamp"])
+                                delta = abs((event_time - tool_time).total_seconds())
+
+                                # Look for tool calls that could have created this event
+                                # (log_thought, log_action, water, light, etc.)
+                                if delta <= 5:  # Within 5 seconds
+                                    if best_delta is None or delta < best_delta:
+                                        best_delta = delta
+                                        best_match = tool_call.get("id")
+                            except (ValueError, TypeError, KeyError):
+                                continue
+
+                    if best_match:
+                        event["tool_id"] = best_match
+
                     break
             except (ValueError, TypeError, KeyError):
                 continue
