@@ -352,6 +352,40 @@ body {
     margin: 0 auto;
 }
 
+/* Timeline scroll position indicator */
+.timeline-scroll-indicator {
+    position: fixed;
+    top: 80px;
+    right: 2rem;
+    background: var(--color-primary);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    font-weight: 600;
+    font-size: 0.95rem;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+}
+
+.timeline-scroll-indicator.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.timeline-scroll-indicator .indicator-date {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.timeline-scroll-indicator .indicator-time {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
 .timeline-event {
     display: flex;
     gap: 1rem;
@@ -408,6 +442,32 @@ body {
 
 .annotate-btn:hover {
     background: var(--color-bg);
+}
+
+.event-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.conversation-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--color-primary);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--color-primary);
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.conversation-link:hover {
+    background: var(--color-primary);
+    color: white;
 }
 
 /* Photos */
@@ -546,6 +606,225 @@ body {
 .tool-input {
     font-size: 0.9rem;
     overflow-x: auto;
+}
+
+/* Data Tables */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    background: white;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    table-layout: fixed;
+}
+
+.data-table thead {
+    background: var(--color-primary);
+    color: white;
+}
+
+.data-table thead th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.data-table tbody td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+    background: var(--color-bg);
+}
+
+/* Alternating row colors for better readability */
+.data-table tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.data-table tbody tr:nth-child(even):hover {
+    background: var(--color-bg);
+}
+
+/* Timestamp columns */
+.data-table td.timestamp-cell {
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+/* Action Cards */
+.tool-result-actions {
+    margin: 1rem 0;
+}
+
+.action-count {
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--color-primary);
+}
+
+.action-card {
+    background: white;
+    border-left: 3px solid var(--color-secondary);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-radius: 4px;
+}
+
+.action-header {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.5rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.action-type {
+    margin-bottom: 0.5rem;
+}
+
+.action-detail {
+    color: var(--color-text);
+    padding: 0.25rem 0;
+}
+
+/* Status History Cards */
+.tool-result-status-history {
+    margin: 1rem 0;
+}
+
+.status-card {
+    background: white;
+    border-left: 3px solid var(--color-primary);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+
+.status-header {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.status-metrics {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.metric {
+    font-size: 0.9rem;
+}
+
+.status-reasoning {
+    margin: 0.75rem 0;
+    padding: 0.75rem;
+    background: var(--color-bg);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.status-next-actions {
+    margin-top: 0.75rem;
+}
+
+.action-list {
+    margin: 0.5rem 0 0 1.5rem;
+    padding: 0;
+}
+
+.action-list li {
+    margin: 0.25rem 0;
+}
+
+/* Plant state indicators */
+.plant-state-healthy {
+    color: #2e7d32;
+    font-weight: 600;
+}
+
+.plant-state-stressed {
+    color: #f57c00;
+    font-weight: 600;
+}
+
+.plant-state-concerning {
+    color: #d32f2f;
+    font-weight: 600;
+}
+
+.plant-state-critical {
+    color: #b71c1c;
+    font-weight: 700;
+}
+
+.plant-state-unassessed,
+.plant-state-unknown {
+    color: var(--color-text-muted);
+}
+
+/* Empty result state */
+.tool-result-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+/* Notes box for fetch_notes results */
+.tool-result-notes-box {
+    padding: 1.5rem;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin: 1rem 0;
+}
+
+/* Counted collection results */
+.tool-result-collection {
+    margin: 1rem 0;
+}
+
+.collection-count {
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--color-primary);
+    font-size: 0.95rem;
+}
+
+/* Status indicators */
+.status-ok {
+    color: #2e7d32;
+    font-weight: 600;
+}
+
+.status-error {
+    color: #d32f2f;
+    font-weight: 600;
+}
+
+/* Links in tool results */
+.link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.link:hover {
+    text-decoration: underline;
 }
 
 /* Footer */

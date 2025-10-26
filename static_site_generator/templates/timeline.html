@@ -4,6 +4,12 @@
 
 {% block content %}
 <div class="timeline-page">
+    <!-- Floating scroll position indicator -->
+    <div class="timeline-scroll-indicator" id="scroll-indicator">
+        <div class="indicator-date" id="indicator-date"></div>
+        <div class="indicator-time" id="indicator-time"></div>
+    </div>
+
     <header class="page-header">
         <h1>= Event Timeline</h1>
         <p class="subtitle">{{ timeline|length }} events tracked</p>
@@ -44,7 +50,12 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-                <button class="annotate-btn" data-event-id="{{ event.unix }}">+ Add Note</button>
+                <div class="event-actions">
+                    {% if event.session_id %}
+                    <a href="conversations/{{ event.session_id }}.html" class="conversation-link" title="View conversation">💬 Conversation</a>
+                    {% endif %}
+                    <button class="annotate-btn" data-event-id="{{ event.unix }}">+ Add Note</button>
+                </div>
             </div>
         </div>
         {% endfor %}
@@ -81,5 +92,87 @@ document.getElementById('search-timeline').addEventListener('input', function(e)
         event.style.display = text.includes(searchTerm) ? 'flex' : 'none';
     });
 });
+
+// Scroll position indicator
+(function() {
+    const indicator = document.getElementById('scroll-indicator');
+    const indicatorDate = document.getElementById('indicator-date');
+    const indicatorTime = document.getElementById('indicator-time');
+    let hideTimeout;
+    let lastScrollY = window.scrollY;
+
+    function formatDateTime(timestamp) {
+        // Parse ISO timestamp like "2025-10-25T18:07:08.123456Z"
+        const date = new Date(timestamp);
+
+        // Format date: "Oct 25, 2025"
+        const dateStr = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+
+        // Format time: "6:07 PM"
+        const timeStr = date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        return { date: dateStr, time: timeStr };
+    }
+
+    function updateIndicator() {
+        const events = document.querySelectorAll('.timeline-event');
+        const viewportCenter = window.scrollY + (window.innerHeight / 2);
+
+        // Find the event closest to viewport center
+        let closestEvent = null;
+        let closestDistance = Infinity;
+
+        events.forEach(event => {
+            // Skip hidden events (from filtering)
+            if (event.style.display === 'none') return;
+
+            const rect = event.getBoundingClientRect();
+            const eventCenter = window.scrollY + rect.top + (rect.height / 2);
+            const distance = Math.abs(eventCenter - viewportCenter);
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestEvent = event;
+            }
+        });
+
+        if (closestEvent) {
+            const timestamp = closestEvent.querySelector('.event-time').textContent;
+            const formatted = formatDateTime(timestamp);
+
+            indicatorDate.textContent = formatted.date;
+            indicatorTime.textContent = formatted.time;
+
+            // Show indicator
+            indicator.classList.add('visible');
+
+            // Hide after 2 seconds of no scrolling
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => {
+                indicator.classList.remove('visible');
+            }, 2000);
+        }
+    }
+
+    // Throttled scroll handler
+    let scrollTimeout;
+    window.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(updateIndicator, 50);
+    });
+
+    // Update on page load if scrolled
+    if (window.scrollY > 100) {
+        updateIndicator();
+    }
+})();
 </script>
 {% endblock %}

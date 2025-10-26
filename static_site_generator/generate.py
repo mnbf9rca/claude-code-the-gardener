@@ -82,6 +82,11 @@ def main():
     timeline_highlights = actions.detect_highlights(timeline)
     print(f"    {len(timeline)} events ({len(timeline_highlights)} highlights)")
 
+    print("  - Correlating timeline with conversations...")
+    timeline = actions.correlate_timeline_with_conversations(timeline, all_conversations)
+    linked_events = sum(1 for e in timeline if 'session_id' in e)
+    print(f"    {linked_events}/{len(timeline)} events linked to conversations")
+
     # Export data as JSON for JavaScript
     print()
     print("Exporting data for JavaScript...")

@@ -20,6 +20,31 @@ def get_thinking_log(data_dir: Path) -> List[Dict[str, Any]]:
     return load_jsonl(thinking_file)
 
 
+def correlate_timeline_with_conversations(timeline: List[Dict[str, Any]], conversations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Add conversation context to timeline events by matching timestamps.
+
+    For each timeline event, finds the conversation that was active at that time
+    and adds session_id for linking.
+    """
+    for event in timeline:
+        event_time = parse_timestamp(event["timestamp"])
+
+        # Find conversation that contains this timestamp
+        for conv in conversations:
+            try:
+                start_time = parse_timestamp(conv["start_time"])
+                end_time = parse_timestamp(conv["end_time"])
+
+                if start_time <= event_time <= end_time:
+                    event["session_id"] = conv["session_id"]
+                    break
+            except (ValueError, TypeError, KeyError):
+                continue
+
+    return timeline
+
+
 def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
     """Create a unified timeline of all events for visualization."""
 
@@ -151,14 +176,64 @@ def create_action_summary(action: Dict[str, Any]) -> str:
     details = action.get("details", {})
 
     if action_type == "water":
+        if isinstance(details, dict):
+            ml = details.get("ml_dispensed", "unknown")
+            return f"Dispensed {ml}ml water"
         return f"Water action: {details}"
+
     elif action_type == "light":
+        if isinstance(details, dict):
+            action = details.get("action", "unknown")
+            duration = details.get("duration_minutes", 0)
+            if action == "activated":
+                return f"Light activated ({duration}min)"
+            else:
+                return f"Light {action}"
         return f"Light action: {details}"
+
     elif action_type == "observe":
+        if isinstance(details, dict):
+            # Extract key observation details
+            moisture = details.get("moisture")
+            plant_health = details.get("plant_health")
+            action = details.get("action")
+            next_action = details.get("next_action")
+
+            summary_parts = []
+            if action:
+                summary_parts.append(f"Action: {action}")
+            if plant_health:
+                summary_parts.append(f"Health: {plant_health}")
+            if moisture:
+                summary_parts.append(f"Moisture: {moisture}")
+            if next_action:
+                summary_parts.append(f"Next: {next_action}")
+
+            if summary_parts:
+                return "Observation - " + ", ".join(summary_parts)
+
+            # Fallback: try to create a readable summary from available keys
+            return f"Observation recorded ({len(details)} data points)"
         return f"Observation: {details}"
+
     elif action_type == "alert":
+        if isinstance(details, dict):
+            message = details.get("message", details.get("alert", "Alert triggered"))
+            return f"Alert: {message}"
         return f"Alert: {details}"
+
     else:
+        # Generic handler for unknown action types
+        if isinstance(details, dict) and details:
+            # Try to extract a meaningful summary
+            if "message" in details:
+                return f"{action_type}: {details['message']}"
+            elif len(details) <= 3:
+                # Small dict - show key-value pairs
+                pairs = [f"{k}={v}" for k, v in details.items()]
+                return f"{action_type}: {', '.join(pairs)}"
+            else:
+                return f"{action_type} ({len(details)} details)"
         return f"{action_type}: {details}"
 
 

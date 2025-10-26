@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+import markdown2
 from .stats import load_jsonl, parse_timestamp
 
 
@@ -244,40 +245,10 @@ def format_tool_call_for_display(tool_call: Dict[str, Any]) -> str:
 
 
 def markdown_to_html(text: str) -> str:
-    """Convert markdown to HTML for display."""
+    """Convert markdown to HTML for display using markdown2 library."""
     if not text:
         return ""
-
-    # Code blocks
-    text = re.sub(r'```(\w+)?\n(.*?)```', r'<pre class="code-block"><code>\2</code></pre>', text, flags=re.DOTALL)
-
-    # Bold
-    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
-
-    # Headers
-    text = re.sub(r'^### (.*?)$', r'<h4>\1</h4>', text, flags=re.MULTILINE)
-    text = re.sub(r'^## (.*?)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
-    text = re.sub(r'^# (.*?)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
-
-    # Lists
-    lines = text.split('\n')
-    in_list = False
-    result = []
-    for line in lines:
-        if line.strip().startswith('- '):
-            if not in_list:
-                result.append('<ul class="markdown-list">')
-                in_list = True
-            result.append(f'<li>{line.strip()[2:]}</li>')
-        else:
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-            result.append(line)
-    if in_list:
-        result.append('</ul>')
-
-    return '\n'.join(result)
+    return markdown2.markdown(text)
 
 
 def format_tool_input(tool_name: str, tool_input: Dict[str, Any]) -> str:
@@ -302,241 +273,508 @@ def format_tool_input(tool_name: str, tool_input: Dict[str, Any]) -> str:
         if 'ml' in tool_input:
             return f'<span class="tool-param">Amount: {tool_input["ml"]}ml</span>'
 
-    # For other tools, show params as key-value pairs
+    elif 'save_notes' in tool_name:
+        # Show mode as header, content in white box with markdown formatting
+        mode = tool_input.get('mode', 'update')
+        content = tool_input.get('content', '')
+
+        result = f'<div><strong>Mode:</strong> <span class="tool-param-value">{mode}</span></div>'
+
+        if isinstance(content, str) and content:
+            formatted_content = markdown_to_html(content)
+            result += f'<div class="tool-result-notes-box">{formatted_content}</div>'
+
+        return result
+
+    elif 'write_plant_status' in tool_name:
+        # Extract key fields from plant status and format nicely
+        params = []
+        if 'plant_state' in tool_input:
+            params.append(f'<span class="tool-param-key">State:</span> <span class="plant-state-{tool_input["plant_state"]}">{tool_input["plant_state"]}</span>')
+        if 'reasoning' in tool_input:
+            params.append(f'<span class="tool-param-key">Reasoning:</span> {tool_input["reasoning"]}')
+        if 'next_action_sequence' in tool_input:
+            actions = tool_input['next_action_sequence']
+            if isinstance(actions, list):
+                actions_html = format_field_value('next_action_sequence', actions)
+                params.append(f'<span class="tool-param-key">Next actions:</span><br>{actions_html}')
+        return '<br>'.join(params) if params else '<span class="tool-param">Plant status update</span>'
+
+    elif 'log_thought' in tool_name:
+        # Structured thought input: observation, hypothesis, candidate_actions (list of dicts), reasoning, uncertainties, tags (array)
+        parts = []
+
+        # Main fields as 2-column table
+        table_rows = []
+        for key in ['observation', 'hypothesis', 'reasoning', 'uncertainties']:
+            if key in tool_input:
+                table_rows.append(f'<tr><td class="tool-param-key">{key}</td><td>{tool_input[key]}</td></tr>')
+
+        if table_rows:
+            parts.append(f'<table class="data-table">{"".join(table_rows)}</table>')
+
+        # Candidate actions as list of tables
+        if 'candidate_actions' in tool_input and isinstance(tool_input['candidate_actions'], list):
+            actions_html = ['<div class="tool-param-key">Candidate Actions:</div>']
+            for idx, action in enumerate(tool_input['candidate_actions'], 1):
+                if isinstance(action, dict):
+                    action_rows = []
+                    for k, v in action.items():
+                        action_rows.append(f'<tr><td class="tool-param-key">{k}</td><td>{v}</td></tr>')
+                    actions_html.append(f'<div style="margin-left: 1rem; margin-bottom: 0.5rem;"><strong>Action {idx}:</strong><table class="data-table">{"".join(action_rows)}</table></div>')
+            parts.append(''.join(actions_html))
+
+        # Tags as inline list
+        if 'tags' in tool_input and isinstance(tool_input['tags'], list):
+            tags_html = ' '.join(f'<span class="tag">{tag}</span>' for tag in tool_input['tags'])
+            parts.append(f'<div><span class="tool-param-key">Tags:</span> {tags_html}</div>')
+
+        return ''.join(parts) if parts else '<span class="tool-param">Thought logged</span>'
+
+    elif 'log_action' in tool_name:
+        # Structured action input - show type, then details as nested table
+        parts = []
+
+        # Show type first if present
+        if 'type' in tool_input:
+            parts.append(f'<div style="margin-bottom: 0.5rem;"><span class="tool-param-key">Type:</span> <span class="tool-param-value">{tool_input["type"]}</span></div>')
+
+        # Show details as a nested 2-column table
+        if 'details' in tool_input and isinstance(tool_input['details'], dict):
+            details = tool_input['details']
+            detail_rows = []
+            for key, value in details.items():
+                detail_rows.append(f'<tr><td class="tool-param-key">{key}</td><td>{value}</td></tr>')
+
+            if detail_rows:
+                parts.append(f'<div style="margin-top: 0.5rem;"><strong>Details:</strong></div>')
+                parts.append(f'<table class="data-table">{"".join(detail_rows)}</table>')
+
+        return ''.join(parts) if parts else '<span class="tool-param">Action logged</span>'
+
+    # For other tools, show params as key-value pairs (FULL content, no truncation)
     params = []
     for key, value in tool_input.items():
-        params.append(f'<span class="tool-param-key">{key}:</span> <span class="tool-param-value">{value}</span>')
+        if isinstance(value, (list, dict)):
+            # Format complex structures as pretty JSON
+            value_html = f'<pre class="tool-result-json"><code>{json.dumps(value, indent=2)}</code></pre>'
+            params.append(f'<div><span class="tool-param-key">{key}:</span><br>{value_html}</div>')
+        else:
+            params.append(f'<span class="tool-param-key">{key}:</span> <span class="tool-param-value">{value}</span>')
     return '<br>'.join(params)
 
 
+def detect_result_pattern(data: Any) -> str:
+    """
+    Detect the structural pattern of tool result data.
+
+    Returns one of: wrapped_result | counted_collection | uniform_list |
+                    simple_dict | time_series | text | primitive
+    """
+    if isinstance(data, str):
+        return 'text'
+
+    if isinstance(data, dict):
+        # Check for wrapper pattern: {"result": ...}
+        if 'result' in data and len(data) == 1:
+            return 'wrapped_result'
+
+        # Check for counted collection: {count: N, items/messages/actions/thoughts: [...]}
+        collection_keys = ['items', 'messages', 'actions', 'thoughts']
+        if 'count' in data and any(key in data for key in collection_keys):
+            return 'counted_collection'
+
+        # Simple dictionary
+        return 'simple_dict'
+
+    if isinstance(data, list):
+        if not data:
+            return 'uniform_list'  # Empty list
+
+        first_item = data[0]
+
+        # Time series: [[timestamp, value], ...]
+        if isinstance(first_item, list) and len(first_item) == 2:
+            return 'time_series'
+
+        # Uniform list of objects: [{...}, {...}]
+        if isinstance(first_item, dict):
+            return 'uniform_list'
+
+        return 'uniform_list'
+
+    return 'primitive'
+
+
+def format_field_value(field_name: str, value: Any, is_table_context: bool = False) -> str:
+    """
+    Format a field value based on semantic field name conventions.
+
+    Applies special formatting for timestamps, status fields, markdown content, etc.
+    """
+    if value is None or value == '':
+        return '<em>N/A</em>' if is_table_context else 'N/A'
+
+    # Timestamp fields - truncate and apply monospace styling
+    if any(x in field_name.lower() for x in ['timestamp', '_time', '_at', 'bucket_start', 'bucket_end']):
+        ts_str = str(value)[:19] if isinstance(value, str) else str(value)
+        return f'<span class="timestamp-cell">{ts_str}</span>'
+
+    # Status and state fields - apply color badges
+    if field_name in ['status', 'state', 'plant_state']:
+        return f'<span class="plant-state-{value}">{value}</span>'
+
+    # Success/boolean fields
+    if field_name == 'success':
+        icon = '✓' if value else '✗'
+        css_class = 'status-ok' if value else 'status-error'
+        return f'<span class="{css_class}">{icon} {"Success" if value else "Failed"}</span>'
+
+    # Action sequences and nested lists - format as compact list
+    if 'action' in field_name.lower() and 'sequence' in field_name.lower():
+        if isinstance(value, list):
+            items = []
+            for action in value:
+                if isinstance(action, dict):
+                    order = action.get('order', '')
+                    action_type = action.get('action', 'unknown')
+                    action_value = action.get('value')
+                    if action_value:
+                        items.append(f"{order}. {action_type} ({action_value})")
+                    else:
+                        items.append(f"{order}. {action_type}")
+            return '<br>'.join(items) if items else '<em>None</em>'
+        return str(value)
+
+    # Content/markdown/reasoning fields - render with proper formatting
+    markdown_fields = ['content', 'message', 'observation', 'hypothesis',
+                       'reasoning', 'uncertainties', 'note']
+    if any(field in field_name.lower() for field in markdown_fields):
+        text = str(value)
+        # In table context, truncate long text and add ellipsis
+        if is_table_context and len(text) > 150:
+            text = text[:150] + '...'
+        # Check if it looks like markdown
+        if '\n' in text or '#' in text or '**' in text:
+            return markdown_to_html(text)
+        return text
+
+    # Type field - add icons
+    if field_name == 'type':
+        icons = {
+            'water': '💧', 'light': '💡', 'photo': '📷',
+            'message': '💬', 'thought': '🧠', 'action': '⚡'
+        }
+        icon = icons.get(str(value).lower(), '')
+        return f'{icon} {value}' if icon else str(value)
+
+    # URLs - make them clickable
+    if field_name == 'url' or (isinstance(value, str) and value.startswith('http')):
+        return f'<a href="{value}" target="_blank" class="link">View</a>'
+
+    # Nested lists or dicts - format compactly
+    if isinstance(value, (list, dict)):
+        return f'<span class="nested-data">{json.dumps(value)}</span>'
+
+    # Default - just convert to string
+    return str(value)
+
+
+def render_vertical_table(data: dict) -> str:
+    """Render a simple dictionary as a vertical key-value table."""
+    if not data:
+        return '<div class="tool-result-empty">Empty result</div>'
+
+    rows = []
+    for key, value in data.items():
+        formatted_value = format_field_value(key, value, is_table_context=True)
+        # Make key human-readable
+        label = key.replace('_', ' ').title()
+        rows.append(f'<tr><td><strong>{label}</strong></td><td>{formatted_value}</td></tr>')
+
+    return f'''<table class="data-table">
+        <tbody>{''.join(rows)}</tbody>
+    </table>'''
+
+
+def render_horizontal_table(data: list) -> str:
+    """Render a uniform list of dictionaries as a horizontal table or cards."""
+    if not data:
+        return '<div class="tool-result-empty">No results</div>'
+
+    # Get all unique keys from all items
+    all_keys = []
+    for item in data:
+        if isinstance(item, dict):
+            for key in item.keys():
+                if key not in all_keys:
+                    all_keys.append(key)
+
+    if not all_keys:
+        return '<div class="tool-result-empty">No data</div>'
+
+    # Check if this looks like plant status history (has reasoning, next_action_sequence)
+    has_complex_fields = any('reasoning' in key.lower() or 'action' in key.lower() and 'sequence' in key.lower() for key in all_keys)
+
+    # If it has complex fields, render as status cards
+    if has_complex_fields:
+        return render_status_cards(data, all_keys)
+
+    # Otherwise, render as standard horizontal table
+    # Build header
+    headers = [key.replace('_', ' ').title() for key in all_keys]
+    header_html = ''.join([f'<th>{h}</th>' for h in headers])
+
+    # Build rows
+    rows = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+
+        cells = []
+        for key in all_keys:
+            value = item.get(key, '')
+            formatted_value = format_field_value(key, value, is_table_context=True)
+            cells.append(f'<td>{formatted_value}</td>')
+
+        rows.append(f'<tr>{"".join(cells)}</tr>')
+
+    return f'''<table class="data-table">
+        <thead><tr>{header_html}</tr></thead>
+        <tbody>{''.join(rows)}</tbody>
+    </table>'''
+
+
+def render_status_cards(data: list, keys: list) -> str:
+    """Render status history as cards with better formatting for complex fields."""
+    cards = []
+
+    for idx, item in enumerate(data, 1):
+        if not isinstance(item, dict):
+            continue
+
+        # Extract key fields
+        timestamp = item.get('timestamp', '')
+        sensor_reading = item.get('sensor_reading', 'N/A')
+        water_24h = item.get('water_24h', 0)
+        light_today = item.get('light_today', 0)
+        plant_state = item.get('plant_state', 'unknown')
+        reasoning = item.get('reasoning', '')
+        next_actions = item.get('next_action_sequence', [])
+
+        # Format plant state with color
+        state_html = f'<span class="plant-state-{plant_state}">{plant_state}</span>'
+
+        # Format next actions as a list
+        actions_html = ''
+        if next_actions and isinstance(next_actions, list):
+            action_items = []
+            for action in next_actions:
+                if isinstance(action, dict):
+                    order = action.get('order', '')
+                    action_type = action.get('action', 'unknown')
+                    action_value = action.get('value')
+                    if action_value:
+                        action_items.append(f'<li>{order}. {action_type} ({action_value})</li>')
+                    else:
+                        action_items.append(f'<li>{order}. {action_type}</li>')
+            if action_items:
+                actions_html = f'<ul class="action-list">{"".join(action_items)}</ul>'
+
+        # Format reasoning
+        reasoning_html = ''
+        if reasoning:
+            reasoning_html = f'<div class="status-reasoning">{reasoning}</div>'
+
+        card = f'''<div class="status-card">
+            <div class="status-header">#{idx} {timestamp[:19] if timestamp else 'N/A'}</div>
+            <div class="status-metrics">
+                <span class="metric"><strong>State:</strong> {state_html}</span>
+                <span class="metric"><strong>Moisture:</strong> {sensor_reading}</span>
+                <span class="metric"><strong>Water 24h:</strong> {water_24h}ml</span>
+                <span class="metric"><strong>Light today:</strong> {light_today}min</span>
+            </div>
+            {reasoning_html}
+            {f'<div class="status-next-actions"><strong>Next actions:</strong>{actions_html}</div>' if actions_html else ''}
+        </div>'''
+        cards.append(card)
+
+    return f'<div class="tool-result-status-history">{"".join(cards)}</div>'
+
+
+def render_time_series(data: list) -> str:
+    """Render time series data [[timestamp, value], ...] as a table."""
+    if not data:
+        return '<div class="tool-result-empty">No data</div>'
+
+    rows = []
+    for item in data:
+        if isinstance(item, list) and len(item) == 2:
+            timestamp, value = item
+            ts_str = timestamp[:19] if isinstance(timestamp, str) else str(timestamp)
+            rows.append(f'<tr><td class="timestamp-cell">{ts_str}</td><td>{value}</td></tr>')
+
+    return f'''<table class="data-table">
+        <thead><tr><th>Time</th><th>Value</th></tr></thead>
+        <tbody>{''.join(rows)}</tbody>
+    </table>'''
+
+
+def render_counted_collection(data: dict) -> str:
+    """Render counted collection {count: N, items: [...]} with header and table."""
+    count = data.get('count', 0)
+
+    # Find the collection key
+    collection_keys = ['items', 'messages', 'actions', 'thoughts']
+    collection = []
+    collection_name = 'items'
+
+    for key in collection_keys:
+        if key in data:
+            collection = data[key]
+            collection_name = key
+            break
+
+    if not collection:
+        return f'<div class="tool-result-empty">{count} {collection_name}</div>'
+
+    # Render the collection as a horizontal table
+    table_html = render_horizontal_table(collection)
+
+    return f'''<div class="tool-result-collection">
+        <div class="collection-count">{count} {collection_name}</div>
+        {table_html}
+    </div>'''
+
+
+def render_text(text: str) -> str:
+    """Render text content, applying markdown if detected."""
+    if not text:
+        return '<div class="tool-result-empty">Empty</div>'
+
+    # Check if it looks like markdown
+    if '\n' in text or '#' in text or '**' in text or '```' in text:
+        return f'<div class="tool-result-markdown">{markdown_to_html(text)}</div>'
+
+    return f'<div class="tool-result-text">{text}</div>'
+
+
 def format_tool_result(tool_name: str, result_content: Any) -> str:
-    """Format tool result based on tool type for better readability."""
+    """
+    Format tool result using generic pattern-based rendering.
+
+    Detects structural patterns and applies semantic field formatting
+    instead of tool-specific logic.
+    """
+    # Step 1: Parse JSON strings
     if isinstance(result_content, str):
         try:
             result_content = json.loads(result_content)
         except (json.JSONDecodeError, TypeError):
-            # If it's markdown or plain text, render it
-            if '\n' in result_content or '#' in result_content:
-                return f'<div class="tool-result-markdown">{markdown_to_html(result_content)}</div>'
-            return f'<div class="tool-result-text">{result_content}</div>'
+            return render_text(result_content)
 
-    if not isinstance(result_content, dict):
-        return f'<pre class="tool-result-raw"><code>{json.dumps(result_content, indent=2)}</code></pre>'
+    # Step 2: Tool-specific overrides for special cases
+    # get_recent_actions returns {count: N, actions: [{timestamp, type, details}, ...]}
+    if 'get_recent_actions' in tool_name and isinstance(result_content, dict) and 'actions' in result_content:
+        actions = result_content.get('actions', [])
+        count = result_content.get('count', len(actions))
 
-    # Plant tool results
-    if 'read_moisture' in tool_name:
-        value = result_content.get('value', 'N/A')
-        status = result_content.get('status', 'unknown')
-        timestamp = result_content.get('timestamp', '')
-        return f'''<div class="tool-result-structured">
-            <div class="result-item"><span class="label">Moisture:</span> <span class="value moisture-value">{value}</span></div>
-            <div class="result-item"><span class="label">Status:</span> <span class="status-{status}">{status}</span></div>
-            <div class="result-item small"><span class="label">Time:</span> {timestamp}</div>
+        if not actions:
+            return '<div class="tool-result-empty">No recent actions</div>'
+
+        action_blocks = [f'<div class="collection-count">{count} actions</div>']
+        for action in actions:
+            if isinstance(action, dict):
+                timestamp = action.get('timestamp', 'N/A')
+                action_type = action.get('type', 'unknown')
+                details = action.get('details', {})
+
+                # Format timestamp
+                ts_str = timestamp[:19] if isinstance(timestamp, str) else str(timestamp)
+
+                # Build action block
+                block = f'<div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--color-bg); border-radius: 4px;">'
+                block += f'<div style="margin-bottom: 0.5rem;"><span class="tool-param-key">Time:</span> <span class="timestamp-cell">{ts_str}</span></div>'
+                block += f'<div style="margin-bottom: 0.5rem;"><span class="tool-param-key">Type:</span> <span class="tool-param-value">{action_type}</span></div>'
+
+                # Render details as table if it's a dict
+                if isinstance(details, dict) and details:
+                    detail_rows = []
+                    for key, value in details.items():
+                        detail_rows.append(f'<tr><td class="tool-param-key">{key}</td><td>{value}</td></tr>')
+                    block += f'<div style="margin-top: 0.5rem;"><strong>Details:</strong></div>'
+                    block += f'<table class="data-table">{"".join(detail_rows)}</table>'
+
+                block += '</div>'
+                action_blocks.append(block)
+
+        return ''.join(action_blocks)
+
+    # log_action returns {timestamp: str, success: bool}
+    if 'log_action' in tool_name and isinstance(result_content, dict):
+        timestamp = result_content.get('timestamp', 'N/A')
+        success = result_content.get('success', False)
+
+        ts_str = timestamp[:19] if isinstance(timestamp, str) else str(timestamp)
+        status_class = 'status-ok' if success else 'status-error'
+        status_text = '✅ Logged' if success else '❌ Failed'
+
+        return f'''<div class="tool-result-text">
+            <div class="{status_class}"><strong>{status_text}</strong></div>
+            <div class="timestamp-cell">{ts_str}</div>
         </div>'''
 
-    elif 'water_usage' in tool_name:
-        used = result_content.get('used_ml', 0)
-        remaining = result_content.get('remaining_ml', 0)
-        events = result_content.get('events', 0)
-        return f'''<div class="tool-result-structured">
-            <div class="result-item"><span class="label">Used (24h):</span> <span class="value">{used}ml</span></div>
-            <div class="result-item"><span class="label">Remaining:</span> <span class="value">{remaining}ml</span></div>
-            <div class="result-item"><span class="label">Events:</span> {events}</div>
-        </div>'''
-
-    elif 'light_status' in tool_name:
-        status = result_content.get('status', 'unknown')
-        can_activate = result_content.get('can_activate', False)
-        minutes = result_content.get('minutes_until_available', 0)
-        return f'''<div class="tool-result-structured">
-            <div class="result-item"><span class="label">Status:</span> <span class="status-{status}">{status}</span></div>
-            <div class="result-item"><span class="label">Can activate:</span> {can_activate}</div>
-            {f'<div class="result-item"><span class="label">Available in:</span> {minutes} minutes</div>' if minutes > 0 else ''}
-        </div>'''
-
-    elif 'capture_photo' in tool_name or 'camera' in tool_name:
-        url = result_content.get('url', '')
-        timestamp = result_content.get('timestamp', '')
-        if url:
-            return f'''<div class="tool-result-structured">
-                <div class="result-item"><span class="label">Photo captured:</span> {timestamp}</div>
-                <div class="result-item"><a href="{url}" target="_blank" class="photo-link">View Photo</a></div>
-            </div>'''
-
-    elif 'get_current_time' in tool_name:
-        timestamp = result_content.get('timestamp', result_content)
-        return f'<div class="tool-result-structured"><div class="result-item"><span class="value">{timestamp}</span></div></div>'
-
-    elif 'moisture_history' in tool_name and 'result' in result_content:
-        readings = result_content.get('result', [])
-        if readings:
-            rows = []
-            for timestamp, value in readings:
-                rows.append(f'<tr><td>{timestamp}</td><td class="moisture-value">{value}</td></tr>')
-            return f'''<div class="tool-result-table">
-                <table class="moisture-history">
-                    <thead><tr><th>Time</th><th>Value</th></tr></thead>
-                    <tbody>{''.join(rows)}</tbody>
-                </table>
-            </div>'''
-
-    elif 'fetch_notes' in tool_name and 'content' in result_content:
+    # fetch_notes returns {content: "markdown text"}
+    if 'fetch_notes' in tool_name and isinstance(result_content, dict) and 'content' in result_content:
         content = result_content.get('content', '')
-        return f'<div class="tool-result-notes">{markdown_to_html(content)}</div>'
+        if isinstance(content, str):
+            return f'<div class="tool-result-notes-box">{markdown_to_html(content)}</div>'
+        return '<div class="tool-result-empty">No content</div>'
 
-    # list_messages_from_human - structured message list
-    elif 'list_messages' in tool_name and 'messages' in result_content:
-        messages = result_content.get('messages', [])
-        if messages:
-            items = []
-            for msg in messages:
-                msg_id = msg.get('message_id', 'N/A')
-                timestamp = msg.get('timestamp', '')[:19]  # Trim to readable length
-                content = msg.get('content', '')
-                in_reply_to = msg.get('in_reply_to')
+    # save_notes returns {success: bool, timestamp: str, note_length_chars: int}
+    if 'save_notes' in tool_name and isinstance(result_content, dict) and 'success' in result_content:
+        success = result_content.get('success', False)
+        timestamp = result_content.get('timestamp', '')
+        length = result_content.get('note_length_chars', 0)
 
-                # Render content as markdown if it looks like formatted text
-                content_html = markdown_to_html(content) if content else '<em>No content</em>'
-                reply_badge = f'<span class="reply-badge">↩ Reply to {in_reply_to}</span>' if in_reply_to else ''
+        status_class = 'status-ok' if success else 'status-error'
+        status_text = '✅ Success' if success else '❌ Failed'
+        ts_str = timestamp[:19] if timestamp else 'N/A'
 
-                items.append(f'''<div class="message-item">
-                    <div class="message-meta">
-                        <strong>{msg_id}</strong> · {timestamp} {reply_badge}
-                    </div>
-                    <div class="message-body">{content_html}</div>
-                </div>''')
+        return f'''<div class="tool-result-text">
+            <div class="{status_class}"><strong>{status_text}</strong></div>
+            <div>Saved {length:,} characters</div>
+            <div class="timestamp-cell">{ts_str}</div>
+        </div>'''
 
-            return f'''<div class="tool-result-messages">
-                <div class="message-count">{len(messages)} message(s)</div>
-                {''.join(items)}
-            </div>'''
+    # Step 3: Detect pattern
+    pattern = detect_result_pattern(result_content)
 
-    # get_recent_thoughts - structured thought cards
-    elif 'thoughts' in tool_name and 'thoughts' in result_content:
-        thoughts = result_content.get('thoughts', [])
-        if thoughts:
-            cards = []
-            for i, thought in enumerate(thoughts, 1):
-                timestamp = thought.get('timestamp', '')[:19]
-                observation = markdown_to_html(thought.get('observation', ''))
-                hypothesis = markdown_to_html(thought.get('hypothesis', ''))
-                reasoning = markdown_to_html(thought.get('reasoning', ''))
-                uncertainties = markdown_to_html(thought.get('uncertainties', ''))
-                actions = thought.get('candidate_actions', [])
-                tags = thought.get('tags', [])
+    # Step 4: Handle wrapped results by unwrapping and re-detecting
+    if pattern == 'wrapped_result':
+        result_content = result_content['result']
+        pattern = detect_result_pattern(result_content)
 
-                # Format actions as a list
-                if actions:
-                    action_items = [f"<li>{act.get('action', 'unknown')}" +
-                                  (f" ({act.get('value')})" if act.get('value') else "") +
-                                  "</li>" for act in actions]
-                    actions_html = f"<ul class='action-list'>{''.join(action_items)}</ul>"
-                else:
-                    actions_html = "<em>No actions</em>"
+    # Step 5: Apply pattern-specific renderer
+    if pattern == 'simple_dict':
+        return render_vertical_table(result_content)
 
-                # Format tags
-                tags_html = ' '.join([f'<span class="tag">{tag}</span>' for tag in tags]) if tags else ''
+    elif pattern == 'uniform_list':
+        return render_horizontal_table(result_content)
 
-                cards.append(f'''<div class="thought-card">
-                    <div class="thought-header">
-                        <span class="thought-number">#{i}</span>
-                        <span class="thought-time">{timestamp}</span>
-                    </div>
-                    {f'<div class="thought-tags">{tags_html}</div>' if tags_html else ''}
-                    <div class="thought-section">
-                        <div class="section-label">Observation</div>
-                        <div class="section-content">{observation}</div>
-                    </div>
-                    <div class="thought-section">
-                        <div class="section-label">Hypothesis</div>
-                        <div class="section-content">{hypothesis}</div>
-                    </div>
-                    <div class="thought-section">
-                        <div class="section-label">Candidate Actions</div>
-                        <div class="section-content">{actions_html}</div>
-                    </div>
-                    <div class="thought-section">
-                        <div class="section-label">Reasoning</div>
-                        <div class="section-content">{reasoning}</div>
-                    </div>
-                    {f'<div class="thought-section"><div class="section-label">Uncertainties</div><div class="section-content">{uncertainties}</div></div>' if uncertainties else ''}
-                </div>''')
+    elif pattern == 'time_series':
+        return render_time_series(result_content)
 
-            return f'<div class="tool-result-thoughts">{chr(10).join(cards)}</div>'
+    elif pattern == 'counted_collection':
+        return render_counted_collection(result_content)
 
-    # History tools - handle dict with 'result' wrapper (moisture_history, light_history, etc.)
-    elif isinstance(result_content, dict) and 'result' in result_content:
-        result_list = result_content['result']
-        if isinstance(result_list, list) and result_list:
-            first_item = result_list[0]
+    elif pattern == 'text':
+        return render_text(result_content)
 
-            # Bucketed data with aggregation (dicts with bucket_start/bucket_end)
-            if isinstance(first_item, dict) and 'bucket_start' in first_item:
-                rows = []
-                for bucket in result_list:
-                    start = bucket.get('bucket_start', '')[:19]
-                    end = bucket.get('bucket_end', '')[:19]
-                    value = bucket.get('value', 0)
-                    count = bucket.get('count', 0)
-                    rows.append(f'<tr><td>{start}</td><td>{end}</td><td class="value-cell">{value}</td><td>{count}</td></tr>')
+    elif pattern == 'primitive':
+        return f'<div class="tool-result-text">{str(result_content)}</div>'
 
-                return f'''<div class="tool-result-table">
-                    <table class="history-table">
-                        <thead><tr><th>Bucket Start</th><th>Bucket End</th><th>Value</th><th>Count</th></tr></thead>
-                        <tbody>{''.join(rows)}</tbody>
-                    </table>
-                </div>'''
-
-            # Time series data [[timestamp, value], ...]
-            elif isinstance(first_item, list) and len(first_item) == 2:
-                rows = []
-                for timestamp, value in result_list:
-                    ts_short = timestamp[:19] if isinstance(timestamp, str) else timestamp
-                    rows.append(f'<tr><td>{ts_short}</td><td class="value-cell">{value}</td></tr>')
-
-                return f'''<div class="tool-result-table">
-                    <table class="history-table">
-                        <thead><tr><th>Time</th><th>Value</th></tr></thead>
-                        <tbody>{''.join(rows)}</tbody>
-                    </table>
-                </div>'''
-
-    # History tools - check if it's a list of [timestamp, value] or bucketed data (no wrapper)
-    elif isinstance(result_content, list) and result_content:
-        first_item = result_content[0]
-
-        # Bucketed data with aggregation (dicts with bucket_start/bucket_end)
-        if isinstance(first_item, dict) and 'bucket_start' in first_item:
-            rows = []
-            for bucket in result_content:
-                start = bucket.get('bucket_start', '')[:19]
-                end = bucket.get('bucket_end', '')[:19]
-                value = bucket.get('value', 0)
-                count = bucket.get('count', 0)
-                rows.append(f'<tr><td>{start}</td><td>{end}</td><td class="value-cell">{value}</td><td>{count}</td></tr>')
-
-            return f'''<div class="tool-result-table">
-                <table class="history-table">
-                    <thead><tr><th>Bucket Start</th><th>Bucket End</th><th>Value</th><th>Count</th></tr></thead>
-                    <tbody>{''.join(rows)}</tbody>
-                </table>
-            </div>'''
-
-        # Time series data [[timestamp, value], ...]
-        elif isinstance(first_item, list) and len(first_item) == 2:
-            rows = []
-            for timestamp, value in result_content:
-                ts_short = timestamp[:19] if isinstance(timestamp, str) else timestamp
-                rows.append(f'<tr><td>{ts_short}</td><td class="value-cell">{value}</td></tr>')
-
-            return f'''<div class="tool-result-table">
-                <table class="history-table">
-                    <thead><tr><th>Time</th><th>Value</th></tr></thead>
-                    <tbody>{''.join(rows)}</tbody>
-                </table>
-            </div>'''
-
-    # Default: JSON pretty print
+    # Fallback: JSON pretty print
     return f'<pre class="tool-result-json"><code>{json.dumps(result_content, indent=2)}</code></pre>'
 
 
