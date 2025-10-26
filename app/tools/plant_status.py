@@ -53,6 +53,7 @@ def setup_plant_status_tools(mcp: FastMCP):
         Write plant status - MUST be called first each cycle.
         This is the gatekeeper that enables non-observational tool calls.
         This information is periodically shared with the owner of the plant to keep them informed of the plant's condition. Note that this person is different than the human caretaker.
+        Note that this tool does not read sensors - it only uses the provided data.
         """
         global current_status
 
@@ -91,7 +92,8 @@ def setup_plant_status_tools(mcp: FastMCP):
 
     @mcp.tool()
     async def get_current_plant_status() -> Dict[str, Any] | None:
-        """Get the current plant status if one has been written this cycle"""
+        """Get the current plant status if one has been written this cycle.
+        Note that this does not generate new status or read sensors again etc. - it only returns the one written this cycle."""
         if current_cycle_status["written"] and current_status:
             return current_status
         return None
