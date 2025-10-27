@@ -53,7 +53,7 @@ while [[ $# -gt 0 ]]; do
             echo "  S3_BUCKET               S3 bucket name"
             echo "  AWS_ACCESS_KEY_ID       AWS access key"
             echo "  AWS_SECRET_ACCESS_KEY   AWS secret key"
-            echo "  AWS_DEFAULT_REGION      AWS region (e.g., us-east-1)"
+            echo "  AWS_REGION              AWS region (e.g., us-east-1)"
             echo ""
             echo "Example:"
             echo "  $0 --output-dir ./output"
@@ -103,12 +103,20 @@ if [[ -n "$DRY_RUN" ]]; then
 fi
 
 echo -e "${BLUE}📦 Claude the Gardener - Site Publisher${NC}"
-echo "=" * 50
+echo "=========================================="
 echo ""
+
+# Validate AWS_REGION is set
+if [[ -z "$AWS_REGION" ]]; then
+    echo -e "${RED}Error: AWS_REGION not set${NC}"
+    echo "Set AWS_REGION in .env.publish (e.g., us-east-1, eu-west-2)"
+    exit 1
+fi
+
 echo "Configuration:"
 echo "  Output directory: $OUTPUT_DIR"
 echo "  S3 bucket:        s3://$S3_BUCKET"
-echo "  AWS region:       ${AWS_DEFAULT_REGION:-us-east-1}"
+echo "  AWS region:       $AWS_REGION"
 echo ""
 
 # Initialize git repo in output directory if not exists
@@ -152,7 +160,7 @@ echo ""
 echo -e "${BLUE}☁️  Uploading to S3...${NC}"
 
 # Sync to S3 with proper content types and cache headers
-# AWS CLI automatically uses AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION from environment
+# AWS CLI automatically uses AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION from environment
 aws s3 sync . "s3://$S3_BUCKET" \
     --delete \
     --exclude ".git/*" \
@@ -185,10 +193,10 @@ if [[ -z "$DRY_RUN" ]]; then
 fi
 
 # Success summary
-echo "=" * 50
+echo "=========================================="
 echo -e "${GREEN}✅ Publication complete!${NC}"
 echo ""
-echo "Site URL: http://$S3_BUCKET.s3-website-${AWS_DEFAULT_REGION:-us-east-1}.amazonaws.com"
+echo "Site URL: http://$S3_BUCKET.s3-website.${AWS_REGION}.amazonaws.com"
 echo ""
 echo "Next steps:"
 echo "  - Verify the site at the URL above"
