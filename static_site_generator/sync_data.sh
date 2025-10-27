@@ -3,7 +3,9 @@
 # Sync data from the Raspberry Pi to local machine for static site generation
 # Usage: ./sync_data.sh [--dry-run]
 
-set -euo pipefail
+# Note: We don't use -e (exit on error) because rsync may return non-zero for partial transfers
+# (e.g., permission denied on some files). We check exit codes explicitly instead.
+set -uo pipefail
 
 # Determine project root (parent of the script's directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,6 +44,20 @@ if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "${DEFAULT_SOURCE_HOST}" "echo 'Co
 fi
 echo -e "${GREEN}✓ Connection successful${NC}"
 
+# Helper function to report rsync status
+report_rsync_status() {
+    local exit_code=$1
+    local description=$2
+
+    if [[ ${exit_code} -eq 0 ]]; then
+        echo -e "${GREEN}  ✓ ${description} synced successfully${NC}"
+    elif [[ ${exit_code} -eq 23 ]]; then
+        echo -e "${YELLOW}  ⚠️  ${description} partially synced (some files skipped due to permissions)${NC}"
+    else
+        echo -e "${YELLOW}  ⚠️  ${description} rsync exited with code ${exit_code}${NC}"
+    fi
+}
+
 # Create local directories if they don't exist
 mkdir -p "${LOCAL_DATA_DIR}"
 mkdir -p "${LOCAL_DATA_DIR}/claude"
@@ -49,21 +65,26 @@ mkdir -p "${LOCAL_PHOTOS_DIR}"
 
 # Sync MCP server data
 echo -e "${BLUE}📊 Syncing MCP server data...${NC}"
+# Exclude light_state.json which has permission issues and isn't needed for static site
 rsync -av --no-perms --update ${DRY_RUN} \
+    --exclude='light_state.json' \
     "${DEFAULT_SOURCE_HOST}:${SOURCE_DATA_PATH}" \
     "${LOCAL_DATA_DIR}"
+report_rsync_status $? "MCP data"
 
 # Sync Claude conversation history
 echo -e "${BLUE}💬 Syncing Claude conversation history...${NC}"
 rsync -av --no-perms --update ${DRY_RUN} \
     "${DEFAULT_SOURCE_HOST}:${SOURCE_CLAUDE_PATH}" \
     "${LOCAL_DATA_DIR}/claude/"
+report_rsync_status $? "Claude conversations"
 
 # Sync photos
 echo -e "${BLUE}📸 Syncing plant photos...${NC}"
 rsync -av --no-perms --update ${DRY_RUN} \
     "${DEFAULT_SOURCE_HOST}:${SOURCE_PHOTOS_PATH}" \
     "${LOCAL_PHOTOS_DIR}"
+report_rsync_status $? "Photos"
 
 echo ""
 echo -e "${GREEN}✅ Sync complete!${NC}"
@@ -91,6 +112,9 @@ fi
 
 echo ""
 echo "Next steps:"
-echo "  1. Generate the static site: python static_site_generator/generate.py"
-echo "  2. View locally: open static_site_generator/output/index.html"
-echo "     or: python -m http.server -d static_site_generator/output"
+echo "  1. Generate the static site:"
+echo "       cd static_site_generator"
+echo "       uv run python generate.py"
+echo "  2. View locally:"
+echo "       open output/index.html"
+echo "       or: uv run python -m http.server -d output 8080"

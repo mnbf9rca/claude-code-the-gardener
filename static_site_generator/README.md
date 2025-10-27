@@ -14,6 +14,8 @@ A static site generator that transforms Claude's autonomous plant care journey i
 
 ## Quick Start
 
+**Note:** This is part of a monorepo. All commands should be run from the `static_site_generator/` directory.
+
 ### 1. Sync Data from Raspberry Pi
 
 ```bash
@@ -25,14 +27,15 @@ This will:
 - Connect to your Raspberry Pi (rob@192.168.17.145 by default)
 - Sync MCP server data from `/home/mcpserver/data/`
 - Sync Claude conversations from `/home/gardener/.claude/`
-- Download to `../app/data/`
+- Sync plant photos from `/home/mcpserver/photos/`
+- Download to `../app/data/` and `../app/photos/`
 
 **Tip:** Use `./sync_data.sh --dry-run` to preview changes first.
 
 ### 2. Generate the Static Site
 
 ```bash
-python generate.py
+uv run python generate.py
 ```
 
 This will:
@@ -43,6 +46,8 @@ This will:
 - Copy photos to output directory
 - Output to `./output/`
 
+**Note:** Uses `uv` for dependency management. The first run will create a virtual environment.
+
 ### 3. View the Site
 
 **Option A - Direct file access:**
@@ -52,7 +57,7 @@ open output/index.html
 
 **Option B - Local web server:**
 ```bash
-python -m http.server -d output 8080
+uv run python -m http.server -d output 8080
 # Visit http://localhost:8080
 ```
 
@@ -68,13 +73,16 @@ Edit `sync_data.sh` to change:
 
 ```
 static_site_generator/
+├── pyproject.toml        # Python dependencies (uv)
 ├── generate.py           # Main generator script
 ├── sync_data.sh          # Data sync script
 ├── parsers/              # Data parsing modules
 │   ├── stats.py          # Overall statistics
-│   ├── conversations.py  # Conversation parsing
+│   ├── conversations.py  # Conversation parsing & rendering
 │   ├── sensors.py        # Sensor data processing
-│   └── actions.py        # Timeline and actions
+│   ├── actions.py        # Timeline and actions
+│   ├── tool_formatters.py # Tool input/result formatters (registry)
+│   └── formatting_utils.py # Shared HTML formatting utilities
 ├── templates/            # Jinja2 HTML templates
 │   ├── base.html
 │   ├── index.html
@@ -87,9 +95,12 @@ static_site_generator/
 ├── static/               # CSS, JavaScript
 │   ├── css/style.css
 │   └── js/
-│       ├── charts.js
-│       ├── annotations.js
-│       └── timeline.js
+│       ├── time-utils.js     # Shared time parsing utilities
+│       ├── charts.js         # Chart.js visualizations
+│       ├── date-filter.js    # Date filtering logic
+│       ├── annotations.js    # Annotation system
+│       └── timeline.js       # Timeline rendering
+├── .venv/                # Virtual environment (created by uv)
 └── output/               # Generated site (gitignored)
     ├── index.html
     ├── conversations/
@@ -137,14 +148,18 @@ The `output/` directory contains a complete static site. Deploy to:
 ## Development
 
 **Requirements:**
-- Python 3.8+
-- Jinja2: `pip install jinja2`
+- Python 3.13+ (specified in `pyproject.toml`)
+- [uv](https://github.com/astral-sh/uv) - Fast Python package installer
 - SSH access to Raspberry Pi (for syncing)
+
+**Dependencies** (managed by `uv` via `pyproject.toml`):
+- Jinja2 >= 3.1.0
+- markdown2 >= 2.5.0
 
 **Regenerate after data updates:**
 ```bash
-./sync_data.sh  # Fetch latest data
-python generate.py  # Regenerate site
+./sync_data.sh        # Fetch latest data
+uv run python generate.py  # Regenerate site
 ```
 
 ## Tips

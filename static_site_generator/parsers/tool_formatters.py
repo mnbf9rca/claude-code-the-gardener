@@ -6,8 +6,8 @@ for HTML display, improving maintainability and testability.
 """
 
 import json
-from typing import Dict, Any, Callable, Optional
-from .conversations import markdown_to_html, format_field_value
+from typing import Dict, Any, Callable
+from .formatting_utils import markdown_to_html, format_field_value
 
 
 # Type alias for formatter functions

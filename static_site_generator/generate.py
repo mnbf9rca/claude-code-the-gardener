@@ -46,7 +46,7 @@ def main():
     # Validate paths
     if not data_dir.exists():
         print(f"Error: Data directory not found: {data_dir}")
-        print("   Run ./static_site_generator/sync_data.sh first\!")
+        print("   Run ./static_site_generator/sync_data.sh first!")
         return 1
 
     # Create output directories
@@ -223,7 +223,7 @@ def main():
     # Generate summary
     print()
     print("=" * 50)
-    print("Static site generation complete\!")
+    print("Static site generation complete!")
     print()
     print("Summary:")
     print(f"  - {len(all_conversations)} conversations processed")
