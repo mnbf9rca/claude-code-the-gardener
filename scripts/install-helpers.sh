@@ -35,7 +35,13 @@ add_user_to_group() {
     fi
 
     # Check if user is already in group
-    if id -nG "$user" 2>/dev/null | grep -qw "$group"; then
+    # Use getent and parse the comma-separated member list
+    # Format: groupname:x:gid:member1,member2,member3
+    local members
+    members=$(getent group "$group" | cut -d: -f4)
+
+    # Check if user appears in the comma-separated list (exact match)
+    if [[ ",$members," == *",$user,"* ]]; then
         echo "✓ User $user already in $group group"
         return 0
     fi
