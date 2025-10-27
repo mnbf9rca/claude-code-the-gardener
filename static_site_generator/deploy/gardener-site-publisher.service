@@ -1,0 +1,47 @@
+[Unit]
+Description=Claude the Gardener - Static Site Publisher
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gardener-publisher
+Group=gardener-publisher
+WorkingDirectory=/home/gardener-publisher/app
+
+# Load environment variables (AWS credentials, S3 bucket name)
+EnvironmentFile=/home/gardener-publisher/app/.env.publish
+
+# Run the orchestration script
+# Skip sync because we're running on the Pi (data is local)
+# Note: AWS credentials are passed via environment variables from .env.publish
+ExecStart=/bin/bash /home/gardener-publisher/app/orchestrate.sh \
+    --skip-sync \
+    --data-dir /home/mcpserver/data \
+    --photos-dir /home/mcpserver/photos \
+    --output-dir /home/gardener-publisher/app/output \
+    --s3-bucket ${S3_BUCKET}
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gardener-publisher
+
+# Resource limits (prevent runaway processes)
+MemoryMax=512M
+CPUQuota=50%
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/gardener-publisher/app/output
+
+# Restart policy
+# Don't restart on failure - let the timer handle scheduling
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

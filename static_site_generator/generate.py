@@ -19,6 +19,7 @@ This code does not have the same threat model as a Flask web app accepting user 
 The use of Jinja2 here is safe and appropriate for static site generation.
 """
 
+import argparse
 import json
 import shutil
 from pathlib import Path
@@ -28,25 +29,74 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from parsers import stats, conversations, sensors, actions
 
 
+def parse_args():
+    """Parse command line arguments."""
+    # Default paths relative to script location
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+
+    parser = argparse.ArgumentParser(
+        description="Static site generator for Claude the Gardener",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=project_root / "app" / "data",
+        help="Path to data directory containing JSONL files",
+    )
+
+    parser.add_argument(
+        "--photos-dir",
+        type=Path,
+        default=project_root / "app" / "photos",
+        help="Path to photos directory containing plant images",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=script_dir / "output",
+        help="Path to output directory for generated site",
+    )
+
+    return parser.parse_args()
+
+
 def main():
     """Main generator function."""
 
-    # Configuration
-    project_root = Path(__file__).parent.parent
-    data_dir = project_root / "app" / "data"
-    photos_dir = project_root / "app" / "photos"
+    # Parse command line arguments
+    args = parse_args()
+
+    # Convert to absolute paths and validate
+    data_dir = args.data_dir.resolve()
+    photos_dir = args.photos_dir.resolve()
+    output_dir = args.output_dir.resolve()
+
+    # Fixed paths (relative to script location)
     templates_dir = Path(__file__).parent / "templates"
     static_dir = Path(__file__).parent / "static"
-    output_dir = Path(__file__).parent / "output"
 
     print("Claude the Gardener - Static Site Generator")
     print("=" * 50)
     print()
+    print(f"Configuration:")
+    print(f"  Data directory:   {data_dir}")
+    print(f"  Photos directory: {photos_dir}")
+    print(f"  Output directory: {output_dir}")
+    print()
 
-    # Validate paths
+    # Validate required paths
     if not data_dir.exists():
         print(f"Error: Data directory not found: {data_dir}")
         print("   Run ./static_site_generator/sync_data.sh first!")
+        return 1
+
+    if not templates_dir.exists():
+        print(f"Error: Templates directory not found: {templates_dir}")
+        print("   This should be part of the repository structure!")
         return 1
 
     # Create output directories
@@ -227,6 +277,9 @@ def main():
             shutil.copy2(photo, output_dir / "photos" / photo.name)
             photo_count += 1
         print(f"   Copied {photo_count} photos")
+    else:
+        print(f"   Note: Photos directory not found: {photos_dir}")
+        print(f"   Site will be generated without photos")
 
     # Generate summary
     print()

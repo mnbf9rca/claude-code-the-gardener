@@ -1,0 +1,19 @@
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Generated output directory
+output/
+
+# Environment files (secrets)
+.env.publish
+
+# macOS
+.DS_Store
+
+# Git repository in output directory (used for change tracking)
+# We track changes locally but don't commit the git repo itself
+output/.git/

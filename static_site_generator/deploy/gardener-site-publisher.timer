@@ -1,0 +1,19 @@
+[Unit]
+Description=Claude the Gardener - Site Publisher Timer
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+Requires=gardener-site-publisher.service
+
+[Timer]
+# Run 5 minutes after boot
+OnBootSec=5min
+
+# Run 15 minutes after the previous run completes
+# This ensures we don't pile up runs if publishing takes longer than expected
+OnUnitInactiveSec=15min
+
+# Keep the timer active even if the service fails
+# This prevents timer from stopping if a single run fails
+Persistent=true
+
+[Install]
+WantedBy=timers.target
