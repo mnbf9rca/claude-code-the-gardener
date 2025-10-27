@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Sensors - Claude the Gardener{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="sensors-page">
+    <header class="page-header">
+        <h1> Sensor Data</h1>
+        <p class="subtitle">Environmental monitoring and control</p>
+    </header>
+
+    <div class="date-range-filter">
+        <div class="time-range-inputs">
+            <div class="time-input-wrapper">
+                <label for="time-from">From:</label>
+                <input type="text" id="time-from" class="time-expr-input" placeholder="now-7d" value="now-7d">
+                <span class="time-hint">Examples: now-3h, now-7d, now-1M, 2024-01-15</span>
+            </div>
+
+            <div class="time-input-wrapper">
+                <label for="time-to">To:</label>
+                <input type="text" id="time-to" class="time-expr-input" placeholder="now" value="now">
+                <span class="time-hint">Examples: now, now+1h, 2024-01-20 15:30</span>
+            </div>
+
+            <button id="apply-time-range" class="apply-btn">Apply</button>
+        </div>
+
+        <!-- Quick preset buttons -->
+        <div class="quick-presets">
+            <button class="preset-btn" data-from="now-1h" data-to="now">Last 1h</button>
+            <button class="preset-btn" data-from="now-3h" data-to="now">Last 3h</button>
+            <button class="preset-btn" data-from="now-6h" data-to="now">Last 6h</button>
+            <button class="preset-btn" data-from="now-12h" data-to="now">Last 12h</button>
+            <button class="preset-btn" data-from="now-24h" data-to="now">Last 24h</button>
+            <button class="preset-btn" data-from="now-3d" data-to="now">Last 3d</button>
+            <button class="preset-btn active" data-from="now-7d" data-to="now">Last 7d</button>
+            <button class="preset-btn" data-from="" data-to="">All</button>
+        </div>
+    </div>
+
+    <div class="sensor-summary">
+        <div class="sensor-card">
+            <h3> Moisture</h3>
+            <div class="sensor-current">{{ sensor_summary.moisture.current }}</div>
+            <div class="sensor-trend trend-{{ sensor_summary.moisture.trend }}">
+                {{ sensor_summary.moisture.trend }}
+            </div>
+            <div class="sensor-detail">Last reading: {{ sensor_summary.moisture.last_reading }}</div>
+        </div>
+
+        <div class="sensor-card">
+            <h3> Light</h3>
+            <div class="sensor-current">{{ sensor_summary.light.total_sessions }}</div>
+            <div class="sensor-label">sessions</div>
+            <div class="sensor-detail">Last: {{ sensor_summary.light.last_duration }} min</div>
+        </div>
+
+        <div class="sensor-card">
+            <h3> Water</h3>
+            <div class="sensor-current">{{ sensor_summary.water.total_ml }}ml</div>
+            <div class="sensor-label">total dispensed</div>
+            <div class="sensor-detail">{{ sensor_summary.water.total_events }} events</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-panel">
+            <h3>Moisture Level</h3>
+            <canvas id="moisture-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Light Sessions</h3>
+            <canvas id="light-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Cost Over Time</h3>
+            <canvas id="cost-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Tokens Used</h3>
+            <canvas id="tokens-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Thoughts Logged</h3>
+            <canvas id="thoughts-chart"></canvas>
+        </div>
+
+        <div class="chart-panel">
+            <h3>Actions Taken</h3>
+            <canvas id="actions-chart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="../static/js/charts.js"></script>
+{% endblock %}

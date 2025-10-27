@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Timeline - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="timeline-page">
+    <!-- Floating scroll position indicator -->
+    <div class="timeline-scroll-indicator" id="scroll-indicator">
+        <div class="indicator-date" id="indicator-date"></div>
+        <div class="indicator-time" id="indicator-time"></div>
+    </div>
+
+    <header class="page-header">
+        <h1>= Event Timeline</h1>
+        <p class="subtitle">{{ timeline|length }} events tracked</p>
+    </header>
+
+    <div class="filter-controls">
+        <input type="text" id="search-timeline" placeholder="Search events..." class="search-input">
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="thought">= Thoughts</button>
+            <button class="filter-btn" data-filter="action"> Actions</button>
+            <button class="filter-btn" data-filter="water">= Water</button>
+            <button class="filter-btn" data-filter="light">= Light</button>
+            <button class="filter-btn" data-filter="photo">= Photos</button>
+            <button class="filter-btn" data-filter="message"> Messages</button>
+        </div>
+    </div>
+
+    {% include 'includes/date-filter.html' %}
+
+    <div class="timeline">
+        {% for event in timeline %}
+        <div class="timeline-event" data-type="{{ event.type }}" data-unix="{{ event.unix }}">
+            <div class="event-marker event-{{ event.type }}">
+                {% if event.type == 'water' %}=
+                {% elif event.type == 'light' %}=
+                {% elif event.type == 'photo' %}=
+                {% elif event.type == 'message' %}
+                {% elif event.type == 'action' %}
+                {% else %}=
+                {% endif %}
+            </div>
+            <div class="event-content">
+                <div class="event-time">{{ event.timestamp }}</div>
+                <div class="event-summary">{{ event.summary }}</div>
+                {% if event.tags %}
+                <div class="event-tags">
+                    {% for tag in event.tags %}
+                    <span class="tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="event-actions">
+                    {% if event.session_id %}
+                    <a href="conversations/{{ event.session_id }}.html{% if event.tool_id %}#tool-{{ event.tool_id }}{% endif %}" class="conversation-link" title="View conversation">💬 Conversation</a>
+                    {% endif %}
+                    <button class="annotate-btn" data-event-id="{{ event.unix }}">+ Add Note</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/date-filter.js"></script>
+<script>
+// Store active filters
+let activeTypeFilter = 'all';
+let activeSearchTerm = '';
+let activeDateRange = { from: null, to: null };
+
+function applyAllFilters() {
+    const events = document.querySelectorAll('.timeline-event');
+
+    events.forEach(event => {
+        const eventType = event.dataset.type;
+        const eventText = event.textContent.toLowerCase();
+        const eventUnix = parseInt(event.dataset.unix);
+
+        // Type filter
+        const matchesType = activeTypeFilter === 'all' || eventType === activeTypeFilter;
+
+        // Search filter
+        const matchesSearch = !activeSearchTerm || eventText.includes(activeSearchTerm);
+
+        // Date range filter
+        let matchesDateRange = true;
+        if (activeDateRange.from !== null || activeDateRange.to !== null) {
+            const fromTime = activeDateRange.from || 0;
+            const toTime = activeDateRange.to || Date.now() + 86400000;
+            matchesDateRange = eventUnix >= fromTime && eventUnix <= toTime;
+        }
+
+        // Show only if all filters match
+        event.style.display = (matchesType && matchesSearch && matchesDateRange) ? 'flex' : 'none';
+    });
+}
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        activeTypeFilter = this.dataset.filter;
+        applyAllFilters();
+    });
+});
+
+document.getElementById('search-timeline').addEventListener('input', function(e) {
+    activeSearchTerm = e.target.value.toLowerCase();
+    applyAllFilters();
+});
+
+// Initialize date range filter
+initDateFilter((fromTime, toTime) => {
+    activeDateRange = { from: fromTime, to: toTime };
+    applyAllFilters();
+});
+
+// Scroll position indicator
+(function() {
+    const indicator = document.getElementById('scroll-indicator');
+    const indicatorDate = document.getElementById('indicator-date');
+    const indicatorTime = document.getElementById('indicator-time');
+    let hideTimeout;
+    let lastScrollY = window.scrollY;
+
+    function formatDateTime(timestamp) {
+        // Parse ISO timestamp like "2025-10-25T18:07:08.123456Z"
+        const date = new Date(timestamp);
+
+        // Format date: "Oct 25, 2025"
+        const dateStr = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+
+        // Format time: "6:07 PM"
+        const timeStr = date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        return { date: dateStr, time: timeStr };
+    }
+
+    function updateIndicator() {
+        const events = document.querySelectorAll('.timeline-event');
+        const viewportCenter = window.scrollY + (window.innerHeight / 2);
+
+        // Find the event closest to viewport center
+        let closestEvent = null;
+        let closestDistance = Infinity;
+
+        events.forEach(event => {
+            // Skip hidden events (from filtering)
+            if (event.style.display === 'none') return;
+
+            const rect = event.getBoundingClientRect();
+            const eventCenter = window.scrollY + rect.top + (rect.height / 2);
+            const distance = Math.abs(eventCenter - viewportCenter);
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestEvent = event;
+            }
+        });
+
+        if (closestEvent) {
+            const timestamp = closestEvent.querySelector('.event-time').textContent;
+            const formatted = formatDateTime(timestamp);
+
+            indicatorDate.textContent = formatted.date;
+            indicatorTime.textContent = formatted.time;
+
+            // Show indicator
+            indicator.classList.add('visible');
+
+            // Hide after 2 seconds of no scrolling
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => {
+                indicator.classList.remove('visible');
+            }, 2000);
+        }
+    }
+
+    // Throttled scroll handler
+    let scrollTimeout;
+    window.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(updateIndicator, 50);
+    });
+
+    // Update on page load if scrolled
+    if (window.scrollY > 100) {
+        updateIndicator();
+    }
+})();
+</script>
+{% endblock %}

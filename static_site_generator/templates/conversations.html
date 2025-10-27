@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Conversations - Claude the Gardener{% endblock %}
+
+{% block content %}
+<div class="conversations-page">
+    <header class="page-header">
+        <h1>= Conversation History</h1>
+        <p class="subtitle">{{ conversations|length }} conversations with Claude the Gardener</p>
+    </header>
+
+    <div class="filter-controls">
+        <input type="text" id="search-conversations" placeholder="Search conversations..." class="search-input">
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="highlights">Highlights</button>
+            <button class="filter-btn" data-filter="water">Water Events</button>
+            <button class="filter-btn" data-filter="photos">With Photos</button>
+        </div>
+    </div>
+
+    {% include 'includes/date-filter.html' %}
+
+    <div class="conversation-grid">
+        {% for conv in conversations %}
+        <div class="conversation-card"
+             data-tools="{{ conv.tool_calls|map(attribute='name')|join(',') }}"
+             data-highlight="{{ 'yes' if conv in highlights else 'no' }}"
+             data-timestamp="{{ conv.start_time }}">
+            <div class="card-header">
+                <div class="card-title">
+                    <a href="{{ conv.session_id }}.html">Session {{ conv.session_id[:8] }}...</a>
+                </div>
+                <div class="card-meta">
+                    {{ conv.start_time[:10] }} " {{ conv.duration_human }}
+                </div>
+            </div>
+
+            <div class="card-stats">
+                <div class="stat-item">
+                    <span class="stat-icon">='</span>
+                    <span class="stat-text">{{ conv.tool_call_count }} tools</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">=</span>
+                    <span class="stat-text">{{ conv.message_count }} messages</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">=</span>
+                    <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output) | format_number }} tokens</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">=</span>
+                    <span class="stat-text">${{ "%.3f"|format(conv.cost_usd) }}</span>
+                </div>
+            </div>
+
+            {% if conv.prompt %}
+            <div class="card-prompt">
+                {{ conv.prompt[:150] }}{% if conv.prompt|length > 150 %}...{% endif %}
+            </div>
+            {% endif %}
+
+            {% if conv in highlights %}
+            <div class="highlight-badges">
+                {% for reason in conv.highlight_reasons %}
+                <span class="badge">{{ reason }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/date-filter.js"></script>
+<script>
+// Store active filters
+let activeTypeFilter = 'all';
+let activeSearchTerm = '';
+let activeDateRange = { from: null, to: null };
+
+function applyAllFilters() {
+    const cards = document.querySelectorAll('.conversation-card');
+
+    cards.forEach(card => {
+        const cardText = card.textContent.toLowerCase();
+        const cardTimestamp = new Date(card.dataset.timestamp).getTime();
+
+        // Type filter
+        let matchesType = false;
+        if (activeTypeFilter === 'all') {
+            matchesType = true;
+        } else if (activeTypeFilter === 'highlights') {
+            matchesType = card.dataset.highlight === 'yes';
+        } else if (activeTypeFilter === 'water') {
+            matchesType = card.dataset.tools.includes('dispense_water');
+        } else if (activeTypeFilter === 'photos') {
+            matchesType = card.dataset.tools.includes('capture_photo');
+        }
+
+        // Search filter
+        const matchesSearch = !activeSearchTerm || cardText.includes(activeSearchTerm);
+
+        // Date range filter
+        let matchesDateRange = true;
+        if (activeDateRange.from !== null || activeDateRange.to !== null) {
+            const fromTime = activeDateRange.from || 0;
+            const toTime = activeDateRange.to || Date.now() + 86400000;
+            matchesDateRange = cardTimestamp >= fromTime && cardTimestamp <= toTime;
+        }
+
+        // Show only if all filters match
+        card.style.display = (matchesType && matchesSearch && matchesDateRange) ? 'block' : 'none';
+    });
+}
+
+document.getElementById('search-conversations').addEventListener('input', function(e) {
+    activeSearchTerm = e.target.value.toLowerCase();
+    applyAllFilters();
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        activeTypeFilter = this.dataset.filter;
+        applyAllFilters();
+    });
+});
+
+// Initialize date range filter
+initDateFilter((fromTime, toTime) => {
+    activeDateRange = { from: fromTime, to: toTime };
+    applyAllFilters();
+});
+</script>
+{% endblock %}

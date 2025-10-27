@@ -1,0 +1,29 @@
+<div class="date-range-filter">
+    <div class="time-range-inputs">
+        <div class="time-input-wrapper">
+            <label for="time-from">From:</label>
+            <input type="text" id="time-from" class="time-expr-input" placeholder="now-7d" value="">
+            <span class="time-hint">Examples: now-3h, now-7d, now-1M, 2024-01-15</span>
+        </div>
+
+        <div class="time-input-wrapper">
+            <label for="time-to">To:</label>
+            <input type="text" id="time-to" class="time-expr-input" placeholder="now" value="">
+            <span class="time-hint">Examples: now, now+1h, 2024-01-20 15:30</span>
+        </div>
+
+        <button id="apply-time-range" class="apply-btn">Apply</button>
+    </div>
+
+    <!-- Quick preset buttons -->
+    <div class="quick-presets">
+        <button class="preset-btn" data-from="now-1h" data-to="now">Last 1h</button>
+        <button class="preset-btn" data-from="now-3h" data-to="now">Last 3h</button>
+        <button class="preset-btn" data-from="now-6h" data-to="now">Last 6h</button>
+        <button class="preset-btn" data-from="now-12h" data-to="now">Last 12h</button>
+        <button class="preset-btn" data-from="now-24h" data-to="now">Last 24h</button>
+        <button class="preset-btn" data-from="now-3d" data-to="now">Last 3d</button>
+        <button class="preset-btn" data-from="now-7d" data-to="now">Last 7d</button>
+        <button class="preset-btn active" data-from="" data-to="">All</button>
+    </div>
+</div>

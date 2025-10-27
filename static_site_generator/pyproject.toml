@@ -1,0 +1,9 @@
+[project]
+name = "plant-care-static-site-generator"
+version = "0.1.0"
+description = "Static site generator for Claude the Gardener conversation logs"
+requires-python = ">=3.13"
+dependencies = [
+    "jinja2>=3.1.0",
+    "markdown2>=2.5.0",
+]
