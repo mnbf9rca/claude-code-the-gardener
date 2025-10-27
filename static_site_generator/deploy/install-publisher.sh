@@ -203,7 +203,7 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "1. Test the publisher manually (dry run):"
-echo -e "   ${YELLOW}sudo -u $PUBLISHER_USER bash ${INSTALL_DIR}/orchestrate.sh --skip-sync --dry-run \\
+echo -e "   ${YELLOW}sudo -u $PUBLISHER_USER -i bash ${INSTALL_DIR}/orchestrate.sh --skip-sync --dry-run \\
      --data-dir /home/mcpserver/data \\
      --conversations-dir /home/gardener/.claude/projects/-home-gardener-workspace \\
      --photos-dir /home/mcpserver/photos \\

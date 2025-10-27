@@ -10,6 +10,9 @@ User=gardener-publisher
 Group=gardener-publisher
 WorkingDirectory=/home/gardener-publisher/app
 
+# Set PATH to include uv installation
+Environment="PATH=/home/gardener-publisher/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 # Load environment variables (AWS credentials, S3 bucket name)
 EnvironmentFile=/home/gardener-publisher/app/.env.publish
 
