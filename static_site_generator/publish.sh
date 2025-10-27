@@ -2,7 +2,7 @@
 
 # Publish static site to S3 with change detection
 # Only uploads if changes are detected (avoids unnecessary write fees)
-# Usage: ./publish.sh --output-dir <path> --s3-bucket <bucket-name> [--dry-run]
+# Usage: ./publish.sh --output-dir <path> [--dry-run]
 
 set -euo pipefail
 
@@ -13,9 +13,22 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Load configuration from .env.publish
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ ! -f "${SCRIPT_DIR}/.env.publish" ]]; then
+    echo -e "${RED}Error: .env.publish not found${NC}"
+    echo "Create ${SCRIPT_DIR}/.env.publish with your AWS credentials"
+    echo "See .env.publish.example for template"
+    exit 1
+fi
+
+# Source the environment file
+set -a
+source "${SCRIPT_DIR}/.env.publish"
+set +a
+
 # Default values
 OUTPUT_DIR=""
-S3_BUCKET=""
 DRY_RUN=""
 
 # Parse arguments
@@ -25,29 +38,25 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_DIR="$2"
             shift 2
             ;;
-        --s3-bucket)
-            S3_BUCKET="$2"
-            shift 2
-            ;;
         --dry-run)
             DRY_RUN="--dryrun"
             shift
             ;;
         --help)
-            echo "Usage: $0 --output-dir <path> --s3-bucket <bucket-name> [--dry-run]"
+            echo "Usage: $0 --output-dir <path> [--dry-run]"
             echo ""
             echo "Options:"
-            echo "  --output-dir       Path to directory containing generated static site"
-            echo "  --s3-bucket        S3 bucket name (without s3:// prefix)"
+            echo "  --output-dir       Path to directory containing generated static site (required)"
             echo "  --dry-run          Show what would be uploaded without actually uploading"
             echo ""
             echo "Environment (set in .env.publish):"
+            echo "  S3_BUCKET               S3 bucket name"
             echo "  AWS_ACCESS_KEY_ID       AWS access key"
             echo "  AWS_SECRET_ACCESS_KEY   AWS secret key"
             echo "  AWS_DEFAULT_REGION      AWS region (e.g., us-east-1)"
             echo ""
             echo "Example:"
-            echo "  $0 --output-dir ./output --s3-bucket my-gardener-site"
+            echo "  $0 --output-dir ./output"
             exit 0
             ;;
         *)
@@ -66,8 +75,8 @@ if [[ -z "$OUTPUT_DIR" ]]; then
 fi
 
 if [[ -z "$S3_BUCKET" ]]; then
-    echo -e "${RED}Error: --s3-bucket is required${NC}"
-    echo "Run with --help for usage information"
+    echo -e "${RED}Error: S3_BUCKET not set in .env.publish${NC}"
+    echo "Edit ${SCRIPT_DIR}/.env.publish and set S3_BUCKET"
     exit 1
 fi
 
