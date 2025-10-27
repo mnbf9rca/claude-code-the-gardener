@@ -39,6 +39,14 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# Ensure we were invoked via sudo (not raw root login)
+if [[ -z "${SUDO_USER:-}" ]]; then
+    echo -e "${RED}Error: SUDO_USER not set${NC}"
+    echo "This script must be run with sudo, not as root directly"
+    echo "Usage: sudo bash install-publisher.sh"
+    exit 1
+fi
+
 echo -e "${GREEN}✓ Running as root${NC}"
 
 # Check required files exist

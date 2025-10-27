@@ -82,7 +82,7 @@ def main():
     print("Claude the Gardener - Static Site Generator")
     print("=" * 50)
     print()
-    print(f"Configuration:")
+    print("Configuration:")
     print(f"  Data directory:   {data_dir}")
     print(f"  Photos directory: {photos_dir}")
     print(f"  Output directory: {output_dir}")
@@ -101,11 +101,11 @@ def main():
 
     # Create output directories
     print("Creating output directories...")
-    output_dir.mkdir(exist_ok=True)
-    (output_dir / "conversations").mkdir(exist_ok=True)
-    (output_dir / "photos").mkdir(exist_ok=True)
-    (output_dir / "static").mkdir(exist_ok=True)
-    (output_dir / "data").mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "conversations").mkdir(parents=True, exist_ok=True)
+    (output_dir / "photos").mkdir(parents=True, exist_ok=True)
+    (output_dir / "static").mkdir(parents=True, exist_ok=True)
+    (output_dir / "data").mkdir(parents=True, exist_ok=True)
 
     # Setup Jinja2
     print("Setting up template engine...")

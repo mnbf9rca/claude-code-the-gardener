@@ -184,18 +184,16 @@ if [[ ! -f "${SCRIPT_DIR}/generate.py" ]]; then
     exit 2
 fi
 
-BUILD_CMD="uv run python ${SCRIPT_DIR}/generate.py"
-BUILD_CMD="$BUILD_CMD --data-dir \"$DATA_DIR\""
-BUILD_CMD="$BUILD_CMD --photos-dir \"$PHOTOS_DIR\""
-BUILD_CMD="$BUILD_CMD --output-dir \"$OUTPUT_DIR\""
+# Build command as array to avoid eval security issues
+BUILD_CMD=(uv run python "${SCRIPT_DIR}/generate.py" --data-dir "$DATA_DIR" --photos-dir "$PHOTOS_DIR" --output-dir "$OUTPUT_DIR")
 
 if [[ "$VERBOSE" == true ]]; then
-    eval $BUILD_CMD
+    "${BUILD_CMD[@]}"
+    BUILD_EXIT_CODE=$?
 else
-    eval $BUILD_CMD 2>&1 | grep -E "(Error|✓|pages|events|conversations)" || true
+    "${BUILD_CMD[@]}" 2>&1 | grep -E "(Error|✓|pages|events|conversations)" || true
+    BUILD_EXIT_CODE=${PIPESTATUS[0]}
 fi
-
-BUILD_EXIT_CODE=${PIPESTATUS[0]}
 
 if [[ $BUILD_EXIT_CODE -ne 0 ]]; then
     echo -e "${RED}  ✗ Build failed with exit code: $BUILD_EXIT_CODE${NC}"
@@ -214,22 +212,21 @@ if [[ ! -f "${SCRIPT_DIR}/publish.sh" ]]; then
     exit 3
 fi
 
-PUBLISH_CMD="${SCRIPT_DIR}/publish.sh"
-PUBLISH_CMD="$PUBLISH_CMD --output-dir \"$OUTPUT_DIR\""
-PUBLISH_CMD="$PUBLISH_CMD --s3-bucket \"$S3_BUCKET\""
+# Publish command as array to avoid eval security issues
+PUBLISH_CMD=("${SCRIPT_DIR}/publish.sh" --output-dir "$OUTPUT_DIR" --s3-bucket "$S3_BUCKET")
 
 if [[ -n "$DRY_RUN" ]]; then
-    PUBLISH_CMD="$PUBLISH_CMD --dry-run"
+    PUBLISH_CMD+=(--dry-run)
 fi
 
 if [[ "$VERBOSE" == true ]]; then
-    eval $PUBLISH_CMD
+    "${PUBLISH_CMD[@]}"
+    PUBLISH_EXIT_CODE=$?
 else
     # For publish, we always want to see key information
-    eval $PUBLISH_CMD 2>&1 | grep -E "(✓|✗|⚠️|Error|changes|uploaded|complete)" || true
+    "${PUBLISH_CMD[@]}" 2>&1 | grep -E "(✓|✗|⚠️|Error|changes|uploaded|complete)" || true
+    PUBLISH_EXIT_CODE=${PIPESTATUS[0]}
 fi
-
-PUBLISH_EXIT_CODE=${PIPESTATUS[0]}
 
 if [[ $PUBLISH_EXIT_CODE -ne 0 ]]; then
     echo -e "${RED}  ✗ Publish failed with exit code: $PUBLISH_EXIT_CODE${NC}"

@@ -47,7 +47,11 @@ add_user_to_group() {
         echo "Adding $user to $group group..."
     fi
 
-    usermod -a -G "$group" "$user"
+    if ! usermod -a -G "$group" "$user"; then
+        echo "✗ ERROR: Failed to add $user to $group group" >&2
+        return 1
+    fi
+
     echo "✓ User $user added to $group group"
 }
 
