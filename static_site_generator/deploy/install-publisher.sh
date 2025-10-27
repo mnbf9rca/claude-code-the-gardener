@@ -102,6 +102,32 @@ add_sudo_user_to_group "$PUBLISHER_USER"
 
 # Add publisher user to mcpserver group to read data
 add_user_to_group "$PUBLISHER_USER" "mcpserver" "for data access"
+
+# Verify mcpserver home directory exists
+MCPSERVER_HOME="/home/mcpserver"
+if [[ ! -d "$MCPSERVER_HOME" ]]; then
+    echo -e "${RED}✗ ERROR: /home/mcpserver not found${NC}"
+    echo "The mcpserver user must exist and have a home directory for data access"
+    echo "Data is stored in /home/mcpserver/data and /home/mcpserver/photos"
+    echo "Install the MCP server first: sudo bash app/deploy/install-mcp-server.sh"
+    exit 1
+fi
+
+# Add publisher user to gardener group to read conversations
+add_user_to_group "$PUBLISHER_USER" "gardener" "for conversation access"
+
+# Verify gardener home directory exists
+GARDENER_HOME="/home/gardener"
+if [[ ! -d "$GARDENER_HOME" ]]; then
+    echo -e "${RED}✗ ERROR: /home/gardener not found${NC}"
+    echo "The gardener user must exist and have a home directory for conversation access"
+    echo "Conversations are stored in /home/gardener/.claude/projects/"
+    exit 1
+fi
+
+echo "Setting up ACLs for data and conversation access..."
+setup_acl_group_access "mcpserver" "$MCPSERVER_HOME"
+setup_acl_group_access "gardener" "$GARDENER_HOME"
 echo ""
 
 # Create installation directory
