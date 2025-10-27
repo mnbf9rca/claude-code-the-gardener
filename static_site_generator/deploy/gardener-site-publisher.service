@@ -47,7 +47,7 @@ PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/gardener-publisher/app/output
+ReadWritePaths=/home/gardener-publisher/app/output /home/gardener-publisher/.cache
 
 # Restart policy
 # Don't restart on failure - let the timer handle scheduling
