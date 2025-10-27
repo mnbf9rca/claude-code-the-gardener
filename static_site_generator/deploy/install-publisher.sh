@@ -76,7 +76,7 @@ if [[ ! -f "${SITE_GEN_DIR}/.env.publish" ]]; then
     echo "Before running this installer, you must:"
     echo "  1. Copy the template: cp ${SITE_GEN_DIR}/.env.publish.example ${SITE_GEN_DIR}/.env.publish"
     echo "  2. Edit it with your AWS credentials: nano ${SITE_GEN_DIR}/.env.publish"
-    echo "  3. Set: S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION"
+    echo "  3. Set: S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION"
     echo ""
     exit 1
 fi
