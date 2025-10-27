@@ -203,11 +203,11 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "1. Test the publisher manually (dry run):"
-echo -e "   ${YELLOW}sudo -u $PUBLISHER_USER bash ${INSTALL_DIR}/orchestrate.sh --skip-sync --dry-run \\${NC}"
-echo -e "   ${YELLOW}     --data-dir /home/mcpserver/data \\${NC}"
-echo -e "   ${YELLOW}     --conversations-dir /home/gardener/.claude/projects/-home-gardener-workspace \\${NC}"
-echo -e "   ${YELLOW}     --photos-dir /home/mcpserver/photos \\${NC}"
-echo -e "   ${YELLOW}     --output-dir ${INSTALL_DIR}/output${NC}"
+echo -e "   ${YELLOW}sudo -u $PUBLISHER_USER bash ${INSTALL_DIR}/orchestrate.sh --skip-sync --dry-run \\
+     --data-dir /home/mcpserver/data \\
+     --conversations-dir /home/gardener/.claude/projects/-home-gardener-workspace \\
+     --photos-dir /home/mcpserver/photos \\
+     --output-dir ${INSTALL_DIR}/output${NC}"
 echo ""
 echo "2. Enable and start the timer:"
 echo -e "   ${YELLOW}sudo systemctl enable --now gardener-site-publisher.timer${NC}"
