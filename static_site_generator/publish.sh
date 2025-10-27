@@ -148,7 +148,7 @@ fi
 # Show what changed
 CHANGED_FILES=$(git diff --cached --stat | tail -n 1)
 echo -e "${GREEN}  ✓ Changes detected:${NC}"
-git diff --cached --stat | head -n 20
+git diff --cached --stat | head -n 20 || true
 if [[ $(git diff --cached --numstat | wc -l) -gt 20 ]]; then
     echo "  ... (showing first 20 files)"
 fi
