@@ -258,8 +258,11 @@ fi
 echo -e "${BLUE}🏗️  Stage 2: Building static site...${NC}"
 echo ""
 
+# Change to script directory so uv can find the virtual environment
+cd "${SCRIPT_DIR}"
+
 # Build command as array to avoid eval security issues
-BUILD_CMD=(uv run python "${SCRIPT_DIR}/generate.py" --data-dir "$DATA_DIR" --photos-dir "$PHOTOS_DIR" --output-dir "$OUTPUT_DIR")
+BUILD_CMD=(uv run python generate.py --data-dir "$DATA_DIR" --photos-dir "$PHOTOS_DIR" --output-dir "$OUTPUT_DIR")
 
 # Add --conversations-dir if specified
 if [[ -n "$CONVERSATIONS_DIR" ]]; then
