@@ -100,11 +100,12 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
 
                 # Content can be a string or a list (like assistant messages)
                 if isinstance(content, list):
-                    # Extract text parts from list
-                    text_parts = []
-                    for item in content:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            text_parts.append(item.get("text", ""))
+                    text_parts = [
+                        item.get("text", "")
+                        for item in content
+                        if isinstance(item, dict)
+                        and item.get("type") == "text"
+                    ]
                     content_text = "\n".join(text_parts) if text_parts else ""
                 else:
                     # It's already a string
