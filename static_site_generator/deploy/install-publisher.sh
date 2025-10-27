@@ -222,6 +222,15 @@ systemctl daemon-reload
 echo -e "${GREEN}  ✓ Systemd units installed${NC}"
 echo ""
 
+# Check if timer is already active
+TIMER_NAME="gardener-site-publisher.timer"
+if systemctl is-active --quiet "$TIMER_NAME"; then
+    echo "  Timer is active - restarting to apply changes..."
+    systemctl restart "$TIMER_NAME"
+    echo -e "${GREEN}✓ Timer restarted${NC}"
+fi
+echo ""
+
 # Summary and next steps
 echo "=================================================="
 echo -e "${GREEN}✅ Installation complete!${NC}"
