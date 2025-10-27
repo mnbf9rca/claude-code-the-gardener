@@ -51,10 +51,9 @@ def correlate_timeline_with_conversations(timeline: List[Dict[str, Any]], conver
 
                                 # Look for tool calls that could have created this event
                                 # (log_thought, log_action, water, light, etc.)
-                                if delta <= 5:  # Within 5 seconds
-                                    if best_delta is None or delta < best_delta:
-                                        best_delta = delta
-                                        best_match = tool_call.get("id")
+                                if delta <= 5 and (best_delta is None or delta < best_delta):
+                                    best_delta = delta
+                                    best_match = tool_call.get("id")
                             except (ValueError, TypeError, KeyError):
                                 continue
 
@@ -68,12 +67,8 @@ def correlate_timeline_with_conversations(timeline: List[Dict[str, Any]], conver
     return timeline
 
 
-def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
-    """Create a unified timeline of all events for visualization."""
-
-    timeline = []
-
-    # Add actions
+def _add_actions_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]) -> None:
+    """Add action log entries to timeline."""
     actions = get_action_log(data_dir)
     for action in actions:
         try:
@@ -89,23 +84,29 @@ def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
         except (ValueError, TypeError, KeyError):
             continue
 
-    # Add thoughts
+
+def _add_thoughts_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]) -> None:
+    """Add thinking log entries to timeline."""
     thoughts = get_thinking_log(data_dir)
     for thought in thoughts:
         try:
             timestamp = parse_timestamp(thought["timestamp"])
+            hypothesis = thought.get("hypothesis", "")
+            summary = hypothesis[:100] + "..." if len(hypothesis) > 100 else hypothesis
             timeline.append({
                 "type": "thought",
                 "timestamp": thought["timestamp"],
                 "unix": int(timestamp.timestamp() * 1000),
                 "data": thought,
-                "summary": thought.get("hypothesis", "")[:100] + "..." if len(thought.get("hypothesis", "")) > 100 else thought.get("hypothesis", ""),
+                "summary": summary,
                 "tags": thought.get("tags", []),
             })
         except (ValueError, TypeError, KeyError):
             continue
 
-    # Add photos
+
+def _add_photos_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]) -> None:
+    """Add photo capture events to timeline."""
     camera_file = data_dir / "camera_usage.jsonl"
     photos = load_jsonl(camera_file)
     for photo in photos:
@@ -121,7 +122,9 @@ def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
         except (ValueError, TypeError, KeyError):
             continue
 
-    # Add water events
+
+def _add_water_events_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]) -> None:
+    """Add water pump events to timeline."""
     water_file = data_dir / "water_pump_history.jsonl"
     water_events = load_jsonl(water_file)
     for event in water_events:
@@ -137,7 +140,9 @@ def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
         except (ValueError, TypeError, KeyError):
             continue
 
-    # Add light events
+
+def _add_light_events_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]) -> None:
+    """Add light control events to timeline."""
     light_file = data_dir / "light_history.jsonl"
     light_events = load_jsonl(light_file)
     for event in light_events:
@@ -145,29 +150,34 @@ def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
             timestamp = parse_timestamp(event["timestamp"])
             action = event.get("action", "unknown")
             duration = event.get("duration_minutes", 0)
+            summary = f"Light {action} ({duration}min)" if action == "activated" else f"Light {action}"
 
             timeline.append({
                 "type": "light",
                 "timestamp": event["timestamp"],
                 "unix": int(timestamp.timestamp() * 1000),
                 "data": event,
-                "summary": f"Light {action} ({duration}min)" if action == "activated" else f"Light {action}",
+                "summary": summary,
             })
         except (ValueError, TypeError, KeyError):
             continue
 
-    # Add messages to/from human
+
+def _add_messages_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]) -> None:
+    """Add messages to/from human to timeline."""
     messages_to = load_jsonl(data_dir / "messages_to_human.jsonl")
     for msg in messages_to:
         try:
             timestamp = parse_timestamp(msg["timestamp"])
+            message = msg.get("message", "")
+            summary = message[:100] + "..." if len(message) > 100 else message
             timeline.append({
                 "type": "message",
                 "subtype": "to_human",
                 "timestamp": msg["timestamp"],
                 "unix": int(timestamp.timestamp() * 1000),
                 "data": msg,
-                "summary": msg.get("message", "")[:100] + "..." if len(msg.get("message", "")) > 100 else msg.get("message", ""),
+                "summary": summary,
             })
         except (ValueError, TypeError, KeyError):
             continue
@@ -176,16 +186,31 @@ def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
     for msg in messages_from:
         try:
             timestamp = parse_timestamp(msg["timestamp"])
+            content = msg.get("content", "")
+            summary = content[:100] + "..." if len(content) > 100 else content
             timeline.append({
                 "type": "message",
                 "subtype": "from_human",
                 "timestamp": msg["timestamp"],
                 "unix": int(timestamp.timestamp() * 1000),
                 "data": msg,
-                "summary": msg.get("content", "")[:100] + "..." if len(msg.get("content", "")) > 100 else msg.get("content", ""),
+                "summary": summary,
             })
         except (ValueError, TypeError, KeyError):
             continue
+
+
+def get_unified_timeline(data_dir: Path) -> List[Dict[str, Any]]:
+    """Create a unified timeline of all events for visualization."""
+    timeline = []
+
+    # Add all event types
+    _add_actions_to_timeline(data_dir, timeline)
+    _add_thoughts_to_timeline(data_dir, timeline)
+    _add_photos_to_timeline(data_dir, timeline)
+    _add_water_events_to_timeline(data_dir, timeline)
+    _add_light_events_to_timeline(data_dir, timeline)
+    _add_messages_to_timeline(data_dir, timeline)
 
     # Sort by timestamp (newest first)
     timeline.sort(key=lambda x: x["unix"], reverse=True)
@@ -265,15 +290,13 @@ def detect_highlights(timeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     highlights = []
 
     # Look for first occurrences
-    first_water = next((e for e in reversed(timeline) if e["type"] == "water"), None)
-    if first_water:
+    if first_water := next((e for e in reversed(timeline) if e["type"] == "water"), None):
         highlights.append({
             **first_water,
             "highlight_reason": "First water dispensed",
         })
 
-    first_photo = next((e for e in reversed(timeline) if e["type"] == "photo"), None)
-    if first_photo:
+    if first_photo := next((e for e in reversed(timeline) if e["type"] == "photo"), None):
         highlights.append({
             **first_photo,
             "highlight_reason": "First photo captured",
@@ -281,11 +304,7 @@ def detect_highlights(timeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     # Look for messages to human (always interesting)
     messages_to_human = [e for e in timeline if e.get("type") == "message" and e.get("subtype") == "to_human"]
-    for msg in messages_to_human:
-        highlights.append({
-            **msg,
-            "highlight_reason": "Message to human",
-        })
+    highlights.extend({**msg, "highlight_reason": "Message to human"} for msg in messages_to_human)
 
     # Look for repeated concerns in thoughts (same tags appearing frequently)
     thought_tags = {}
@@ -296,12 +315,10 @@ def detect_highlights(timeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     thought_tags[tag] = []
                 thought_tags[tag].append(event)
 
-    for tag, events in thought_tags.items():
-        if len(events) >= 5:  # Tag appears 5+ times
-            # Add the most recent one as a highlight
-            highlights.append({
-                **events[0],
-                "highlight_reason": f"Repeated concern: {tag} ({len(events)} times)",
-            })
+    # Add highlights for frequently occurring tags
+    highlights.extend(
+        {**events[0], "highlight_reason": f"Repeated concern: {tag} ({len(events)} times)"}
+        for tag, events in thought_tags.items() if len(events) >= 5
+    )
 
     return highlights

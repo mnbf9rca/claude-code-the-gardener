@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import markdown2
 from .stats import load_jsonl, parse_timestamp
+from .tool_formatters import format_tool_input as format_tool_input_registry
 
 
 def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
@@ -208,8 +209,7 @@ def get_all_conversations(data_dir: Path) -> List[Dict[str, Any]]:
 
     conversations = []
     for conv_file in claude_dir.glob("*.jsonl"):
-        conv = parse_conversation(conv_file)
-        if conv:
+        if conv := parse_conversation(conv_file):
             conversations.append(conv)
 
     # Sort by start time (newest first)
@@ -223,10 +223,7 @@ def get_conversation_by_id(data_dir: Path, session_id: str) -> Optional[Dict[str
     claude_dir = data_dir / "claude"
     conv_file = claude_dir / f"{session_id}.jsonl"
 
-    if not conv_file.exists():
-        return None
-
-    return parse_conversation(conv_file)
+    return None if not conv_file.exists() else parse_conversation(conv_file)
 
 
 def format_tool_call_for_display(tool_call: Dict[str, Any]) -> str:
@@ -237,131 +234,25 @@ def format_tool_call_for_display(tool_call: Dict[str, Any]) -> str:
     # Pretty print the input JSON
     formatted_input = json.dumps(input_params, indent=2)
 
-    html = f'''<div class="tool-call">
+    return f'''<div class="tool-call">
   <div class="tool-name">{name}</div>
   <pre class="tool-input"><code>{formatted_input}</code></pre>
 </div>'''
-    return html
 
 
 def markdown_to_html(text: str) -> str:
     """Convert markdown to HTML for display using markdown2 library."""
-    if not text:
-        return ""
-    return markdown2.markdown(text)
+    return "" if not text else markdown2.markdown(text)
 
 
 def format_tool_input(tool_name: str, tool_input: Dict[str, Any]) -> str:
-    """Format tool input parameters in a human-readable way."""
-    if not tool_input:
-        return '<span class="tool-no-params">No parameters</span>'
+    """
+    Format tool input parameters in a human-readable way.
 
-    # Plant-specific tools - make them more readable
-    if 'moisture' in tool_name.lower():
-        if 'hours' in tool_input:
-            return f'<span class="tool-param">Last {tool_input["hours"]} hours, {tool_input.get("samples_per_hour", 1)} samples/hour</span>'
-
-    elif 'recent_thoughts' in tool_name or 'recent_actions' in tool_name:
-        if 'n' in tool_input:
-            return f'<span class="tool-param">Last {tool_input["n"]} items</span>'
-
-    elif 'light' in tool_name.lower() and 'activate' in tool_name:
-        if 'duration_minutes' in tool_input:
-            return f'<span class="tool-param">Duration: {tool_input["duration_minutes"]} minutes</span>'
-
-    elif 'dispense_water' in tool_name:
-        if 'ml' in tool_input:
-            return f'<span class="tool-param">Amount: {tool_input["ml"]}ml</span>'
-
-    elif 'save_notes' in tool_name:
-        # Show mode as header, content in white box with markdown formatting
-        mode = tool_input.get('mode', 'update')
-        content = tool_input.get('content', '')
-
-        result = f'<div><strong>Mode:</strong> <span class="tool-param-value">{mode}</span></div>'
-
-        if isinstance(content, str) and content:
-            formatted_content = markdown_to_html(content)
-            result += f'<div class="tool-result-notes-box">{formatted_content}</div>'
-
-        return result
-
-    elif 'write_plant_status' in tool_name:
-        # Extract key fields from plant status and format nicely
-        params = []
-        if 'plant_state' in tool_input:
-            params.append(f'<span class="tool-param-key">State:</span> <span class="plant-state-{tool_input["plant_state"]}">{tool_input["plant_state"]}</span>')
-        if 'reasoning' in tool_input:
-            params.append(f'<span class="tool-param-key">Reasoning:</span> {tool_input["reasoning"]}')
-        if 'next_action_sequence' in tool_input:
-            actions = tool_input['next_action_sequence']
-            if isinstance(actions, list):
-                actions_html = format_field_value('next_action_sequence', actions)
-                params.append(f'<span class="tool-param-key">Next actions:</span><br>{actions_html}')
-        return '<br>'.join(params) if params else '<span class="tool-param">Plant status update</span>'
-
-    elif 'log_thought' in tool_name:
-        # Structured thought input: observation, hypothesis, candidate_actions (list of dicts), reasoning, uncertainties, tags (array)
-        parts = []
-
-        # Main fields as 2-column table
-        table_rows = []
-        for key in ['observation', 'hypothesis', 'reasoning', 'uncertainties']:
-            if key in tool_input:
-                table_rows.append(f'<tr><td class="tool-param-key">{key}</td><td>{tool_input[key]}</td></tr>')
-
-        if table_rows:
-            parts.append(f'<table class="data-table">{"".join(table_rows)}</table>')
-
-        # Candidate actions as list of tables
-        if 'candidate_actions' in tool_input and isinstance(tool_input['candidate_actions'], list):
-            actions_html = ['<div class="tool-param-key">Candidate Actions:</div>']
-            for idx, action in enumerate(tool_input['candidate_actions'], 1):
-                if isinstance(action, dict):
-                    action_rows = []
-                    for k, v in action.items():
-                        action_rows.append(f'<tr><td class="tool-param-key">{k}</td><td>{v}</td></tr>')
-                    actions_html.append(f'<div style="margin-left: 1rem; margin-bottom: 0.5rem;"><strong>Action {idx}:</strong><table class="data-table">{"".join(action_rows)}</table></div>')
-            parts.append(''.join(actions_html))
-
-        # Tags as inline list
-        if 'tags' in tool_input and isinstance(tool_input['tags'], list):
-            tags_html = ' '.join(f'<span class="tag">{tag}</span>' for tag in tool_input['tags'])
-            parts.append(f'<div><span class="tool-param-key">Tags:</span> {tags_html}</div>')
-
-        return ''.join(parts) if parts else '<span class="tool-param">Thought logged</span>'
-
-    elif 'log_action' in tool_name:
-        # Structured action input - show type, then details as nested table
-        parts = []
-
-        # Show type first if present
-        if 'type' in tool_input:
-            parts.append(f'<div style="margin-bottom: 0.5rem;"><span class="tool-param-key">Type:</span> <span class="tool-param-value">{tool_input["type"]}</span></div>')
-
-        # Show details as a nested 2-column table
-        if 'details' in tool_input and isinstance(tool_input['details'], dict):
-            details = tool_input['details']
-            detail_rows = []
-            for key, value in details.items():
-                detail_rows.append(f'<tr><td class="tool-param-key">{key}</td><td>{value}</td></tr>')
-
-            if detail_rows:
-                parts.append(f'<div style="margin-top: 0.5rem;"><strong>Details:</strong></div>')
-                parts.append(f'<table class="data-table">{"".join(detail_rows)}</table>')
-
-        return ''.join(parts) if parts else '<span class="tool-param">Action logged</span>'
-
-    # For other tools, show params as key-value pairs (FULL content, no truncation)
-    params = []
-    for key, value in tool_input.items():
-        if isinstance(value, (list, dict)):
-            # Format complex structures as pretty JSON
-            value_html = f'<pre class="tool-result-json"><code>{json.dumps(value, indent=2)}</code></pre>'
-            params.append(f'<div><span class="tool-param-key">{key}:</span><br>{value_html}</div>')
-        else:
-            params.append(f'<span class="tool-param-key">{key}:</span> <span class="tool-param-value">{value}</span>')
-    return '<br>'.join(params)
+    This is a thin wrapper around the registry-based formatter to maintain
+    backwards compatibility with existing code.
+    """
+    return format_tool_input_registry(tool_name, tool_input)
 
 
 def detect_result_pattern(data: Any) -> str:

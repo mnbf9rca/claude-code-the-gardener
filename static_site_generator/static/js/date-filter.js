@@ -36,7 +36,8 @@ function initDateFilter(onFilterChange) {
         if (e.key === 'Enter') applyTimeRange();
     });
 
-    function applyTimeRange() {
+    // Function expression instead of declaration (avoid hoisting issues in blocks)
+    const applyTimeRange = () => {
         const fromExpr = fromInput.value.trim();
         const toExpr = toInput.value.trim();
 
@@ -52,5 +53,5 @@ function initDateFilter(onFilterChange) {
 
         // Call the callback with the parsed times
         onFilterChange(fromTime, toTime);
-    }
+    };
 }

@@ -39,8 +39,29 @@ function importAnnotations(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const annotations = JSON.parse(e.target.result);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+            const importedAnnotations = JSON.parse(e.target.result);
+            const existingAnnotations = loadAnnotations();
+
+            // Warn if overwriting existing annotations
+            if (Object.keys(existingAnnotations).length > 0) {
+                const action = window.confirm(
+                    `You have ${Object.keys(existingAnnotations).length} existing annotation(s). ` +
+                    `Click OK to overwrite them, or Cancel to merge (imported annotations will take precedence).`
+                );
+
+                if (action) {
+                    // Overwrite
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(importedAnnotations));
+                } else {
+                    // Merge: imported takes precedence
+                    const merged = { ...existingAnnotations, ...importedAnnotations };
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+                }
+            } else {
+                // No existing annotations, just import
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(importedAnnotations));
+            }
+
             location.reload();
         } catch (error) {
             alert('Error importing annotations: ' + error.message);
@@ -55,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     annotateBtns.forEach(btn => {
         btn.addEventListener('click', function() {
-            const eventId = this.dataset.eventId;
+            const {eventId} = this.dataset;
             const note = prompt('Add your note:');
 
             if (note) {
@@ -76,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load existing annotations and mark buttons
     const annotations = loadAnnotations();
     annotateBtns.forEach(btn => {
-        const eventId = btn.dataset.eventId;
+        const {eventId} = btn.dataset;
         if (annotations[eventId]) {
             btn.textContent = '✓ Noted';
             btn.style.background = '#e8f5e9';

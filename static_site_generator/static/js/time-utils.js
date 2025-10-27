@@ -1,4 +1,6 @@
 /**
+ * Time expression parsing utilities
+ *
  * Parse Grafana-style relative time expressions using modern Date methods
  * Supported formats:
  * - "now" - current time
@@ -12,7 +14,16 @@
  * - Varying month lengths (28-31 days)
  * - Daylight saving time transitions
  */
-function parseTimeExpression(expr) {
+
+/**
+ * Parse a time expression and return a Unix timestamp in milliseconds,
+ * or null if the expression is invalid or empty.
+ *
+ * @param {string} expr - The time expression to parse
+ * @param {Function} onError - Optional callback for error handling: onError(errorMessage)
+ * @returns {number|null} Unix timestamp in milliseconds, or null
+ */
+function parseTimeExpression(expr, onError) {
     if (!expr || expr.trim() === '') {
         return null; // No filter
     }
@@ -67,7 +78,12 @@ function parseTimeExpression(expr) {
         return date.getTime();
     }
 
-    // If we can't parse it, return null
-    console.warn(`Could not parse time expression: "${trimmed}"`);
+    // If we can't parse it, invoke error callback if provided
+    const errorMsg = `Unrecognized time filter expression: "${trimmed}"`;
+    if (onError && typeof onError === 'function') {
+        onError(errorMsg);
+    } else {
+        console.warn(errorMsg);
+    }
     return null;
 }

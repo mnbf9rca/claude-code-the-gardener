@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{#
+  SECURITY NOTE: XSS false positives
+  The | safe filter is used intentionally in this template to render pre-formatted HTML
+  from trusted Python formatter functions. All content comes from local data files,
+  not user input. This is a static site generator, not a web application.
+#}
+
 {% block title %}Conversation {{ conversation.session_id[:8] }} - Claude the Gardener{% endblock %}
 
 {% block content %}

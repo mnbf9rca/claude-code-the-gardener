@@ -288,4 +288,4 @@ def get_daily_summary(data_dir: Path) -> List[Dict[str, Any]]:
                     break
 
     # Convert to sorted list
-    return sorted(daily_data.values(), key=lambda x: x["date"] if x["date"] else "")
+    return sorted(daily_data.values(), key=lambda x: x["date"] or "")

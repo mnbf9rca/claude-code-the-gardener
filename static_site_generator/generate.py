@@ -3,6 +3,20 @@
 """
 Static site generator for Claude the Gardener.
 Parses all data and generates an interactive HTML site.
+
+SECURITY NOTE: XSS Warnings from Static Analysis Tools
+-------------------------------------------------------
+This is a STATIC SITE GENERATOR, not a Flask web application. Code analysis tools
+may flag the direct use of Jinja2 as an XSS risk, but this is a false positive because:
+
+1. All content comes from TRUSTED LOCAL FILES (conversation logs, sensor data)
+2. There is NO user-submitted content or external input
+3. The generated HTML is served statically (e.g., from S3), not dynamically
+4. The | safe filter in templates is intentionally used to render pre-formatted
+   HTML from Python formatter functions
+
+This code does not have the same threat model as a Flask web app accepting user input.
+The use of Jinja2 here is safe and appropriate for static site generation.
 """
 
 import json
@@ -86,7 +100,7 @@ def main():
 
     print("  - Correlating timeline with conversations...")
     timeline = actions.correlate_timeline_with_conversations(timeline, all_conversations)
-    linked_events = sum(1 for e in timeline if 'session_id' in e)
+    linked_events = sum(bool('session_id' in e) for e in timeline)
     print(f"    {linked_events}/{len(timeline)} events linked to conversations")
 
     # Export data as JSON for JavaScript
@@ -211,7 +225,7 @@ def main():
     print("=" * 50)
     print("Static site generation complete\!")
     print()
-    print(f"Summary:")
+    print("Summary:")
     print(f"  - {len(all_conversations)} conversations processed")
     print(f"  - {len(timeline)} timeline events")
     print(f"  - {overall_stats['project'].get('duration_days', 0)} days of plant care")

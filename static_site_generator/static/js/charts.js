@@ -21,78 +21,34 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 });
 
-/**
- * Parse Grafana-style relative time expressions using modern Date methods
- * Supported formats:
- * - "now" - current time
- * - "now-3h", "now-7d", "now-1M", "now-2y" - relative past
- * - "now+1h", "now+3d" - relative future
- * - "2024-01-15" or "2024-01-15 14:30" - absolute dates
- * - Empty string - interpreted as no filter (all data)
- *
- * Uses Date.prototype methods (setMonth, setDate, etc.) which properly handle:
- * - Leap years
- * - Varying month lengths (28-31 days)
- * - Daylight saving time transitions
- */
-function parseTimeExpression(expr) {
-    if (!expr || expr.trim() === '') {
-        return null; // No filter
-    }
-
-    const trimmed = expr.trim();
-
-    // Try parsing as absolute date/datetime
-    const absoluteDate = new Date(trimmed);
-    if (!isNaN(absoluteDate.getTime()) && trimmed.match(/\d{4}-\d{2}-\d{2}/)) {
-        return absoluteDate.getTime();
-    }
-
-    // Handle "now" with optional offset
-    if (trimmed === 'now') {
-        return Date.now();
-    }
-
-    // Match: now[+-]<number><unit>
-    const relativeMatch = trimmed.match(/^now\s*([+-])\s*(\d+)\s*([smhdwMy])$/);
-    if (relativeMatch) {
-        const sign = relativeMatch[1] === '+' ? 1 : -1;
-        const amount = parseInt(relativeMatch[2]) * sign;
-        const unit = relativeMatch[3];
-
-        const date = new Date();
-
-        // Use Date methods for accurate calendar arithmetic
-        switch (unit) {
-            case 's': // seconds
-                date.setSeconds(date.getSeconds() + amount);
-                break;
-            case 'm': // minutes
-                date.setMinutes(date.getMinutes() + amount);
-                break;
-            case 'h': // hours
-                date.setHours(date.getHours() + amount);
-                break;
-            case 'd': // days
-                date.setDate(date.getDate() + amount);
-                break;
-            case 'w': // weeks
-                date.setDate(date.getDate() + (amount * 7));
-                break;
-            case 'M': // months (handles varying lengths correctly)
-                date.setMonth(date.getMonth() + amount);
-                break;
-            case 'y': // years (handles leap years correctly)
-                date.setFullYear(date.getFullYear() + amount);
-                break;
+// Helper to show error feedback for invalid time expressions
+function showTimeExpressionError(message) {
+    let errorElem = document.getElementById('time-expression-error');
+    if (!errorElem) {
+        errorElem = document.createElement('div');
+        errorElem.id = 'time-expression-error';
+        errorElem.style.color = 'var(--color-error, #e63946)';
+        errorElem.style.marginTop = '8px';
+        errorElem.style.fontSize = '0.9em';
+        // Insert after the time filter controls if present
+        const filterControls = document.querySelector('.time-filter-controls');
+        if (filterControls && filterControls.parentNode) {
+            filterControls.parentNode.insertBefore(errorElem, filterControls.nextSibling);
+        } else {
+            // Fallback: insert at top of page
+            const main = document.querySelector('main') || document.body;
+            main.insertBefore(errorElem, main.firstChild);
         }
-
-        return date.getTime();
     }
+    errorElem.textContent = message;
+}
 
-    // If we can't parse it, return null
-    console.warn(`Could not parse time expression: "${trimmed}"`);
-    return null;
+// Helper to clear error feedback
+function clearTimeExpressionError() {
+    const errorElem = document.getElementById('time-expression-error');
+    if (errorElem) {
+        errorElem.textContent = '';
+    }
 }
 
 function setupDateRangeFilter() {
@@ -129,12 +85,17 @@ function setupDateRangeFilter() {
         if (e.key === 'Enter') applyTimeRange();
     });
 
-    function applyTimeRange() {
+    // Function expression instead of declaration (avoid hoisting issues in blocks)
+    const applyTimeRange = () => {
         const fromExpr = fromInput.value.trim();
         const toExpr = toInput.value.trim();
 
-        const fromTime = parseTimeExpression(fromExpr);
-        const toTime = parseTimeExpression(toExpr);
+        // Clear any previous errors
+        clearTimeExpressionError();
+
+        // Parse with error callbacks
+        const fromTime = parseTimeExpression(fromExpr, showTimeExpressionError);
+        const toTime = parseTimeExpression(toExpr, showTimeExpressionError);
 
         // Clear active preset buttons if manually edited
         presetBtns.forEach(b => {
@@ -154,7 +115,7 @@ function setupDateRangeFilter() {
         const maxTime = toTime || Date.now() + 86400000;
 
         applyFilter('custom', minTime, maxTime);
-    }
+    };
 }
 
 function applyFilter(range, customStart, customEnd) {
