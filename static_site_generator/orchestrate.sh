@@ -105,10 +105,10 @@ Examples:
 
 Exit Codes:
   0 - Success (site published or no changes detected)
-  1 - Error in sync stage
+  1 - Error in sync stage or .env.publish not found
   2 - Error in build stage
   3 - Error in publish stage
-  4 - Missing required arguments
+  4 - S3_BUCKET not set in .env.publish or unknown option
 
 EOF
             exit 0
