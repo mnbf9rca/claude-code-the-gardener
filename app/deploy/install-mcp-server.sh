@@ -153,50 +153,14 @@ else
 fi
 
 # Add mcpserver to video group for camera access
-if ! groups "$MCP_USER" | grep -q '\bvideo\b'; then
-    echo "Adding $MCP_USER to video group for camera access..."
-    if ! usermod -a -G video "$MCP_USER"; then
-        echo "✗ ERROR: Failed to add $MCP_USER to video group" >&2
-        echo "  Camera access will not work without video group membership" >&2
-        exit 1
-    fi
-    echo "✓ User $MCP_USER added to video group"
-else
-    echo "✓ User $MCP_USER already in video group"
-fi
+add_user_to_group "$MCP_USER" "video" "for camera access"
 
 # Add the sudo user to mcpserver group for convenient access
 add_sudo_user_to_group "$MCP_USER"
 
 # 2. Install uv package manager for mcpserver user
+install_uv_for_user "$MCP_USER"
 UV_BIN="$MCP_HOME/.local/bin/uv"
-if [ -x "$UV_BIN" ]; then
-    UV_VERSION=$(sudo -u "$MCP_USER" "$UV_BIN" --version 2>/dev/null || echo "unknown")
-    echo "✓ uv already installed (version: $UV_VERSION)"
-else
-    echo "Installing uv package manager as $MCP_USER..."
-    echo ""
-
-    # Run uv installation with visible output
-    sudo -u "$MCP_USER" bash -c "cd $MCP_HOME && curl -LsSf https://astral.sh/uv/install.sh | sh"
-    INSTALL_EXIT_CODE=$?
-
-    echo ""
-
-    # Validate installation
-    if [ $INSTALL_EXIT_CODE -ne 0 ]; then
-        echo "✗ ERROR: uv installation script failed with exit code $INSTALL_EXIT_CODE" >&2
-        exit 1
-    fi
-
-    if [ -x "$UV_BIN" ]; then
-        UV_VERSION=$(sudo -u "$MCP_USER" "$UV_BIN" --version 2>/dev/null || echo "unknown")
-        echo "✓ uv installed successfully (version: $UV_VERSION)"
-    else
-        echo "✗ ERROR: uv installation failed - binary not found at $UV_BIN" >&2
-        exit 1
-    fi
-fi
 
 # 3. Copy app directory to mcpserver home
 echo "Copying application files..."
