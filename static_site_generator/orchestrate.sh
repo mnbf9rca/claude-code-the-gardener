@@ -17,12 +17,24 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Load configuration from .env.publish
+if [[ ! -f "${SCRIPT_DIR}/.env.publish" ]]; then
+    echo -e "${RED}Error: .env.publish not found${NC}"
+    echo "Create ${SCRIPT_DIR}/.env.publish with your AWS credentials"
+    echo "See .env.publish.example for template"
+    exit 1
+fi
+
+# Source the environment file
+set -a
+source "${SCRIPT_DIR}/.env.publish"
+set +a
+
 # Default values
 SKIP_SYNC=false
 DATA_DIR="${PROJECT_ROOT}/app/data"
 PHOTOS_DIR="${PROJECT_ROOT}/app/photos"
 OUTPUT_DIR="${SCRIPT_DIR}/output"
-S3_BUCKET=""
 DRY_RUN=""
 VERBOSE=false
 
@@ -43,10 +55,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --output-dir)
             OUTPUT_DIR="$2"
-            shift 2
-            ;;
-        --s3-bucket)
-            S3_BUCKET="$2"
             shift 2
             ;;
         --dry-run)
@@ -73,27 +81,27 @@ Options:
   --data-dir <path>     Path to data directory (default: ../app/data)
   --photos-dir <path>   Path to photos directory (default: ../app/photos)
   --output-dir <path>   Path to output directory (default: ./output)
-  --s3-bucket <name>    S3 bucket name for publishing (required)
   --dry-run             Show what would be done without actually doing it
   --verbose, -v         Verbose output for debugging
 
 Environment Variables (set in .env.publish):
+  S3_BUCKET               S3 bucket name
   AWS_ACCESS_KEY_ID       AWS access key
   AWS_SECRET_ACCESS_KEY   AWS secret key
   AWS_DEFAULT_REGION      AWS region
 
 Examples:
   # Run locally (syncs from Pi, builds, publishes)
-  $0 --s3-bucket my-gardener-site
+  $0
 
   # Run on Pi (skip sync, just build and publish)
-  $0 --skip-sync --s3-bucket my-gardener-site
+  $0 --skip-sync
 
   # Dry run to test without publishing
-  $0 --s3-bucket my-gardener-site --dry-run
+  $0 --dry-run
 
   # Custom paths
-  $0 --data-dir /path/to/data --output-dir /path/to/output --s3-bucket my-site
+  $0 --data-dir /path/to/data --output-dir /path/to/output
 
 Exit Codes:
   0 - Success (site published or no changes detected)
@@ -113,10 +121,10 @@ EOF
     esac
 done
 
-# Validate required arguments
+# Validate S3_BUCKET is set in .env.publish
 if [[ -z "$S3_BUCKET" ]]; then
-    echo -e "${RED}Error: --s3-bucket is required${NC}"
-    echo "Run with --help for usage information"
+    echo -e "${RED}Error: S3_BUCKET not set in .env.publish${NC}"
+    echo "Edit ${SCRIPT_DIR}/.env.publish and set S3_BUCKET"
     exit 4
 fi
 
@@ -213,10 +221,10 @@ if [[ ! -f "${SCRIPT_DIR}/publish.sh" ]]; then
 fi
 
 # Publish command as array to avoid eval security issues
-PUBLISH_CMD=("${SCRIPT_DIR}/publish.sh" --output-dir "$OUTPUT_DIR" --s3-bucket "$S3_BUCKET")
+PUBLISH_CMD=("${SCRIPT_DIR}/publish.sh" --output-dir "$OUTPUT_DIR")
 
 if [[ -n "$DRY_RUN" ]]; then
-    PUBLISH_CMD+=(--dry-run)
+    PUBLISH_CMD+=($DRY_RUN)
 fi
 
 if [[ "$VERBOSE" == true ]]; then
