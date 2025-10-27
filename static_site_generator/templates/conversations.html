@@ -32,7 +32,7 @@
                     <a href="{{ conv.session_id }}.html">Session {{ conv.session_id[:8] }}...</a>
                 </div>
                 <div class="card-meta">
-                    {{ conv.start_time[:10] }} " {{ conv.duration_human }}
+                    {{ conv.start_time[:10] }} {{ conv.start_time[11:16] }} " {{ conv.duration_human }}
                 </div>
             </div>
 

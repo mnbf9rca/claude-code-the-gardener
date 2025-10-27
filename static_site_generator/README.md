@@ -73,17 +73,21 @@ Edit `sync_data.sh` to change:
 
 ```
 static_site_generator/
-├── pyproject.toml        # Python dependencies (uv)
-├── generate.py           # Main generator script
-├── sync_data.sh          # Data sync script
-├── parsers/              # Data parsing modules
-│   ├── stats.py          # Overall statistics
-│   ├── conversations.py  # Conversation parsing & rendering
-│   ├── sensors.py        # Sensor data processing
-│   ├── actions.py        # Timeline and actions
-│   ├── tool_formatters.py # Tool input/result formatters (registry)
+├── pyproject.toml           # Python dependencies (uv)
+├── generate.py              # Main generator script (with CLI args)
+├── sync_data.sh             # Data sync script
+├── publish.sh               # S3 publishing with change detection
+├── orchestrate.sh           # Pipeline orchestrator
+├── .env.publish.example     # Template for AWS credentials
+├── .gitignore               # Ignore output/.git and secrets
+├── parsers/                 # Data parsing modules
+│   ├── stats.py             # Overall statistics
+│   ├── conversations.py     # Conversation parsing & rendering
+│   ├── sensors.py           # Sensor data processing
+│   ├── actions.py           # Timeline and actions
+│   ├── tool_formatters.py  # Tool input/result formatters (registry)
 │   └── formatting_utils.py # Shared HTML formatting utilities
-├── templates/            # Jinja2 HTML templates
+├── templates/               # Jinja2 HTML templates
 │   ├── base.html
 │   ├── index.html
 │   ├── conversations.html
@@ -92,20 +96,28 @@ static_site_generator/
 │   ├── sensors.html
 │   ├── photos.html
 │   └── notes.html
-├── static/               # CSS, JavaScript
+├── static/                  # CSS, JavaScript
 │   ├── css/style.css
 │   └── js/
-│       ├── time-utils.js     # Shared time parsing utilities
-│       ├── charts.js         # Chart.js visualizations
-│       ├── date-filter.js    # Date filtering logic
-│       ├── annotations.js    # Annotation system
-│       └── timeline.js       # Timeline rendering
-├── .venv/                # Virtual environment (created by uv)
-└── output/               # Generated site (gitignored)
+│       ├── time-utils.js        # Shared time parsing utilities
+│       ├── charts.js            # Chart.js visualizations
+│       ├── date-filter.js       # Date filtering logic
+│       ├── annotations.js       # Annotation system
+│       └── timeline.js          # Timeline rendering
+├── deploy/                  # Deployment files for Raspberry Pi
+│   ├── install-publisher.sh             # Installation script
+│   ├── gardener-site-publisher.service  # Systemd service
+│   └── gardener-site-publisher.timer    # Systemd timer
+├── docs/                    # Documentation
+│   ├── S3_SETUP.md          # S3 bucket configuration guide
+│   └── PUBLISHING.md        # Publishing workflow guide
+├── .venv/                   # Virtual environment (created by uv)
+└── output/                  # Generated site (gitignored)
+    ├── .git/                # Git repo for change tracking (gitignored)
     ├── index.html
     ├── conversations/
     ├── photos/
-    ├── data/             # JSON for JavaScript
+    ├── data/                # JSON for JavaScript
     └── static/
 ```
 
@@ -136,12 +148,103 @@ The generated site includes:
 - **Statistics dashboard** - Token usage, costs, activity metrics
 - **Annotation system** - Add notes to any event (stored in localStorage)
 
-## Deployment
+## Publishing to AWS S3
 
-The `output/` directory contains a complete static site. Deploy to:
+This project includes automated publishing to AWS S3 with change detection.
+
+### Quick Start (Local Machine)
+
+**Prerequisites:** AWS CLI installed (`brew install awscli` on macOS)
+
+```bash
+# 1. Set up environment file
+cp .env.publish.example .env.publish
+# Edit and add your AWS credentials
+
+# 2. Set up S3 bucket (one-time)
+# See docs/S3_SETUP.md for detailed instructions
+
+# 3. Run the complete pipeline
+source .env.publish  # Load credentials
+./orchestrate.sh --s3-bucket your-bucket-name
+```
+
+This will:
+- Sync latest data from Pi
+- Generate fresh HTML
+- Upload to S3 (only if changes detected)
+
+### Automated Publishing (Raspberry Pi)
+
+Deploy the publisher to run automatically every 15 minutes:
+
+```bash
+# 1. Install the publisher on Pi (installs AWS CLI, Python deps, systemd units)
+sudo bash deploy/install-publisher.sh
+
+# 2. Edit .env.publish with your AWS credentials
+sudo nano /home/mcpserver/gardener-publisher/.env.publish
+
+# 3. Enable the timer
+sudo systemctl enable --now gardener-site-publisher.timer
+
+# 4. Monitor
+journalctl -u gardener-site-publisher -f
+```
+
+**Note:** The install script automatically installs AWS CLI v2 if not present.
+
+### Modular Scripts
+
+The publishing system consists of three independent scripts:
+
+1. **sync_data.sh** - Sync data from Raspberry Pi
+   ```bash
+   ./sync_data.sh [--dry-run]
+   ```
+
+2. **generate.py** - Build static site
+   ```bash
+   uv run python generate.py \
+       [--data-dir <path>] \
+       [--photos-dir <path>] \
+       [--output-dir <path>]
+   ```
+
+3. **publish.sh** - Upload to S3 (with change detection)
+   ```bash
+   ./publish.sh \
+       --output-dir <path> \
+       --s3-bucket <name> \
+       [--dry-run]
+   ```
+
+4. **orchestrate.sh** - Chain all three together
+   ```bash
+   ./orchestrate.sh \
+       --s3-bucket <name> \
+       [--skip-sync] \
+       [--dry-run]
+   ```
+
+### Documentation
+
+- **[S3_SETUP.md](docs/S3_SETUP.md)** - Complete S3 bucket configuration guide
+- **[PUBLISHING.md](docs/PUBLISHING.md)** - Publishing workflow and deployment guide
+
+### Change Detection
+
+The publish script only uploads when changes are detected:
+- Uses git in `output/` directory to track changes
+- Runs `git diff` before uploading
+- Skips S3 upload if no changes (saves money!)
+- Commits after successful publish (audit trail)
+
+### Other Deployment Options
+
+The `output/` directory is a standard static site. You can also deploy to:
 
 - **GitHub Pages**: Push `output/*` to `gh-pages` branch
-- **AWS S3**: `aws s3 sync output/ s3://your-bucket --acl public-read`
 - **Netlify/Vercel**: Drag and drop the `output/` folder
 - **Any static host**: Just upload the files!
 
@@ -150,6 +253,7 @@ The `output/` directory contains a complete static site. Deploy to:
 **Requirements:**
 - Python 3.13+ (specified in `pyproject.toml`)
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer
+- [AWS CLI](https://aws.amazon.com/cli/) - For S3 publishing
 - SSH access to Raspberry Pi (for syncing)
 
 **Dependencies** (managed by `uv` via `pyproject.toml`):

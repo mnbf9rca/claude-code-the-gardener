@@ -21,7 +21,7 @@
         <div class="stat-card">
             <div class="stat-icon">=</div>
             <div class="stat-content">
-                <div class="stat-value">{{ stats.conversations.total_count }}</div>
+                <div class="stat-value">{{ stats.conversations.get('total_count', 0) }}</div>
                 <div class="stat-label">Conversations</div>
             </div>
         </div>
@@ -61,7 +61,7 @@
         <div class="stat-card">
             <div class="stat-icon">></div>
             <div class="stat-content">
-                <div class="stat-value">${{ "%.2f"|format(stats.conversations.estimated_cost_usd.total) }}</div>
+                <div class="stat-value">${{ "%.2f"|format(stats.conversations.get('estimated_cost_usd', {}).get('total', 0)) }}</div>
                 <div class="stat-label">Estimated Cost</div>
             </div>
         </div>
@@ -69,7 +69,7 @@
         <div class="stat-card">
             <div class="stat-icon">=</div>
             <div class="stat-content">
-                <div class="stat-value">{{ (stats.conversations.total_tokens.input + stats.conversations.total_tokens.output) | format_number }}</div>
+                <div class="stat-value">{{ (stats.conversations.get('total_tokens', {}).get('input', 0) + stats.conversations.get('total_tokens', {}).get('output', 0)) | format_number }}</div>
                 <div class="stat-label">Total Tokens</div>
             </div>
         </div>
