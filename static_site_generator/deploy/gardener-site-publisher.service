@@ -16,6 +16,10 @@ Environment="PATH=/home/gardener-publisher/.local/bin:/usr/local/sbin:/usr/local
 # Load environment variables (AWS credentials, S3 bucket name)
 EnvironmentFile=/home/gardener-publisher/app/.env.publish
 
+# Ping healthchecks.io when starting (optional - only if HEALTHCHECK_URL is set)
+# The - prefix means failure is ignored
+ExecStartPre=-/bin/bash -c 'if [ -n "$HEALTHCHECK_URL" ]; then curl -fsS -m 10 --retry 5 "$HEALTHCHECK_URL/start"; fi'
+
 # Run the orchestration script
 # Skip sync because we're running on the Pi (data is local)
 # Note: AWS credentials and S3 bucket are passed via environment variables from .env.publish
@@ -25,6 +29,9 @@ ExecStart=/bin/bash /home/gardener-publisher/app/orchestrate.sh \
     --conversations-dir /home/gardener/.claude/projects/-home-gardener-workspace \
     --photos-dir /home/mcpserver/photos \
     --output-dir /home/gardener-publisher/app/output
+
+# Ping healthchecks.io with exit status (optional - only if HEALTHCHECK_URL is set)
+ExecStopPost=/bin/bash -c 'if [ -n "$HEALTHCHECK_URL" ]; then curl -fsS -m 10 --retry 5 "$HEALTHCHECK_URL/$EXIT_STATUS"; fi'
 
 # Logging
 StandardOutput=journal
