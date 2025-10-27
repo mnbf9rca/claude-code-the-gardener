@@ -201,15 +201,13 @@ def format_duration(seconds: float) -> str:
         return f"{hours}h {minutes}m"
 
 
-def get_all_conversations(data_dir: Path) -> List[Dict[str, Any]]:
+def get_all_conversations(conversations_dir: Path) -> List[Dict[str, Any]]:
     """Parse all conversation files and return sorted list."""
-    claude_dir = data_dir / "claude"
-
-    if not claude_dir.exists():
+    if not conversations_dir.exists():
         return []
 
     conversations = []
-    for conv_file in claude_dir.glob("*.jsonl"):
+    for conv_file in conversations_dir.glob("*.jsonl"):
         if conv := parse_conversation(conv_file):
             conversations.append(conv)
 

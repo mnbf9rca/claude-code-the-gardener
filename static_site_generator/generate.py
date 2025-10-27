@@ -48,6 +48,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--conversations-dir",
+        type=Path,
+        default=None,
+        help="Path to conversations directory (defaults to data-dir/claude)",
+    )
+
+    parser.add_argument(
         "--photos-dir",
         type=Path,
         default=project_root / "app" / "photos",
@@ -61,7 +68,13 @@ def parse_args():
         help="Path to output directory for generated site",
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Default conversations_dir to data_dir/claude if not specified
+    if args.conversations_dir is None:
+        args.conversations_dir = args.data_dir / "claude"
+
+    return args
 
 
 def main():
@@ -72,6 +85,7 @@ def main():
 
     # Convert to absolute paths and validate
     data_dir = args.data_dir.resolve()
+    conversations_dir = args.conversations_dir.resolve()
     photos_dir = args.photos_dir.resolve()
     output_dir = args.output_dir.resolve()
 
@@ -83,9 +97,10 @@ def main():
     print("=" * 50)
     print()
     print("Configuration:")
-    print(f"  Data directory:   {data_dir}")
-    print(f"  Photos directory: {photos_dir}")
-    print(f"  Output directory: {output_dir}")
+    print(f"  Data directory:          {data_dir}")
+    print(f"  Conversations directory: {conversations_dir}")
+    print(f"  Photos directory:        {photos_dir}")
+    print(f"  Output directory:        {output_dir}")
     print()
 
     # Validate required paths
@@ -130,7 +145,7 @@ def main():
     daily_summary = stats.get_daily_summary(data_dir)
 
     print("  - Parsing conversations...")
-    all_conversations = conversations.get_all_conversations(data_dir)
+    all_conversations = conversations.get_all_conversations(conversations_dir)
     conversation_highlights = conversations.get_highlights(all_conversations)
     print(f"    Found {len(all_conversations)} conversations ({len(conversation_highlights)} highlights)")
 

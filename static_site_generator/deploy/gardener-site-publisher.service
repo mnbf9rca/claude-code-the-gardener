@@ -15,13 +15,13 @@ EnvironmentFile=/home/gardener-publisher/app/.env.publish
 
 # Run the orchestration script
 # Skip sync because we're running on the Pi (data is local)
-# Note: AWS credentials are passed via environment variables from .env.publish
+# Note: AWS credentials and S3 bucket are passed via environment variables from .env.publish
 ExecStart=/bin/bash /home/gardener-publisher/app/orchestrate.sh \
     --skip-sync \
     --data-dir /home/mcpserver/data \
+    --conversations-dir /home/gardener/.claude/projects/-home-gardener-workspace \
     --photos-dir /home/mcpserver/photos \
-    --output-dir /home/gardener-publisher/app/output \
-    --s3-bucket ${S3_BUCKET}
+    --output-dir /home/gardener-publisher/app/output
 
 # Logging
 StandardOutput=journal
