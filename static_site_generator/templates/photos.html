@@ -14,15 +14,26 @@
     <div class="photos-grid">
         {% for photo in photos %}
         {% if photo.photo_path %}
-        <div class="photo-card" data-timestamp="{{ photo.timestamp }}">
+        <div class="photo-card{% if not photo.photo_exists %} missing-photo{% endif %}" data-timestamp="{{ photo.timestamp }}">
             <div class="photo-wrapper">
+                {% if photo.photo_exists %}
                 <img src="../photos/{{ photo.photo_path.split('/')[-1] }}"
                      alt="Plant photo from {{ photo.timestamp }}"
                      loading="lazy"
                      class="photo-img">
+                {% else %}
+                <div class="missing-photo-placeholder">
+                    <span class="missing-icon">📷</span>
+                    <p class="missing-text">Photo Missing</p>
+                    <p class="missing-filename">{{ photo.photo_path.split('/')[-1] }}</p>
+                </div>
+                {% endif %}
             </div>
             <div class="photo-meta">
                 <div class="photo-time">{{ photo.timestamp }}</div>
+                {% if not photo.photo_exists %}
+                <div class="photo-missing-badge">⚠️ File not found</div>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -32,7 +43,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/time-utils.js"></script>
 <script src="../static/js/date-filter.js"></script>
 <script>
 let activeDateRange = { from: null, to: null };

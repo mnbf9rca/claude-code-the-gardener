@@ -484,6 +484,11 @@ body {
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+.photo-card.missing-photo {
+    border: 2px dashed #ff6b6b;
+    background: #fff5f5;
+}
+
 .photo-wrapper {
     aspect-ratio: 4/3;
     overflow: hidden;
@@ -493,6 +498,48 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.missing-photo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+    padding: 1rem;
+    text-align: center;
+}
+
+.missing-icon {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: 0.5rem;
+}
+
+.missing-text {
+    font-weight: 600;
+    color: #c92a2a;
+    margin-bottom: 0.25rem;
+}
+
+.missing-filename {
+    font-size: 0.75rem;
+    color: #666;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.photo-missing-badge {
+    background: #ff6b6b;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-top: 0.5rem;
+    display: inline-block;
 }
 
 .photo-meta {

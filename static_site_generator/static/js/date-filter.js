@@ -8,6 +8,25 @@ function initDateFilter(onFilterChange) {
     const fromInput = document.getElementById('time-from');
     const toInput = document.getElementById('time-to');
 
+    // Define applyTimeRange BEFORE it's used
+    const applyTimeRange = () => {
+        const fromExpr = fromInput.value.trim();
+        const toExpr = toInput.value.trim();
+
+        const fromTime = parseTimeExpression(fromExpr);
+        const toTime = parseTimeExpression(toExpr);
+
+        // Clear active preset buttons if manually edited
+        presetBtns.forEach(b => {
+            if (b.dataset.from !== fromExpr || b.dataset.to !== toExpr) {
+                b.classList.remove('active');
+            }
+        });
+
+        // Call the callback with the parsed times
+        onFilterChange(fromTime, toTime);
+    };
+
     // Preset buttons
     presetBtns.forEach(btn => {
         btn.addEventListener('click', function() {
@@ -35,23 +54,4 @@ function initDateFilter(onFilterChange) {
     toInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') applyTimeRange();
     });
-
-    // Function expression instead of declaration (avoid hoisting issues in blocks)
-    const applyTimeRange = () => {
-        const fromExpr = fromInput.value.trim();
-        const toExpr = toInput.value.trim();
-
-        const fromTime = parseTimeExpression(fromExpr);
-        const toTime = parseTimeExpression(toExpr);
-
-        // Clear active preset buttons if manually edited
-        presetBtns.forEach(b => {
-            if (b.dataset.from !== fromExpr || b.dataset.to !== toExpr) {
-                b.classList.remove('active');
-            }
-        });
-
-        // Call the callback with the parsed times
-        onFilterChange(fromTime, toTime);
-    };
 }

@@ -173,6 +173,14 @@ def main():
     photos_template = env.get_template("photos.html")
     camera_file = data_dir / "camera_usage.jsonl"
     camera_records = stats.load_jsonl(camera_file)
+
+    # Check which photos actually exist on disk
+    for record in camera_records:
+        if record.get("photo_path"):
+            photo_filename = Path(record["photo_path"]).name
+            photo_exists = (photos_dir / photo_filename).exists()
+            record["photo_exists"] = photo_exists
+
     photos_html = photos_template.render(
         nav_base="",
         photos=camera_records,
