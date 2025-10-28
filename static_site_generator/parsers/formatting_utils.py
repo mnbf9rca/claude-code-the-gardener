@@ -14,7 +14,6 @@ def markdown_to_html(text: str) -> str:
     return markdown2.markdown(text, extras=[
         'fenced-code-blocks',     # Support ``` code blocks
         'tables',                 # Support markdown tables
-        'break-on-newline',       # Convert single newlines to <br>
         'cuddled-lists',          # Lists without blank lines before them
         'code-friendly',          # Better code rendering
         'task_list',              # Support [ ] and [x] checkboxes

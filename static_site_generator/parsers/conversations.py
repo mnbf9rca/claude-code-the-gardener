@@ -174,6 +174,25 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
     # Calculate cost estimate
     conversation["cost_usd"] = estimate_cost(conversation["tokens"])
 
+    # Extract last assistant message for snippet
+    last_assistant_text = ""
+    for msg in reversed(conversation["messages"]):
+        if msg["role"] == "assistant" and msg.get("content"):
+            last_assistant_text = msg["content"]
+            break
+    conversation["last_assistant_message"] = last_assistant_text
+    conversation["last_assistant_message_html"] = markdown_to_html(last_assistant_text) if last_assistant_text else ""
+
+    # Count tool calls by type (strip mcp prefix)
+    tool_counts = {}
+    for tool_call in conversation["tool_calls"]:
+        tool_name = tool_call.get("name", "unknown")
+        # Strip MCP prefixes like mcp__plant-tools__
+        tool_name = tool_name.replace("mcp__plant-tools__", "")
+        tool_name = tool_name.replace("mcp__", "")
+        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+    conversation["tool_counts"] = tool_counts
+
     return conversation
 
 

@@ -218,11 +218,48 @@ def main():
     # Conversations list
     print("  - conversations/index.html (conversation browser)")
     conv_list_template = env.get_template("conversations.html")
+
+    # Collect all unique tools used across conversations with counts
+    all_tools = {}
+    for conv in all_conversations:
+        for tool_name, count in conv.get('tool_counts', {}).items():
+            all_tools[tool_name] = all_tools.get(tool_name, 0) + count
+
+    # Sort by usage count (most used first)
+    sorted_tools = sorted(all_tools.items(), key=lambda x: x[1], reverse=True)
+
+    # Tool icon mapping
+    tool_icons = {
+        'read_moisture': '💧',
+        'dispense_water': '🚿',
+        'turn_on_light': '💡',
+        'turn_off_light': '💡',
+        'capture_photo': '📷',
+        'write_plant_status': '📋',
+        'log_thought': '🧠',
+        'send_message_to_human': '💬',
+        'list_messages_from_human': '💬',
+        'log_action': '⚡',
+        'save_notes': '📝',
+        'fetch_notes': '📝',
+        'get_current_time': '🕐',
+    }
+
+    # Add generic icon for tools starting with get_ or search_
+    for tool_name in all_tools.keys():
+        if tool_name not in tool_icons:
+            if tool_name.startswith('get_') or tool_name.startswith('search_'):
+                tool_icons[tool_name] = '🔍'
+            else:
+                tool_icons[tool_name] = '🔧'
+
     conv_list_html = conv_list_template.render(
         nav_base="../",
         conversations=all_conversations,
         highlights=conversation_highlights,
         stats=overall_stats,
+        all_tools=sorted_tools,
+        tool_icons=tool_icons,
         generation_time=generation_time,
         git_commit=git_commit,
     )
@@ -289,7 +326,7 @@ def main():
     # Tag messages with direction and process content
     for msg in messages_to:
         msg['direction'] = 'to_human'
-        # Render markdown for agent messages
+        # Render markdown for agent messages only
         msg['content_html'] = markdown_to_html(msg.get('content', ''))
         # Format timestamp
         try:
@@ -300,6 +337,7 @@ def main():
 
     for msg in messages_from:
         msg['direction'] = 'from_human'
+        # Human messages stay as plain text (no markdown conversion)
         # Format timestamp
         try:
             dt = datetime.fromisoformat(msg['timestamp'])
