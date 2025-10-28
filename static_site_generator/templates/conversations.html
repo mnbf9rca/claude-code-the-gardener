@@ -37,7 +37,7 @@
              data-timestamp="{{ conv.start_time }}">
             <div class="card-header">
                 <div class="card-title">
-                    <a href="{{ conv.session_id }}.html">Session {{ conv.session_id[:8] }}...</a>
+                    <a href="{{ conv.session_id }}.html">Session {{ conv.session_id }}</a>
                 </div>
                 <div class="card-meta">
                     {{ conv.start_time[:10] }} {{ conv.start_time[11:16] }} " {{ conv.duration_human }}
@@ -55,7 +55,7 @@
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">=</span>
-                    <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output) | format_number }} tokens</span>
+                    <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output + conv.tokens.cache_read + conv.tokens.cache_creation) | format_number }} tokens</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">=</span>
