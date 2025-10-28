@@ -94,8 +94,9 @@
         color: #6c757d;
     }
 
-    .message-content {
-        /* No custom styling - use browser defaults like tool results do */
+    /* Preserve newlines only for human messages (plain text) */
+    .message.from-human .message-content {
+        white-space: pre-wrap;
     }
 
     .message-content code {
@@ -198,7 +199,7 @@
         </div>
         {% else %}
         {% for msg in messages %}
-        <div class="message {{ 'from-agent' if msg.direction == 'to_human' else 'from-human' }}">
+        <div class="message {{ 'from-agent' if msg.direction == 'to_human' else 'from-human' }}" id="{{ msg.message_id }}">
             <div class="message-header">
                 <span class="message-label">
                     {% if msg.direction == 'to_human' %}
@@ -226,7 +227,7 @@
                 {% endif %}
             </div>
 
-            <div class="message-footer" id="{{ msg.message_id }}">
+            <div class="message-footer">
                 <strong>ID:</strong> <code>{{ msg.message_id }}</code>
             </div>
         </div>

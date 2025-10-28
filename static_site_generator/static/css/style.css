@@ -772,6 +772,11 @@ body {
     overflow-x: auto;
 }
 
+.tool-result-text,
+.tool-result-markdown {
+    white-space: pre-wrap; /* Preserve newlines and spaces */
+}
+
 /* Data Tables */
 .data-table {
     width: 100%;
