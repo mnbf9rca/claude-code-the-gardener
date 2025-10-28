@@ -57,35 +57,6 @@ function setupDateRangeFilter() {
     const fromInput = document.getElementById('time-from');
     const toInput = document.getElementById('time-to');
 
-    // Preset buttons
-    presetBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            presetBtns.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-
-            const fromExpr = this.dataset.from;
-            const toExpr = this.dataset.to;
-
-            fromInput.value = fromExpr;
-            toInput.value = toExpr;
-
-            // Auto-apply
-            applyTimeRange();
-        });
-    });
-
-    // Apply button
-    applyBtn.addEventListener('click', applyTimeRange);
-
-    // Enter key in inputs
-    fromInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') applyTimeRange();
-    });
-    toInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') applyTimeRange();
-    });
-
-    // Function expression instead of declaration (avoid hoisting issues in blocks)
     const applyTimeRange = () => {
         const fromExpr = fromInput.value.trim();
         const toExpr = toInput.value.trim();
@@ -116,6 +87,34 @@ function setupDateRangeFilter() {
 
         applyFilter('custom', minTime, maxTime);
     };
+
+    // Setup event listeners
+    // Preset buttons
+    presetBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            presetBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const fromExpr = this.dataset.from;
+            const toExpr = this.dataset.to;
+
+            fromInput.value = fromExpr;
+            toInput.value = toExpr;
+
+            // Auto-apply
+            applyTimeRange();
+        });
+    });
+
+    // Apply button
+    applyBtn.addEventListener('click', applyTimeRange);
+
+    // Enter key handling for time inputs
+    [fromInput, toInput].forEach(input => {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') applyTimeRange();
+        });
+    });
 }
 
 function applyFilter(range, customStart, customEnd) {
