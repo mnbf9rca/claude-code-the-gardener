@@ -40,7 +40,8 @@
       "Read",
       "WebSearch",
       "WebFetch",
-      "Write(/home/gardener/workspace/**)",
+      "Edit(~/workspace/**)",
+      "Write(~/workspace/**)",
       "Bash"
     ]
   },
