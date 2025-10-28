@@ -88,6 +88,7 @@ function setupDateRangeFilter() {
         applyFilter('custom', minTime, maxTime);
     };
 
+    // Setup event listeners
     // Preset buttons
     presetBtns.forEach(btn => {
         btn.addEventListener('click', function() {
@@ -108,12 +109,11 @@ function setupDateRangeFilter() {
     // Apply button
     applyBtn.addEventListener('click', applyTimeRange);
 
-    // Enter key in inputs
-    fromInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') applyTimeRange();
-    });
-    toInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') applyTimeRange();
+    // Enter key handling for time inputs
+    [fromInput, toInput].forEach(input => {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') applyTimeRange();
+        });
     });
 }
 
