@@ -166,13 +166,15 @@ def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
     stats["water"]["total_ml_dispensed"] = total_ml
     stats["water"]["total_events"] = len(water_events)
 
-    # Light stats
+    # Light stats (only count events with duration > 0, i.e., actual light sessions)
     light_file = data_dir / "light_history.jsonl"
     light_events = load_jsonl(light_file)
-    total_minutes = sum(e.get("duration_minutes", 0) for e in light_events)
+    # Filter to only turn_on events (duration > 0)
+    active_sessions = [e for e in light_events if e.get("duration_minutes", 0) > 0]
+    total_minutes = sum(e.get("duration_minutes", 0) for e in active_sessions)
     stats["light"]["total_minutes"] = total_minutes
     stats["light"]["total_hours"] = round(total_minutes / 60, 1)
-    stats["light"]["total_sessions"] = len(light_events)
+    stats["light"]["total_sessions"] = len(active_sessions)
 
     # Messages from/to human
     messages_from = load_jsonl(data_dir / "messages_from_human.jsonl")

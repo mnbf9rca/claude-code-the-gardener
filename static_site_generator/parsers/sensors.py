@@ -37,10 +37,15 @@ def get_light_data(data_dir: Path) -> List[Dict[str, Any]]:
     chart_data = []
     for event in events:
         try:
+            duration_minutes = event.get("duration_minutes", 0)
+            # Only include events with actual duration (filter out turn_off, recovery events)
+            if duration_minutes <= 0:
+                continue
+
             timestamp = parse_timestamp(event["timestamp"])
             chart_data.append({
                 "timestamp": timestamp.isoformat(),
-                "duration_minutes": event.get("duration_minutes", 0),
+                "duration_minutes": duration_minutes,
                 "unix": int(timestamp.timestamp() * 1000),
                 "action": event.get("action", "unknown"),
             })

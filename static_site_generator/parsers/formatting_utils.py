@@ -9,7 +9,18 @@ import markdown2
 
 def markdown_to_html(text: str) -> str:
     """Convert markdown to HTML for display using markdown2 library."""
-    return "" if not text else markdown2.markdown(text)
+    if not text:
+        return ""
+    return markdown2.markdown(text, extras=[
+        'fenced-code-blocks',     # Support ``` code blocks
+        'tables',                 # Support markdown tables
+        'break-on-newline',       # Convert single newlines to <br>
+        'cuddled-lists',          # Lists without blank lines before them
+        'code-friendly',          # Better code rendering
+        'task_list',              # Support [ ] and [x] checkboxes
+        'strike',                 # Support ~~strikethrough~~
+        'header-ids',             # Add IDs to headers for linking
+    ])
 
 
 def format_field_value(field_name: str, value: Any, is_table_context: bool = False) -> str:
