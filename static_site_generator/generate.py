@@ -295,6 +295,7 @@ def main():
     camera_file = data_dir / "camera_usage.jsonl"
     camera_records = stats.load_jsonl(camera_file)
     # Sort photos by timestamp (newest first, oldest last)
+    # ISO timestamps sort correctly as strings, but explicit for clarity
     camera_records.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
 
     # Check which photos actually exist on disk
