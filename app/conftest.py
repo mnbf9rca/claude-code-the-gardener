@@ -65,9 +65,12 @@ def sample_photos() -> List[Path]:
 
 @pytest.fixture
 def camera_config(test_photos_dir: Path, monkeypatch, reset_camera_module) -> dict:
-    """Provide test-specific camera configuration."""
-    import tools.camera as camera_module
+    """
+    Provide test-specific camera configuration.
 
+    NOTE: With open-per-capture pattern, get_camera_config() is called fresh on each
+    capture and reads from environment variables. No need to update a global config dict.
+    """
     config = {
         "CAMERA_ENABLED": "true",
         "CAMERA_DEVICE_INDEX": "0",
@@ -75,30 +78,27 @@ def camera_config(test_photos_dir: Path, monkeypatch, reset_camera_module) -> di
         "CAMERA_IMAGE_WIDTH": "1920",
         "CAMERA_IMAGE_HEIGHT": "1080",
         "CAMERA_IMAGE_QUALITY": "85",
-        "CAMERA_CAPTURE_TIMEOUT": "5",
+        "CAMERA_CAPTURE_TIMEOUT": "2",  # Match new default
+        "CAMERA_BUFFER_FLUSH_FRAMES": "10",
+        "CAMERA_WARMUP_MS": "150",
     }
 
     # Apply configuration to environment
+    # get_camera_config() will read these on each capture
     for key, value in config.items():
         monkeypatch.setenv(key, value)
-
-    # Update camera module configuration
-    camera_module.CAMERA_CONFIG["enabled"] = True
-    camera_module.CAMERA_CONFIG["device_index"] = 0
-    camera_module.CAMERA_CONFIG["save_path"] = test_photos_dir
-    camera_module.CAMERA_CONFIG["image_width"] = 1920
-    camera_module.CAMERA_CONFIG["image_height"] = 1080
-    camera_module.CAMERA_CONFIG["image_quality"] = 85
-    camera_module.CAMERA_CONFIG["capture_timeout"] = 5
 
     return config
 
 
 @pytest.fixture
 def camera_config_disabled(test_photos_dir: Path, monkeypatch, reset_camera_module) -> dict:
-    """Provide test configuration with camera disabled."""
-    import tools.camera as camera_module
+    """
+    Provide test configuration with camera disabled.
 
+    NOTE: With open-per-capture pattern, no camera state to reset.
+    Just set environment variables and get_camera_config() will read them.
+    """
     config = {
         "CAMERA_ENABLED": "false",
         "CAMERA_DEVICE_INDEX": "0",
@@ -106,26 +106,15 @@ def camera_config_disabled(test_photos_dir: Path, monkeypatch, reset_camera_modu
         "CAMERA_IMAGE_WIDTH": "1920",
         "CAMERA_IMAGE_HEIGHT": "1080",
         "CAMERA_IMAGE_QUALITY": "85",
-        "CAMERA_CAPTURE_TIMEOUT": "5",
+        "CAMERA_CAPTURE_TIMEOUT": "2",  # Match new default
+        "CAMERA_BUFFER_FLUSH_FRAMES": "10",
+        "CAMERA_WARMUP_MS": "150",
     }
 
     # Apply configuration to environment
+    # get_camera_config() will read these on each capture
     for key, value in config.items():
         monkeypatch.setenv(key, value)
-
-    # Update camera module configuration
-    camera_module.CAMERA_CONFIG["enabled"] = False
-    camera_module.CAMERA_CONFIG["device_index"] = 0
-    camera_module.CAMERA_CONFIG["save_path"] = test_photos_dir
-    camera_module.CAMERA_CONFIG["image_width"] = 1920
-    camera_module.CAMERA_CONFIG["image_height"] = 1080
-    camera_module.CAMERA_CONFIG["image_quality"] = 85
-    camera_module.CAMERA_CONFIG["capture_timeout"] = 5
-
-    # Reset camera state for disabled test
-    camera_module.camera = None
-    camera_module.camera_available = False
-    camera_module.camera_error = None
 
     return config
 
@@ -165,13 +154,16 @@ requires_sample_photos = pytest.mark.skipif(
 
 @pytest.fixture
 def reset_camera_module():
-    """Reset camera module state between tests."""
+    """
+    Reset camera module state between tests.
+
+    NOTE: With open-per-capture pattern, there's no global camera state to manage.
+    Camera is opened and closed within each capture_real_photo() call.
+    Only photo_history needs to be managed.
+    """
     import tools.camera as camera_module
 
-    # Save original state
-    original_camera = camera_module.camera
-    original_available = camera_module.camera_available
-    original_error = camera_module.camera_error
+    # Save original photo history
     original_history = camera_module.photo_history.copy()
 
     # Clear photo history for tests (tests expect a clean slate)
@@ -179,13 +171,7 @@ def reset_camera_module():
 
     yield
 
-    # Restore original state
-    if camera_module.camera is not None and camera_module.camera != original_camera:
-        camera_module.camera.release()
-
-    camera_module.camera = original_camera
-    camera_module.camera_available = original_available
-    camera_module.camera_error = original_error
+    # Restore original photo history
     camera_module.photo_history = original_history
 
 
