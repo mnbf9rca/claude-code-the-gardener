@@ -338,7 +338,7 @@ def capture_real_photo() -> Tuple[str, str]:
     except Exception as e:
         error_msg = f"Error capturing photo: {str(e)}"
         logging.error(error_msg)
-        raise ValueError(error_msg)
+        raise ValueError(error_msg) from e
 
     finally:
         # Step 7: Always close camera (open-per-capture pattern)
@@ -481,7 +481,7 @@ def setup_camera_tools(mcp: FastMCP):
             "warmup_ms": config["warmup_ms"],
             "capture_timeout": config["capture_timeout"],
             "photos_captured": len(photo_history),
-            "error": camera_error if not camera_available else None
+            "error": None if camera_available else camera_error
         }
 
         # Log tool usage
