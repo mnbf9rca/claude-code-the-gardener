@@ -2,12 +2,50 @@
 Camera Tool - Capture photos of the plant
 Supports real USB webcam capture.
 Works on both Mac and Raspberry Pi.
+
+Camera Pattern: Open-per-capture with timeout protection
+---------------------------------------------------------
+PROBLEM: Stale images were being captured when camera stays open between agent runs
+SOLUTION: Multi-layered reliability approach:
+
+1. Open-per-capture pattern:
+   - Camera is opened fresh for each photo capture
+   - Immediately closed after capture completes
+   - Prevents buffer staleness between agent runs (15-20 min intervals)
+   - Allows other processes to access camera when not in use
+
+2. Buffer flushing:
+   - Reads and discards N frames before capturing actual photo (default: 10)
+   - Clears stale frames from camera's internal buffer
+   - Even fresh camera opens can have buffered frames
+
+3. Warm-up delay:
+   - Brief delay after opening camera (default: 150ms)
+   - Allows sensor to stabilize (exposure, white balance)
+   - Improves image quality consistency
+
+4. Timeout protection:
+   - ALL camera reads (buffer flush + final capture) are timeout-protected
+   - Uses threading to prevent hanging on USB/driver failures
+   - Configurable timeout (default: 2 seconds per read)
+   - Prevents blocking the agent on camera hardware issues
+
+5. Runtime configuration:
+   - Config reloaded from .env on each capture
+   - Allows tuning buffer flush count / timeouts without restart
+   - Great for experimentation and debugging
+
+TRADE-OFFS:
+- More complex than simple always-open camera
+- Slightly slower per-capture (open/close overhead)
+- BUT: Much more reliable for unattended operation
+- Worth it for hobby project that runs 24/7
 """
 import os
 import logging
-import atexit
 import threading
 import heapq
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List, Any
@@ -21,19 +59,28 @@ from dotenv import load_dotenv
 import cv2
 from PIL import Image
 
-# Load configuration
-load_dotenv()
 
-# Camera configuration with defaults
-CAMERA_CONFIG: Dict[str, Any] = {
-    "enabled": os.getenv("CAMERA_ENABLED", "true").lower() == "true",
-    "device_index": int(os.getenv("CAMERA_DEVICE_INDEX", "0")),
-    "save_path": get_app_dir("photos"),
-    "image_width": int(os.getenv("CAMERA_IMAGE_WIDTH", "1920")),
-    "image_height": int(os.getenv("CAMERA_IMAGE_HEIGHT", "1080")),
-    "image_quality": int(os.getenv("CAMERA_IMAGE_QUALITY", "85")),
-    "capture_timeout": int(os.getenv("CAMERA_CAPTURE_TIMEOUT", "5")),
-}
+def get_camera_config() -> Dict[str, Any]:
+    """
+    Load camera configuration from environment.
+    Called on each capture to allow runtime config changes without restart.
+
+    This enables experimentation: change .env values and next photo uses new settings.
+    """
+    load_dotenv()  # Reload environment variables
+
+    return {
+        "enabled": os.getenv("CAMERA_ENABLED", "true").lower() == "true",
+        "device_index": int(os.getenv("CAMERA_DEVICE_INDEX", "0")),
+        "save_path": get_app_dir("photos"),
+        "image_width": int(os.getenv("CAMERA_IMAGE_WIDTH", "1920")),
+        "image_height": int(os.getenv("CAMERA_IMAGE_HEIGHT", "1080")),
+        "image_quality": int(os.getenv("CAMERA_IMAGE_QUALITY", "85")),
+        "capture_timeout": int(os.getenv("CAMERA_CAPTURE_TIMEOUT", "2")),  # 2s per read
+        # Buffer and timing configuration for reliability
+        "buffer_flush_frames": int(os.getenv("CAMERA_BUFFER_FLUSH_FRAMES", "10")),
+        "warmup_ms": int(os.getenv("CAMERA_WARMUP_MS", "150")),
+    }
 
 # Server configuration for photo URLs
 MCP_PUBLIC_HOST = os.getenv("MCP_PUBLIC_HOST", "localhost")
@@ -43,17 +90,14 @@ SERVER_URL = f"http://{MCP_PUBLIC_HOST}:{MCP_PORT}"
 # Photo history configuration
 PHOTO_HISTORY_LIMIT = 100  # Maximum number of photos to keep in memory
 
-# Camera state
-camera: Optional[cv2.VideoCapture] = None
-camera_available: bool = False
-camera_error: Optional[str] = None
-
 # State persistence - audit log for camera usage
 # Used for time-bucketed queries via get_camera_history_bucketed()
 usage_history = JsonlHistory(
     file_path=get_app_dir("data") / "camera_usage.jsonl",
-    max_memory_entries=1000  # Standard cache size for querying
+    max_memory_entries=1000  # Standard cache for querying
 )
+
+# NOTE: No global camera state - using open-per-capture pattern for reliability
 
 
 def log_tool_usage(tool_name: str, event_data: Dict[str, Any]) -> None:
@@ -85,7 +129,7 @@ def load_photo_history_from_disk() -> List[Dict[str, str]]:
     Optimized for large directories by limiting files processed.
     """
     history = []
-    save_path = CAMERA_CONFIG["save_path"]
+    save_path = get_app_dir("photos")  # Use direct path getter
     max_photos = PHOTO_HISTORY_LIMIT
 
     if save_path.exists() and save_path.is_dir():
@@ -150,51 +194,14 @@ class CaptureResponse(BaseModel):
     timestamp: str = Field(..., description="When the photo was captured (ISO 8601 UTC)")
 
 
-def initialize_camera() -> Tuple[bool, Optional[cv2.VideoCapture], Optional[str]]:
-    """
-    Initialize the camera if available.
-    Returns: (success, camera_object, error_message)
-    """
-    if not CAMERA_CONFIG["enabled"]:
-        error_msg = "Camera disabled via configuration"
-        logging.info(error_msg)
-        return False, None, error_msg
-
-    try:
-        # Try to open the camera
-        device_index = CAMERA_CONFIG["device_index"]
-        cam = cv2.VideoCapture(device_index)
-
-        if not cam.isOpened():
-            error_msg = f"Cannot open camera at index {device_index}"
-            logging.warning(error_msg)
-            return False, None, error_msg
-
-        # Set camera properties
-        cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIG["image_width"])
-        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIG["image_height"])
-
-        # Test if camera is working
-        ret, frame = cam.read()
-        if ret and frame is not None:
-            logging.info(f"Camera initialized successfully on device {device_index}")
-            return True, cam, None
-        else:
-            cam.release()
-            error_msg = f"Camera opened but couldn't read frame from device {device_index}"
-            logging.warning(error_msg)
-            return False, None, error_msg
-
-    except Exception as e:
-        error_msg = f"Failed to initialize camera: {str(e)}"
-        logging.error(error_msg)
-        return False, None, error_msg
-
-
-def _read_camera_frame(camera, result_container: Dict[str, Any]):
+def _read_camera_frame(camera: cv2.VideoCapture, result_container: Dict[str, Any]) -> None:
     """
     Helper function to read camera frame in a separate thread.
-    Stores result in result_container dict.
+    Provides timeout protection for camera reads (prevents hanging on USB/driver failures).
+
+    Args:
+        camera: OpenCV VideoCapture object
+        result_container: Dict to store results {'ret': bool, 'frame': ndarray} or {'error': str}
     """
     try:
         ret, frame = camera.read()
@@ -204,69 +211,126 @@ def _read_camera_frame(camera, result_container: Dict[str, Any]):
         result_container['error'] = str(e)
 
 
+def _read_frame_with_timeout(camera: cv2.VideoCapture, timeout_seconds: int, context: str = "read") -> Tuple[bool, Optional[Any]]:
+    """
+    Read a single frame with timeout protection.
+
+    Args:
+        camera: OpenCV VideoCapture object
+        timeout_seconds: Maximum time to wait for read
+        context: Description for error messages (e.g., "buffer flush", "final capture")
+
+    Returns:
+        (success, frame) tuple
+
+    Raises:
+        ValueError: If read times out or fails
+    """
+    result_container: Dict[str, Any] = {}
+    read_thread = threading.Thread(target=_read_camera_frame, args=(camera, result_container))
+    read_thread.daemon = True
+    read_thread.start()
+    read_thread.join(timeout_seconds)
+
+    if read_thread.is_alive():
+        error_msg = f"Camera {context} timed out after {timeout_seconds} seconds"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    if 'error' in result_container:
+        error_msg = f"Camera {context} error: {result_container['error']}"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    ret = result_container.get('ret', False)
+    frame = result_container.get('frame')
+
+    if not ret or frame is None:
+        error_msg = f"Failed to {context}"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    return ret, frame
+
+
 def capture_real_photo() -> Tuple[str, str]:
     """
-    Capture a real photo using the USB camera with timeout protection.
+    Capture a photo using open-per-capture pattern with full timeout protection.
+
+    Process:
+    1. Load fresh config from .env (allows runtime tuning)
+    2. Open camera device
+    3. Set resolution
+    4. Warm-up delay (sensor stabilization)
+    5. Flush buffer (discard N stale frames with timeout protection)
+    6. Capture final frame (with timeout protection)
+    7. Save to disk
+    8. Close camera (finally block ensures cleanup)
+
+    All camera reads are timeout-protected to prevent hanging the agent.
+
     Returns: (file_path, timestamp_iso)
-    Raises: ValueError if camera is unavailable or capture fails
+    Raises: ValueError if camera is unavailable or any step fails
     """
-    global camera, camera_available, camera_error
+    # Load config fresh from environment (allows adjustment without restart)
+    config = get_camera_config()
 
-    # Initialize camera on first use
-    if camera is None and not camera_available:
-        camera_available, camera, camera_error = initialize_camera()
+    if not config["enabled"]:
+        raise ValueError("Camera disabled via configuration")
 
-    if not camera_available or camera is None:
-        raise ValueError(camera_error or "Camera not available")
-
+    cam = None
     try:
-        # Ensure save directory exists
-        save_path = CAMERA_CONFIG["save_path"]
+        # Step 1: Open camera
+        device_index = config["device_index"]
+        cam = cv2.VideoCapture(device_index)
+
+        if not cam.isOpened():
+            raise ValueError(f"Cannot open camera at index {device_index}")
+
+        logging.debug(f"Camera opened on device {device_index}")
+
+        # Step 2: Set resolution
+        cam.set(cv2.CAP_PROP_FRAME_WIDTH, config["image_width"])
+        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, config["image_height"])
+
+        # Step 3: Warm-up delay (allow sensor to stabilize)
+        if config["warmup_ms"] > 0:
+            time.sleep(config["warmup_ms"] / 1000.0)
+            logging.debug(f"Camera warm-up: {config['warmup_ms']}ms")
+
+        # Step 4: Flush buffer (clear stale frames with timeout protection)
+        # Each flush read is timeout-protected to prevent hangs
+        flush_count = config["buffer_flush_frames"]
+        timeout_seconds = config["capture_timeout"]
+
+        for i in range(flush_count):
+            try:
+                _read_frame_with_timeout(cam, timeout_seconds, context=f"buffer flush frame {i+1}/{flush_count}")
+            except ValueError as e:
+                # Log warning but continue - partial flush is better than no flush
+                logging.warning(f"Buffer flush frame {i+1}/{flush_count} failed: {e}")
+
+        logging.debug(f"Flushed {flush_count} buffer frames")
+
+        # Step 5: Capture the actual frame (timeout-protected)
+        ret, frame = _read_frame_with_timeout(cam, timeout_seconds, context="final capture")
+
+        # Step 6: Save the photo
+        save_path = config["save_path"]
         save_path.mkdir(parents=True, exist_ok=True)
 
-        # Clear buffer by reading a few frames (cameras can have stale frames)
-        for _ in range(3):
-            camera.read()
-
-        # Capture frame with timeout protection
-        timeout_seconds = CAMERA_CONFIG["capture_timeout"]
-        result_container: Dict[str, Any] = {}
-        read_thread = threading.Thread(target=_read_camera_frame, args=(camera, result_container))
-        read_thread.daemon = True
-        read_thread.start()
-        read_thread.join(timeout_seconds)
-
-        if read_thread.is_alive():
-            error_msg = f"Camera read timed out after {timeout_seconds} seconds"
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-
-        if 'error' in result_container:
-            error_msg = f"Camera read error: {result_container['error']}"
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-
-        ret = result_container.get('ret', False)
-        frame = result_container.get('frame')
-
-        if not ret or frame is None:
-            error_msg = "Failed to capture frame"
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-
-        # Generate timestamp once for both filename and response (ensures consistency)
+        # Generate timestamp once (ensures consistency across filename, log, response)
         now = datetime.now(timezone.utc)
         timestamp_iso = now.isoformat()
-        timestamp_filename = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # milliseconds for filename
+        timestamp_filename = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # milliseconds
 
         filename = f"plant_{timestamp_filename}.jpg"
         filepath = save_path / filename
 
-        # Save image with specified quality
-        # Convert BGR to RGB (OpenCV uses BGR, PIL uses RGB)
+        # Convert BGR to RGB and save (OpenCV uses BGR, PIL uses RGB)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(rgb_frame)
-        img.save(filepath, "JPEG", quality=CAMERA_CONFIG["image_quality"])
+        img.save(filepath, "JPEG", quality=config["image_quality"])
 
         logging.info(f"Photo captured: {filepath}")
         return str(filepath), timestamp_iso
@@ -274,19 +338,17 @@ def capture_real_photo() -> Tuple[str, str]:
     except Exception as e:
         error_msg = f"Error capturing photo: {str(e)}"
         logging.error(error_msg)
-        raise ValueError(error_msg)
+        raise ValueError(error_msg) from e
+
+    finally:
+        # Step 7: Always close camera (open-per-capture pattern)
+        if cam is not None:
+            cam.release()
+            logging.debug("Camera released")
 
 
-def cleanup_camera():
-    """Release camera resources when shutting down."""
-    global camera
-    if camera is not None:
-        try:
-            camera.release()
-            camera = None
-            logging.info("Camera released")
-        except Exception as e:
-            logging.error(f"Error releasing camera: {e}")
+# NOTE: No cleanup_camera() function needed - using open-per-capture pattern
+# Camera is opened and closed within each capture_real_photo() call
 
 
 def setup_camera_tools(mcp: FastMCP):
@@ -377,21 +439,47 @@ def setup_camera_tools(mcp: FastMCP):
     async def get_camera_status() -> Dict[str, Any]:
         """
         Get current camera configuration and status.
+        Tests camera availability by attempting to open it.
         Useful for debugging camera issues.
         """
-        global camera, camera_available, camera_error
+        # Load current config (may have changed since last check)
+        config = get_camera_config()
 
-        # Check current camera status if not already checked
-        if camera is None and not camera_available:
-            camera_available, camera, camera_error = initialize_camera()
+        # Test camera availability by attempting to open it
+        camera_available = False
+        camera_error = None
+
+        if config["enabled"]:
+            cam = None
+            try:
+                cam = cv2.VideoCapture(config["device_index"])
+                if cam.isOpened():
+                    # Try to read a test frame to verify camera works
+                    ret, frame = cam.read()
+                    if ret and frame is not None:
+                        camera_available = True
+                    else:
+                        camera_error = "Camera opened but couldn't read frame"
+                else:
+                    camera_error = f"Cannot open camera at index {config['device_index']}"
+            except Exception as e:
+                camera_error = f"Camera test failed: {str(e)}"
+            finally:
+                if cam is not None:
+                    cam.release()
+        else:
+            camera_error = "Camera disabled via configuration"
 
         status = {
-            "camera_enabled": CAMERA_CONFIG["enabled"],
+            "camera_enabled": config["enabled"],
             "camera_available": camera_available,
-            "device_index": CAMERA_CONFIG["device_index"],
-            "save_path": str(CAMERA_CONFIG["save_path"]),
-            "resolution": f"{CAMERA_CONFIG['image_width']}x{CAMERA_CONFIG['image_height']}",
-            "image_quality": CAMERA_CONFIG["image_quality"],
+            "device_index": config["device_index"],
+            "save_path": str(config["save_path"]),
+            "resolution": f"{config['image_width']}x{config['image_height']}",
+            "image_quality": config["image_quality"],
+            "buffer_flush_frames": config["buffer_flush_frames"],
+            "warmup_ms": config["warmup_ms"],
+            "capture_timeout": config["capture_timeout"],
             "photos_captured": len(photo_history),
             "error": None if camera_available else camera_error
         }
@@ -453,7 +541,3 @@ def setup_camera_tools(mcp: FastMCP):
             end_time=end_dt,
             value_field=value_field
         )
-
-
-# Register cleanup on module unload
-atexit.register(cleanup_camera)

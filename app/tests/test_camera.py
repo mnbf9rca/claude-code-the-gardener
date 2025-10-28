@@ -198,10 +198,10 @@ class TestCameraWithoutDevice:
         monkeypatch.setenv("CAMERA_DEVICE_INDEX", "not_a_number")
         monkeypatch.setenv("CAMERA_SAVE_PATH", str(test_photos_dir))
 
-        # Attempting to reload configuration with invalid integer should raise ValueError
-        import importlib
+        # With open-per-capture pattern, config is loaded on-demand.
+        # Attempting to get config with invalid integer should raise ValueError
         with pytest.raises(ValueError):
-            importlib.reload(camera_module)
+            camera_module.get_camera_config()
 
     @pytest.mark.asyncio
     async def test_capture_with_negative_device_index(

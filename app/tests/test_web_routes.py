@@ -523,10 +523,11 @@ def test_post_reply_with_manual_message_id(client, clean_message_history):
 
 def test_get_photos_api_empty(client, tmp_path, monkeypatch):
     """Test /api/photos returns empty list when no photos exist"""
-    # Mock CAMERA_CONFIG to use temp directory
+    # Mock get_app_dir to use temp directory
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': tmp_path / 'empty_photos'})
-    (tmp_path / 'empty_photos').mkdir()
+    photos_dir = tmp_path / 'empty_photos'
+    photos_dir.mkdir()
+    monkeypatch.setattr(web_routes, 'get_app_dir', lambda x: photos_dir if x == "photos" else tmp_path / x)
 
     response = client.get("/api/photos")
 
@@ -547,9 +548,9 @@ def test_get_photos_api_with_photos(client, tmp_path, monkeypatch):
     # Create test photo files using helper
     create_test_photos(photos_dir, count=3, base_timestamp="20251022_120000")
 
-    # Mock CAMERA_CONFIG
+    # Mock get_app_dir
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/api/photos")
 
@@ -577,9 +578,9 @@ def test_get_photos_api_with_pagination(client, tmp_path, monkeypatch):
     # Create test photo files using helper
     create_test_photos(photos_dir, count=25, base_timestamp="20251022_1200")
 
-    # Mock CAMERA_CONFIG
+    # Mock get_app_dir
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     # Test limit
     response = client.get("/api/photos?limit=10")
@@ -647,7 +648,7 @@ def test_get_gallery_ui_empty(client, tmp_path, monkeypatch):
     photos_dir.mkdir()
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/gallery")
 
@@ -667,7 +668,7 @@ def test_get_gallery_ui_with_photos(client, tmp_path, monkeypatch):
     create_test_photos(photos_dir, count=3, base_timestamp="20251022_120000")
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/gallery")
 
@@ -687,7 +688,7 @@ def test_get_gallery_ui_pagination(client, tmp_path, monkeypatch):
     create_test_photos(photos_dir, count=25, base_timestamp="20251022_1200")
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/gallery")
 
@@ -703,7 +704,7 @@ def test_gallery_has_link_to_messages(client, tmp_path, monkeypatch):
     photos_dir.mkdir()
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/gallery")
 
@@ -727,7 +728,7 @@ def test_get_photos_api_invalid_parameters(client, tmp_path, monkeypatch):
     photos_dir.mkdir()
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     # Invalid limit (non-integer)
     response = client.get("/api/photos?limit=abc")
@@ -746,7 +747,7 @@ def test_gallery_capture_button_present(client, tmp_path, monkeypatch):
     photos_dir.mkdir()
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/gallery")
 
@@ -772,7 +773,7 @@ def test_get_gallery_ui_xss_filename(client, tmp_path, monkeypatch):
     photo_path.write_bytes(b"fake image data")
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/gallery")
 
@@ -803,7 +804,7 @@ def test_get_photos_api_malformed_filename(client, tmp_path, monkeypatch):
     malformed_path.write_bytes(b'fake image data')
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     response = client.get("/api/photos")
 
@@ -832,7 +833,7 @@ def test_get_gallery_ui_offset_beyond_total(client, tmp_path, monkeypatch):
     create_test_photos(photos_dir, count=10, base_timestamp="20251022_120000")
 
     import web_routes
-    monkeypatch.setattr(web_routes, 'CAMERA_CONFIG', {'save_path': photos_dir})
+    monkeypatch.setattr(web_routes, "get_app_dir", lambda x: photos_dir if x == "photos" else photos_dir.parent / x)
 
     # Request with offset beyond total photos
     response = client.get("/gallery?offset=50")
