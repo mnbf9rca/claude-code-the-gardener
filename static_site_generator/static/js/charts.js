@@ -85,8 +85,7 @@ function setupDateRangeFilter() {
         if (e.key === 'Enter') applyTimeRange();
     });
 
-    // Function expression instead of declaration (avoid hoisting issues in blocks)
-    const applyTimeRange = () => {
+    function applyTimeRange() {
         const fromExpr = fromInput.value.trim();
         const toExpr = toInput.value.trim();
 
@@ -115,7 +114,7 @@ function setupDateRangeFilter() {
         const maxTime = toTime || Date.now() + 86400000;
 
         applyFilter('custom', minTime, maxTime);
-    };
+    }
 }
 
 function applyFilter(range, customStart, customEnd) {
