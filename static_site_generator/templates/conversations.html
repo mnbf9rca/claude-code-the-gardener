@@ -14,8 +14,16 @@
         <div class="filter-buttons">
             <button class="filter-btn active" data-filter="all">All</button>
             <button class="filter-btn" data-filter="highlights">Highlights</button>
-            <button class="filter-btn" data-filter="water">Water Events</button>
-            <button class="filter-btn" data-filter="photos">With Photos</button>
+        </div>
+        <div class="filter-section">
+            <label>Filter by Tools (click multiple for AND):</label>
+            <div class="tool-filter-buttons">
+                {% for tool_name, count in all_tools %}
+                <button class="tool-filter-btn" data-tool="{{ tool_name }}" title="{{ count }} uses">
+                    {{ tool_icons.get(tool_name, '🔧') }} {{ tool_name.replace('_', ' ').title() }}
+                </button>
+                {% endfor %}
+            </div>
         </div>
     </div>
 
@@ -24,12 +32,12 @@
     <div class="conversation-grid">
         {% for conv in conversations %}
         <div class="conversation-card"
-             data-tools="{{ conv.tool_calls|map(attribute='name')|join(',') }}"
+             data-tools="{% for tool in conv.tool_calls %}{{ tool.name.replace('mcp__plant-tools__', '').replace('mcp__', '') }}{% if not loop.last %},{% endif %}{% endfor %}"
              data-highlight="{{ 'yes' if conv in highlights else 'no' }}"
              data-timestamp="{{ conv.start_time }}">
             <div class="card-header">
                 <div class="card-title">
-                    <a href="{{ conv.session_id }}.html">Session {{ conv.session_id[:8] }}...</a>
+                    <a href="{{ conv.session_id }}.html">Session {{ conv.session_id }}</a>
                 </div>
                 <div class="card-meta">
                     {{ conv.start_time[:10] }} {{ conv.start_time[11:16] }} " {{ conv.duration_human }}
@@ -47,7 +55,7 @@
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">=</span>
-                    <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output) | format_number }} tokens</span>
+                    <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output + conv.tokens.cache_read + conv.tokens.cache_creation) | format_number }} tokens</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">=</span>
@@ -55,9 +63,19 @@
                 </div>
             </div>
 
-            {% if conv.prompt %}
-            <div class="card-prompt">
-                {{ conv.prompt[:150] }}{% if conv.prompt|length > 150 %}...{% endif %}
+            {% if conv.tool_counts %}
+            <div class="tool-badges">
+                {% for tool_name, count in conv.tool_counts.items() %}
+                <span class="tool-badge" data-tool="{{ tool_name }}" title="{{ tool_name }}">
+                    {{ tool_icons.get(tool_name, '🔧') }}{{ count }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if conv.last_assistant_message_html %}
+            <div class="card-snippet">
+                {{ conv.last_assistant_message_html | safe }}
             </div>
             {% endif %}
 
@@ -75,11 +93,12 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="../static/js/time-parser.js"></script>
+<script src="../static/js/time-utils.js"></script>
 <script src="../static/js/date-filter.js"></script>
 <script>
 // Store active filters
 let activeTypeFilter = 'all';
+let activeToolFilters = new Set(); // Multi-select for tools
 let activeSearchTerm = '';
 let activeDateRange = { from: null, to: null };
 
@@ -96,10 +115,19 @@ function applyAllFilters() {
             matchesType = true;
         } else if (activeTypeFilter === 'highlights') {
             matchesType = card.dataset.highlight === 'yes';
-        } else if (activeTypeFilter === 'water') {
-            matchesType = card.dataset.tools.includes('dispense_water');
-        } else if (activeTypeFilter === 'photos') {
-            matchesType = card.dataset.tools.includes('capture_photo');
+        }
+
+        // Tool filter (AND logic - must have ALL selected tools)
+        let matchesTool = true;
+        if (activeToolFilters.size > 0) {
+            const cardTools = card.dataset.tools.split(',');
+            // Check if card has ALL selected tools
+            for (let tool of activeToolFilters) {
+                if (!cardTools.includes(tool)) {
+                    matchesTool = false;
+                    break;
+                }
+            }
         }
 
         // Search filter
@@ -114,7 +142,17 @@ function applyAllFilters() {
         }
 
         // Show only if all filters match
-        card.style.display = (matchesType && matchesSearch && matchesDateRange) ? 'block' : 'none';
+        card.style.display = (matchesType && matchesTool && matchesSearch && matchesDateRange) ? 'block' : 'none';
+    });
+
+    // Update button count display
+    const filterCount = activeToolFilters.size;
+    document.querySelectorAll('.tool-filter-btn').forEach(btn => {
+        if (activeToolFilters.has(btn.dataset.tool)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     });
 }
 
@@ -129,6 +167,22 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
         this.classList.add('active');
 
         activeTypeFilter = this.dataset.filter;
+        applyAllFilters();
+    });
+});
+
+// Tool filter buttons (multi-select toggle)
+document.querySelectorAll('.tool-filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const tool = this.dataset.tool;
+
+        // Toggle tool in set
+        if (activeToolFilters.has(tool)) {
+            activeToolFilters.delete(tool);
+        } else {
+            activeToolFilters.add(tool);
+        }
+
         applyAllFilters();
     });
 });

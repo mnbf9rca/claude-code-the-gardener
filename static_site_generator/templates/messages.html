@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Messages - Claude the Gardener{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Messages page styling - copied from app/web_routes.py for consistency */
+    .messages-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .messages-header {
+        background: linear-gradient(135deg, #4CAF50, #45a049);
+        color: white;
+        padding: 30px;
+        border-radius: 12px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+
+    .messages-header h1 {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+
+    .messages-header p {
+        opacity: 0.9;
+        font-size: 0.95rem;
+    }
+
+    .messages-list {
+        margin-top: 20px;
+    }
+
+    .messages-list h2 {
+        font-size: 1.3rem;
+        margin-bottom: 20px;
+        color: #495057;
+    }
+
+    .message {
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        transition: box-shadow 0.2s;
+    }
+
+    .message:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .message.from-agent {
+        border-left: 4px solid #4CAF50;
+        background: #f1f8f4;
+    }
+
+    .message.from-human {
+        border-left: 4px solid #667eea;
+        background: #f5f6fa;
+    }
+
+    .message-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .message-label {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .message.from-agent .message-label {
+        background: #4CAF50;
+        color: white;
+    }
+
+    .message.from-human .message-label {
+        background: #667eea;
+        color: white;
+    }
+
+    .message-meta {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    /* Preserve newlines only for human messages (plain text) */
+    .message.from-human .message-content {
+        white-space: pre-wrap;
+    }
+
+    .message-content code {
+        background: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+
+    .message-content pre {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 1em 0;
+    }
+
+    .message-content pre code {
+        background: none;
+        padding: 0;
+    }
+
+    .reply-indicator {
+        background: #fff3cd;
+        border-left: 3px solid #ffc107;
+        padding: 8px 12px;
+        margin: 10px 0;
+        font-size: 0.9rem;
+        color: #856404;
+        border-radius: 4px;
+    }
+
+    .reply-indicator code {
+        background: #fff;
+        padding: 2px 6px;
+        border-radius: 3px;
+        color: #667eea;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+    }
+
+    .message-footer {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e9ecef;
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .message-footer code {
+        background: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        color: #495057;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+    }
+
+    .no-messages {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+    }
+
+    @media (max-width: 600px) {
+        .messages-container {
+            padding: 10px;
+        }
+
+        .messages-header {
+            padding: 20px;
+        }
+
+        .messages-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .message-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="messages-container">
+    <div class="messages-header">
+        <h1>🌱 Plant Care Messages</h1>
+        <p>Communication between you and your plant care agent</p>
+    </div>
+
+    <div class="messages-list">
+        <h2>Message History ({{ messages|length }} messages)</h2>
+
+        {% if not messages %}
+        <div class="no-messages">
+            <p>No messages yet. The agent will send messages here when it needs your attention.</p>
+        </div>
+        {% else %}
+        {% for msg in messages %}
+        <div class="message {{ 'from-agent' if msg.direction == 'to_human' else 'from-human' }}" id="{{ msg.message_id }}">
+            <div class="message-header">
+                <span class="message-label">
+                    {% if msg.direction == 'to_human' %}
+                    🌱 From Agent
+                    {% else %}
+                    👤 From Human
+                    {% endif %}
+                </span>
+                <span class="message-meta">{{ msg.timestamp_formatted }}</span>
+            </div>
+
+            {% if msg.in_reply_to %}
+            <div class="reply-indicator">
+                ↩️ In reply to: <code><a href="#{{ msg.in_reply_to }}" style="color: inherit; text-decoration: none;">{{ msg.in_reply_to }}</a></code>
+            </div>
+            {% endif %}
+
+            <div class="message-content">
+                {% if msg.direction == 'to_human' %}
+                    {# Agent messages use markdown #}
+                    {{ msg.content_html | safe }}
+                {% else %}
+                    {# Human messages are plain text #}
+                    {{ msg.content }}
+                {% endif %}
+            </div>
+
+            <div class="message-footer">
+                <strong>ID:</strong> <code>{{ msg.message_id }}</code>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

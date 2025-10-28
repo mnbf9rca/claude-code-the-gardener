@@ -13,6 +13,21 @@ from .formatting_utils import markdown_to_html, format_field_value
 from .tool_formatters import format_tool_input as format_tool_input_registry
 
 
+def normalize_tool_name(tool_name: str) -> str:
+    """
+    Normalize tool names by stripping known MCP prefixes.
+    Centralizes normalization logic for consistency.
+    """
+    if not isinstance(tool_name, str):
+        return "unknown"
+    # Strip MCP prefixes like mcp__plant-tools__
+    if tool_name.startswith("mcp__plant-tools__"):
+        tool_name = tool_name.replace("mcp__plant-tools__", "")
+    elif tool_name.startswith("mcp__"):
+        tool_name = tool_name.replace("mcp__", "")
+    return tool_name
+
+
 def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
     """Parse a single conversation file and extract relevant data."""
 
@@ -173,6 +188,26 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
 
     # Calculate cost estimate
     conversation["cost_usd"] = estimate_cost(conversation["tokens"])
+
+    # Extract last assistant message for snippet
+    last_assistant_text = next(
+        (
+            msg["content"]
+            for msg in reversed(conversation["messages"])
+            if msg["role"] == "assistant" and msg.get("content")
+        ),
+        "",
+    )
+    conversation["last_assistant_message"] = last_assistant_text
+    conversation["last_assistant_message_html"] = markdown_to_html(last_assistant_text) if last_assistant_text else ""
+
+    # Count tool calls by type (using centralized normalization)
+    tool_counts = {}
+    for tool_call in conversation["tool_calls"]:
+        raw_tool_name = tool_call.get("name", "unknown")
+        tool_name = normalize_tool_name(raw_tool_name)
+        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+    conversation["tool_counts"] = tool_counts
 
     return conversation
 

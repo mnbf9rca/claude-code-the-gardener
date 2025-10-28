@@ -22,11 +22,14 @@ The use of Jinja2 here is safe and appropriate for static site generation.
 import argparse
 import json
 import shutil
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # Import our parsers
 from parsers import stats, conversations, sensors, actions
+from parsers.formatting_utils import markdown_to_html
 
 
 def parse_args():
@@ -135,6 +138,22 @@ def main():
     env.filters['format_number'] = lambda x: f"{x:,}"
     env.filters['format_bytes'] = lambda x: f"{x / 1_000_000:.2f}M" if x > 1_000_000 else f"{x / 1_000:.1f}K"
 
+    # Get generation metadata
+    generation_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    git_commit = None
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=Path(__file__).parent.parent,  # Run from repo root
+        )
+        if result.returncode == 0:
+            git_commit = result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass  # Git not available or command failed, that's ok
+
     # Parse all data
     print()
     print("Parsing data...")
@@ -191,17 +210,58 @@ def main():
         recent_timeline=timeline[:20],
         highlights=conversation_highlights[:5] + timeline_highlights[:5],
         daily_summary=daily_summary[-7:],  # Last 7 days
+        generation_time=generation_time,
+        git_commit=git_commit,
     )
     (output_dir / "index.html").write_text(index_html)
 
     # Conversations list
     print("  - conversations/index.html (conversation browser)")
     conv_list_template = env.get_template("conversations.html")
+
+    # Collect all unique tools used across conversations with counts
+    all_tools = {}
+    for conv in all_conversations:
+        for tool_name, count in conv.get('tool_counts', {}).items():
+            all_tools[tool_name] = all_tools.get(tool_name, 0) + count
+
+    # Sort by usage count (most used first)
+    sorted_tools = sorted(all_tools.items(), key=lambda x: x[1], reverse=True)
+
+    # Tool icon mapping
+    tool_icons = {
+        'read_moisture': '💧',
+        'dispense_water': '🚿',
+        'turn_on_light': '💡',
+        'turn_off_light': '💡',
+        'capture_photo': '📷',
+        'write_plant_status': '📋',
+        'log_thought': '🧠',
+        'send_message_to_human': '💬',
+        'list_messages_from_human': '💬',
+        'log_action': '⚡',
+        'save_notes': '📝',
+        'fetch_notes': '📝',
+        'get_current_time': '🕐',
+    }
+
+    # Add generic icon for tools starting with get_ or search_
+    for tool_name in all_tools.keys():
+        if tool_name not in tool_icons:
+            if tool_name.startswith('get_') or tool_name.startswith('search_'):
+                tool_icons[tool_name] = '🔍'
+            else:
+                tool_icons[tool_name] = '🔧'
+
     conv_list_html = conv_list_template.render(
         nav_base="../",
         conversations=all_conversations,
         highlights=conversation_highlights,
         stats=overall_stats,
+        all_tools=sorted_tools,
+        tool_icons=tool_icons,
+        generation_time=generation_time,
+        git_commit=git_commit,
     )
     (output_dir / "conversations" / "index.html").write_text(conv_list_html)
 
@@ -209,19 +269,13 @@ def main():
     print(f"  - Generating {len(all_conversations)} conversation detail pages...")
     conv_detail_template = env.get_template("conversation_detail.html")
     for conv in all_conversations:
-        conv_html = conv_detail_template.render(nav_base="../", conversation=conv)
+        conv_html = conv_detail_template.render(
+            nav_base="../",
+            conversation=conv,
+            generation_time=generation_time,
+            git_commit=git_commit,
+        )
         (output_dir / "conversations" / f"{conv['session_id']}.html").write_text(conv_html)
-
-    # Timeline page
-    print("  - timeline.html (interactive timeline)")
-    timeline_template = env.get_template("timeline.html")
-    timeline_html = timeline_template.render(
-        nav_base="",
-        timeline=timeline[:500],  # Limit to 500 recent for initial load
-        highlights=timeline_highlights,
-        stats=overall_stats,
-    )
-    (output_dir / "timeline.html").write_text(timeline_html)
 
     # Sensors page
     print("  - sensors.html (sensor charts)")
@@ -230,6 +284,8 @@ def main():
         nav_base="",
         sensor_summary=sensor_summary,
         stats=overall_stats,
+        generation_time=generation_time,
+        git_commit=git_commit,
     )
     (output_dir / "sensors.html").write_text(sensors_html)
 
@@ -238,6 +294,9 @@ def main():
     photos_template = env.get_template("photos.html")
     camera_file = data_dir / "camera_usage.jsonl"
     camera_records = stats.load_jsonl(camera_file)
+    # Sort photos by timestamp (newest first, oldest last)
+    # ISO timestamps sort correctly as strings, but explicit for clarity
+    camera_records.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
 
     # Check which photos actually exist on disk
     for record in camera_records:
@@ -250,8 +309,55 @@ def main():
         nav_base="",
         photos=camera_records,
         stats=overall_stats,
+        generation_time=generation_time,
+        git_commit=git_commit,
     )
     (output_dir / "photos.html").write_text(photos_html)
+
+    # Messages page
+    print("  - messages.html (human/agent messages)")
+    messages_template = env.get_template("messages.html")
+    messages_to_human_file = data_dir / "messages_to_human.jsonl"
+    messages_from_human_file = data_dir / "messages_from_human.jsonl"
+
+    # Load both message types
+    messages_to = stats.load_jsonl(messages_to_human_file)
+    messages_from = stats.load_jsonl(messages_from_human_file)
+
+    # Tag messages with direction and process content
+    for msg in messages_to:
+        msg['direction'] = 'to_human'
+        # Render markdown for agent messages only
+        msg['content_html'] = markdown_to_html(msg.get('content', ''))
+        # Format timestamp
+        try:
+            dt = datetime.fromisoformat(msg['timestamp'])
+            msg['timestamp_formatted'] = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+        except (ValueError, KeyError):
+            msg['timestamp_formatted'] = msg.get('timestamp', '')
+
+    for msg in messages_from:
+        msg['direction'] = 'from_human'
+        # Human messages stay as plain text (no markdown conversion)
+        # Format timestamp
+        try:
+            dt = datetime.fromisoformat(msg['timestamp'])
+            msg['timestamp_formatted'] = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+        except (ValueError, KeyError):
+            msg['timestamp_formatted'] = msg.get('timestamp', '')
+
+    # Combine and sort by timestamp
+    all_messages = messages_to + messages_from
+    all_messages.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+
+    messages_html = messages_template.render(
+        nav_base="",
+        messages=all_messages,
+        stats=overall_stats,
+        generation_time=generation_time,
+        git_commit=git_commit,
+    )
+    (output_dir / "messages.html").write_text(messages_html)
 
     # Notes evolution page
     print("  - notes.html (notes evolution)")
@@ -275,6 +381,8 @@ def main():
         current_notes=current_notes,
         versions=notes_versions[-50:],  # Last 50 versions
         stats=overall_stats,
+        generation_time=generation_time,
+        git_commit=git_commit,
     )
     (output_dir / "notes.html").write_text(notes_html)
 
