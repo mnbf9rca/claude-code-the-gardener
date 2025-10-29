@@ -3,8 +3,38 @@ Shared formatting utilities for HTML generation.
 """
 
 import json
+import re
 from typing import Any
 import markdown2
+
+
+def convert_photo_urls_to_relative(text: str) -> str:
+    """
+    Convert absolute photo URLs to relative paths for static site.
+
+    Finds any URL containing '/photos/' (regardless of protocol, host, or port)
+    and converts it to a relative path like '../photos/filename.jpg'.
+
+    Examples:
+        'http://192.168.1.100:8000/photos/plant_123.jpg' -> '../photos/plant_123.jpg'
+        'http://localhost:8080/photos/plant_456.jpg' -> '../photos/plant_456.jpg'
+        'http://plant-server.local:8000/photos/plant_789.jpg' -> '../photos/plant_789.jpg'
+
+    Args:
+        text: Text content that may contain absolute photo URLs
+
+    Returns:
+        Text with absolute photo URLs converted to relative paths
+    """
+    if '/photos/' not in text:
+        return text
+
+    # Match any URL containing /photos/ and extract the filename
+    # Pattern: http(s)://[host]:[port]/photos/[filename]
+    # Captures everything after /photos/ as the filename
+    pattern = r'https?://[^/\s]+(?::\d+)?/photos/([^\s\)\"\'<>]+)'
+    replacement = r'../photos/\1'
+    return re.sub(pattern, replacement, text)
 
 
 def markdown_to_html(text: str) -> str:
@@ -67,6 +97,8 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
                        'reasoning', 'uncertainties', 'note']
     if any(field in field_name.lower() for field in markdown_fields):
         text = str(value)
+        # Convert photo URLs to relative paths before processing
+        text = convert_photo_urls_to_relative(text)
         # In table context, truncate long text and add ellipsis
         if is_table_context and len(text) > 150:
             text = text[:150] + '...'
@@ -84,9 +116,14 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
         icon = icons.get(str(value).lower(), '')
         return f'{icon} {value}' if icon else str(value)
 
-    # URLs - make them clickable
+    # URLs - make them clickable (convert photo URLs to relative paths)
     if field_name == 'url' or (isinstance(value, str) and value.startswith('http')):
-        return f'<a href="{value}" target="_blank" class="link">View</a>'
+        url = str(value)
+        # Convert absolute photo URLs to relative paths for static site
+        if '/photos/' in url:
+            filename = url.split('/photos/')[-1]
+            url = f'../photos/{filename}'
+        return f'<a href="{url}" target="_blank" class="link">View</a>'
 
     # Nested lists or dicts - format compactly
     if isinstance(value, (list, dict)):

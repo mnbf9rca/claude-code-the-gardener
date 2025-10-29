@@ -17,10 +17,12 @@
         <div class="photo-card{% if not photo.photo_exists %} missing-photo{% endif %}" data-timestamp="{{ photo.timestamp }}">
             <div class="photo-wrapper">
                 {% if photo.photo_exists %}
-                <img src="../photos/{{ photo.photo_path.split('/')[-1] }}"
-                     alt="Plant photo from {{ photo.timestamp }}"
-                     loading="lazy"
-                     class="photo-img">
+                <a href="../photos/{{ photo.photo_path.split('/')[-1] }}" target="_blank" class="photo-link">
+                    <img src="../photos/{{ photo.photo_path.split('/')[-1] }}"
+                         alt="Plant photo from {{ photo.timestamp }}"
+                         loading="lazy"
+                         class="photo-img">
+                </a>
                 {% else %}
                 <div class="missing-photo-placeholder">
                     <span class="missing-icon">📷</span>
