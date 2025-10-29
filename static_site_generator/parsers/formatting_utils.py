@@ -67,7 +67,7 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
         return f'<span class="timestamp-cell">{ts_str}</span>'
 
     # Status and state fields - apply color badges
-    if field_name in ['status', 'state', 'plant_state']:
+    if field_name.lower() in ['status', 'state', 'plant_state']:
         return f'<span class="plant-state-{value}">{value}</span>'
 
     # Success/boolean fields
@@ -117,6 +117,7 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
         return f'{icon} {value}' if icon else str(value)
 
     # URLs - make them clickable (convert photo URLs to relative paths)
+    # Note: Intentionally broad matching to catch photo URLs in any field (notes, actions, etc.)
     if field_name == 'url' or (isinstance(value, str) and value.startswith('http')):
         url = str(value)
         # Convert absolute photo URLs to relative paths for static site
@@ -127,7 +128,11 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
 
     # Nested lists or dicts - format compactly
     if isinstance(value, (list, dict)):
-        return f'<span class="nested-data">{json.dumps(value)}</span>'
+        try:
+            json_str = json.dumps(value, default=str)
+        except (TypeError, ValueError):
+            json_str = str(value)
+        return f'<span class="nested-data">{json_str}</span>'
 
     # Default - just convert to string
     return str(value)
