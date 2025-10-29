@@ -85,7 +85,7 @@ def calculate_stats_from_conversations(conversations: List[Dict[str, Any]], data
     for conv in conversations:
         # Aggregate tokens (already deduplicated during parsing)
         for key in total_tokens:
-            total_tokens[key] += conv["tokens"][key]
+            total_tokens[key] += conv.get("tokens", {}).get(key, 0)
 
         total_messages += conv["message_count"]
 
@@ -228,7 +228,7 @@ def calculate_overall_stats(data_dir: Path, conversations_dir: Path = None) -> D
 
     # Conversation stats
     # Use provided conversations_dir or default to data_dir/claude
-    claude_dir = conversations_dir if conversations_dir else data_dir / "claude"
+    claude_dir = conversations_dir or data_dir / "claude"
     if claude_dir.exists():
         conversation_files = list(claude_dir.glob("*.jsonl"))
         stats["conversations"]["total_count"] = len(conversation_files)

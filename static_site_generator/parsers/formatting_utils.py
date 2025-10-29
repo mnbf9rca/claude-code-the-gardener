@@ -3,9 +3,29 @@ Shared formatting utilities for HTML generation.
 """
 
 import json
+import os
 import re
 from typing import Any
+from urllib.parse import urlparse
 import markdown2
+
+
+def _extract_photo_filename(url: str) -> str:
+    """
+    Extract filename from a photo URL, handling query parameters and fragments.
+
+    Args:
+        url: Photo URL (absolute or relative)
+
+    Returns:
+        Just the filename portion (e.g., 'plant_123.jpg')
+    """
+    if '/photos/' not in url:
+        return url
+
+    # Use urlparse for robust handling of query params and fragments
+    parsed = urlparse(url)
+    return os.path.basename(parsed.path)
 
 
 def convert_photo_urls_to_relative(text: str) -> str:
@@ -29,12 +49,16 @@ def convert_photo_urls_to_relative(text: str) -> str:
     if '/photos/' not in text:
         return text
 
-    # Match any URL containing /photos/ and extract the filename
+    # Match any URL containing /photos/ and extract the full URL
     # Pattern: http(s)://[host]:[port]/photos/[filename]
-    # Captures everything after /photos/ as the filename
-    pattern = r'https?://[^/\s]+(?::\d+)?/photos/([^\s\)\"\'<>]+)'
-    replacement = r'../photos/\1'
-    return re.sub(pattern, replacement, text)
+    pattern = r'https?://[^/\s]+(?::\d+)?/photos/[^\s\)\"\'<>]+'
+
+    def replace_url(match):
+        url = match.group(0)
+        filename = _extract_photo_filename(url)
+        return f'../photos/{filename}'
+
+    return re.sub(pattern, replace_url, text)
 
 
 def markdown_to_html(text: str) -> str:
@@ -93,9 +117,16 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
         return str(value)
 
     # Content/markdown/reasoning fields - render with proper formatting
-    markdown_fields = ['content', 'message', 'observation', 'hypothesis',
-                       'reasoning', 'uncertainties', 'note']
-    if any(field in field_name.lower() for field in markdown_fields):
+    # Use exact matching or suffix matching to avoid false positives (e.g., 'reasoning_score')
+    markdown_field_patterns = {'content', 'message', 'observation', 'hypothesis',
+                                'reasoning', 'uncertainties', 'note'}
+    field_lower = field_name.lower()
+    is_markdown_field = (
+        field_lower in markdown_field_patterns or
+        any(field_lower.endswith(f'_{pattern}') for pattern in markdown_field_patterns)
+    )
+
+    if is_markdown_field:
         text = str(value)
         # Convert photo URLs to relative paths before processing
         text = convert_photo_urls_to_relative(text)
@@ -120,9 +151,9 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
     # Note: Intentionally broad matching to catch photo URLs in any field (notes, actions, etc.)
     if field_name == 'url' or (isinstance(value, str) and value.startswith('http')):
         url = str(value)
-        # Convert absolute photo URLs to relative paths for static site
+        # Convert absolute photo URLs to relative paths for static site (reuses helper)
         if '/photos/' in url:
-            filename = url.split('/photos/')[-1]
+            filename = _extract_photo_filename(url)
             url = f'../photos/{filename}'
         return f'<a href="{url}" target="_blank" class="link">View</a>'
 
@@ -131,7 +162,9 @@ def format_field_value(field_name: str, value: Any, is_table_context: bool = Fal
         try:
             json_str = json.dumps(value, default=str)
         except (TypeError, ValueError):
-            json_str = str(value)
+            # Provide clearer indication of serialization failure
+            type_name = type(value).__name__
+            json_str = f"&lt;non-serializable {type_name}&gt;"
         return f'<span class="nested-data">{json_str}</span>'
 
     # Default - just convert to string
