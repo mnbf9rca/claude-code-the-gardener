@@ -35,7 +35,15 @@
         </div>
         <div class="meta-item">
             <span class="meta-label">Tokens:</span>
-            <span class="meta-value">{{ (conversation.tokens.input + conversation.tokens.output) | format_number }}</span>
+            <span class="meta-value">
+                {{ (conversation.tokens.input + conversation.tokens.output + conversation.tokens.cache_read + conversation.tokens.cache_creation) | format_number }}
+                <span style="font-size: 0.85rem; color: var(--color-text-muted); margin-left: 0.5rem;">
+                    (In: {{ conversation.tokens.input | format_number }},
+                    Out: {{ conversation.tokens.output | format_number }},
+                    Cache R: {{ conversation.tokens.cache_read | format_number }},
+                    Cache W: {{ conversation.tokens.cache_creation | format_number }})
+                </span>
+            </span>
         </div>
         <div class="meta-item">
             <span class="meta-label">Cost:</span>

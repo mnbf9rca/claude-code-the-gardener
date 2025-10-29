@@ -159,14 +159,14 @@ def main():
     print("Parsing data...")
     print("-" * 50)
 
-    print("  - Calculating overall statistics...")
-    overall_stats = stats.calculate_overall_stats(data_dir, conversations_dir)
-    daily_summary = stats.get_daily_summary(data_dir)
-
     print("  - Parsing conversations...")
     all_conversations = conversations.get_all_conversations(conversations_dir)
     conversation_highlights = conversations.get_highlights(all_conversations)
     print(f"    Found {len(all_conversations)} conversations ({len(conversation_highlights)} highlights)")
+
+    print("  - Calculating overall statistics...")
+    overall_stats = stats.calculate_stats_from_conversations(all_conversations, data_dir)
+    daily_summary = stats.get_daily_summary(data_dir)
 
     print("  - Processing sensor data...")
     sensor_data = sensors.get_combined_sensor_data(data_dir, all_conversations)

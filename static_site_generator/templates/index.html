@@ -74,10 +74,10 @@
             </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card stat-card-wide">
             <div class="stat-icon">=</div>
             <div class="stat-content">
-                <div class="stat-value">{{ (stats.conversations.get('total_tokens', {}).get('input', 0) + stats.conversations.get('total_tokens', {}).get('output', 0)) | format_number }}</div>
+                <div class="stat-value">{{ (stats.conversations.get('total_tokens', {}).get('input', 0) + stats.conversations.get('total_tokens', {}).get('output', 0) + stats.conversations.get('total_tokens', {}).get('cache_read', 0) + stats.conversations.get('total_tokens', {}).get('cache_creation', 0)) | format_number }}</div>
                 <div class="stat-label">Total Tokens</div>
             </div>
         </div>

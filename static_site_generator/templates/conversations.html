@@ -56,6 +56,10 @@
                 <div class="stat-item">
                     <span class="stat-icon">=</span>
                     <span class="stat-text">{{ (conv.tokens.input + conv.tokens.output + conv.tokens.cache_read + conv.tokens.cache_creation) | format_number }} tokens</span>
+                    <span class="stat-text-small" style="display: block; margin-top: 0.25rem; font-size: 0.75rem; color: var(--color-text-muted);">
+                        I/O: {{ (conv.tokens.input + conv.tokens.output) | format_number }} |
+                        Cache: {{ (conv.tokens.cache_read + conv.tokens.cache_creation) | format_number }}
+                    </span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">=</span>

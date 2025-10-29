@@ -115,6 +115,14 @@ body {
     gap: 1rem;
 }
 
+.stat-card-wide {
+    grid-column: span 2;
+}
+
+.stat-card-wide .stat-value {
+    font-size: 2rem;
+}
+
 .stat-icon {
     font-size: 2.5rem;
 }
