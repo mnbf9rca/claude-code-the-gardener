@@ -50,8 +50,13 @@ def parse_timestamp(ts_str: str) -> datetime:
         raise ValueError(f"Could not parse timestamp: {ts_str}")
 
 
-def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
-    """Calculate overall project statistics."""
+def calculate_overall_stats(data_dir: Path, conversations_dir: Path = None) -> Dict[str, Any]:
+    """Calculate overall project statistics.
+
+    Args:
+        data_dir: Path to the data directory containing JSONL files
+        conversations_dir: Path to conversations directory (defaults to data_dir/claude if not specified)
+    """
 
     stats = {
         "conversations": {},
@@ -66,7 +71,8 @@ def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
     }
 
     # Conversation stats
-    claude_dir = data_dir / "claude"
+    # Use provided conversations_dir or default to data_dir/claude
+    claude_dir = conversations_dir if conversations_dir else data_dir / "claude"
     if claude_dir.exists():
         conversation_files = list(claude_dir.glob("*.jsonl"))
         stats["conversations"]["total_count"] = len(conversation_files)
@@ -77,20 +83,31 @@ def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
 
         for conv_file in conversation_files:
             messages = load_jsonl(conv_file)
+            # Track seen message IDs to prevent double-counting
+            # Claude Code writes multiple JSONL entries with the same message ID (one per tool call)
+            seen_message_ids = set()
+
             for msg in messages:
                 if msg.get("type") == "assistant" and "message" in msg:
-                    total_messages += 1
-                    usage = msg.get("message", {}).get("usage", {})
-                    total_tokens["input"] += usage.get("input_tokens", 0)
-                    total_tokens["output"] += usage.get("output_tokens", 0)
-                    total_tokens["cache_read"] += usage.get("cache_read_input_tokens", 0)
+                    # Get message ID to deduplicate token counting
+                    msg_id = msg.get("message", {}).get("id")
 
-                    cache_creation = usage.get("cache_creation", {})
-                    if isinstance(cache_creation, dict):
-                        total_tokens["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
-                        total_tokens["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
+                    # Only count usage once per unique message ID
+                    if msg_id and msg_id not in seen_message_ids:
+                        seen_message_ids.add(msg_id)
+                        total_messages += 1
 
-                    # Count tool calls
+                        usage = msg.get("message", {}).get("usage", {})
+                        total_tokens["input"] += usage.get("input_tokens", 0)
+                        total_tokens["output"] += usage.get("output_tokens", 0)
+                        total_tokens["cache_read"] += usage.get("cache_read_input_tokens", 0)
+
+                        cache_creation = usage.get("cache_creation", {})
+                        if isinstance(cache_creation, dict):
+                            total_tokens["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
+                            total_tokens["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
+
+                    # Count tool calls (still count all, as each entry has different tool_use items)
                     content = msg.get("message", {}).get("content", [])
                     if isinstance(content, list):
                         for item in content:

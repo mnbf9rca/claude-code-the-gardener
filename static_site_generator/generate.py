@@ -160,7 +160,7 @@ def main():
     print("-" * 50)
 
     print("  - Calculating overall statistics...")
-    overall_stats = stats.calculate_overall_stats(data_dir)
+    overall_stats = stats.calculate_overall_stats(data_dir, conversations_dir)
     daily_summary = stats.get_daily_summary(data_dir)
 
     print("  - Parsing conversations...")
