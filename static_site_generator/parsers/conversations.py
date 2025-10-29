@@ -67,6 +67,10 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
         conversation["duration_human"] = "Unknown"
 
     # Process messages
+    # Track seen message IDs to prevent double-counting of tokens
+    # Claude Code writes multiple JSONL entries with the same message ID (one per tool call)
+    seen_message_ids = set()
+
     for msg in messages:
         msg_type = msg.get("type")
 
@@ -175,16 +179,23 @@ def parse_conversation(file_path: Path) -> Optional[Dict[str, Any]]:
             })
             conversation["message_count"] += 1
 
-            # Accumulate token usage
-            usage = assistant_msg.get("usage", {})
-            conversation["tokens"]["input"] += usage.get("input_tokens", 0)
-            conversation["tokens"]["output"] += usage.get("output_tokens", 0)
-            conversation["tokens"]["cache_read"] += usage.get("cache_read_input_tokens", 0)
+            # Accumulate token usage - but only once per unique message ID
+            # Get message ID to deduplicate token counting
+            msg_id = assistant_msg.get("id")
 
-            cache_creation = usage.get("cache_creation", {})
-            if isinstance(cache_creation, dict):
-                conversation["tokens"]["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
-                conversation["tokens"]["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
+            # Only count usage once per unique message ID
+            if msg_id and msg_id not in seen_message_ids:
+                seen_message_ids.add(msg_id)
+
+                usage = assistant_msg.get("usage", {})
+                conversation["tokens"]["input"] += usage.get("input_tokens", 0)
+                conversation["tokens"]["output"] += usage.get("output_tokens", 0)
+                conversation["tokens"]["cache_read"] += usage.get("cache_read_input_tokens", 0)
+
+                cache_creation = usage.get("cache_creation", {})
+                if isinstance(cache_creation, dict):
+                    conversation["tokens"]["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
+                    conversation["tokens"]["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
 
     # Calculate cost estimate
     conversation["cost_usd"] = estimate_cost(conversation["tokens"])

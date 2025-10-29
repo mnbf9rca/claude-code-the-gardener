@@ -17,7 +17,7 @@ source $HOME/.local/bin/env
 install git
 
 ```shell
-DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends git libopencv-dev v4l-utils python3-numpy python3-pip python3-matplotlib acl
+DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends git jq libopencv-dev v4l-utils python3-numpy python3-pip python3-matplotlib acl
 ```
 
 clone repo and install dependencies

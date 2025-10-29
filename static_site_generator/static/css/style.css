@@ -115,6 +115,14 @@ body {
     gap: 1rem;
 }
 
+.stat-card-wide {
+    grid-column: span 2;
+}
+
+.stat-card-wide .stat-value {
+    font-size: 2rem;
+}
+
 .stat-icon {
     font-size: 2.5rem;
 }
@@ -615,6 +623,20 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* Clickable photo link styles */
+.photo-link {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.photo-link:hover .photo-img {
+    opacity: 0.9;
+    transform: scale(1.02);
+    transition: all 0.2s ease;
 }
 
 .missing-photo-placeholder {

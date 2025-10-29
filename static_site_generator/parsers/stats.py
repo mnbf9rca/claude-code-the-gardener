@@ -50,9 +50,19 @@ def parse_timestamp(ts_str: str) -> datetime:
         raise ValueError(f"Could not parse timestamp: {ts_str}")
 
 
-def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
-    """Calculate overall project statistics."""
+def calculate_stats_from_conversations(conversations: List[Dict[str, Any]], data_dir: Path) -> Dict[str, Any]:
+    """Calculate overall project statistics from already-parsed conversations.
 
+    This is more efficient than calculate_overall_stats() as it doesn't re-parse
+    conversation files that have already been parsed.
+
+    Args:
+        conversations: List of parsed conversation dictionaries from conversations.get_all_conversations()
+        data_dir: Path to the data directory containing JSONL files (for sensors, actions, etc.)
+
+    Returns:
+        Dictionary containing overall project statistics
+    """
     stats = {
         "conversations": {},
         "sensors": {},
@@ -65,58 +75,51 @@ def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
         "project": {},
     }
 
-    # Conversation stats
-    claude_dir = data_dir / "claude"
-    if claude_dir.exists():
-        conversation_files = list(claude_dir.glob("*.jsonl"))
-        stats["conversations"]["total_count"] = len(conversation_files)
+    # Aggregate conversation stats from already-parsed conversations
+    stats["conversations"]["total_count"] = len(conversations)
 
-        total_tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
-        total_messages = 0
-        tool_calls = defaultdict(int)
+    total_tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
+    total_messages = 0
+    tool_calls = defaultdict(int)
 
-        for conv_file in conversation_files:
-            messages = load_jsonl(conv_file)
-            for msg in messages:
-                if msg.get("type") == "assistant" and "message" in msg:
-                    total_messages += 1
-                    usage = msg.get("message", {}).get("usage", {})
-                    total_tokens["input"] += usage.get("input_tokens", 0)
-                    total_tokens["output"] += usage.get("output_tokens", 0)
-                    total_tokens["cache_read"] += usage.get("cache_read_input_tokens", 0)
+    for conv in conversations:
+        # Aggregate tokens (already deduplicated during parsing)
+        for key in total_tokens:
+            total_tokens[key] += conv.get("tokens", {}).get(key, 0)
 
-                    cache_creation = usage.get("cache_creation", {})
-                    if isinstance(cache_creation, dict):
-                        total_tokens["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
-                        total_tokens["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
+        total_messages += conv["message_count"]
 
-                    # Count tool calls
-                    content = msg.get("message", {}).get("content", [])
-                    if isinstance(content, list):
-                        for item in content:
-                            if isinstance(item, dict) and item.get("type") == "tool_use":
-                                tool_name = item.get("name", "unknown")
-                                tool_calls[tool_name] += 1
+        # Aggregate tool calls
+        for tool_name, count in conv.get("tool_counts", {}).items():
+            tool_calls[tool_name] += count
 
-        stats["conversations"]["total_tokens"] = total_tokens
-        stats["conversations"]["total_messages"] = total_messages
-        stats["conversations"]["tool_calls"] = dict(tool_calls)
+    stats["conversations"]["total_tokens"] = total_tokens
+    stats["conversations"]["total_messages"] = total_messages
+    stats["conversations"]["tool_calls"] = dict(tool_calls)
 
-        # Cost estimation (approximate rates for Claude 3.5 Sonnet)
-        # Input: $3/MTok, Output: $15/MTok, Cache write: $3.75/MTok, Cache read: $0.30/MTok
-        input_cost = (total_tokens["input"] / 1_000_000) * 3.0
-        output_cost = (total_tokens["output"] / 1_000_000) * 15.0
-        cache_write_cost = (total_tokens["cache_creation"] / 1_000_000) * 3.75
-        cache_read_cost = (total_tokens["cache_read"] / 1_000_000) * 0.30
+    # Cost estimation (approximate rates for Claude 3.5 Sonnet)
+    # Input: $3/MTok, Output: $15/MTok, Cache write: $3.75/MTok, Cache read: $0.30/MTok
+    input_cost = (total_tokens["input"] / 1_000_000) * 3.0
+    output_cost = (total_tokens["output"] / 1_000_000) * 15.0
+    cache_write_cost = (total_tokens["cache_creation"] / 1_000_000) * 3.75
+    cache_read_cost = (total_tokens["cache_read"] / 1_000_000) * 0.30
 
-        stats["conversations"]["estimated_cost_usd"] = {
-            "input": round(input_cost, 2),
-            "output": round(output_cost, 2),
-            "cache_write": round(cache_write_cost, 2),
-            "cache_read": round(cache_read_cost, 2),
-            "total": round(input_cost + output_cost + cache_write_cost + cache_read_cost, 2)
-        }
+    stats["conversations"]["estimated_cost_usd"] = {
+        "input": round(input_cost, 2),
+        "output": round(output_cost, 2),
+        "cache_write": round(cache_write_cost, 2),
+        "cache_read": round(cache_read_cost, 2),
+        "total": round(input_cost + output_cost + cache_write_cost + cache_read_cost, 2)
+    }
 
+    # Continue with sensor/action stats (unchanged from original function)
+    _add_sensor_and_action_stats(stats, data_dir)
+
+    return stats
+
+
+def _add_sensor_and_action_stats(stats: Dict[str, Any], data_dir: Path) -> None:
+    """Helper to add sensor and action statistics to stats dict (extracted for reuse)."""
     # Moisture sensor stats
     moisture_file = data_dir / "moisture_sensor_history.jsonl"
     moisture_readings = load_jsonl(moisture_file)
@@ -201,6 +204,94 @@ def calculate_overall_stats(data_dir: Path) -> Dict[str, Any]:
         duration = all_timestamps[-1] - all_timestamps[0]
         stats["project"]["duration_days"] = duration.days
         stats["project"]["duration_hours"] = round(duration.total_seconds() / 3600, 1)
+
+
+def calculate_overall_stats(data_dir: Path, conversations_dir: Path = None) -> Dict[str, Any]:
+    """Calculate overall project statistics.
+
+    Args:
+        data_dir: Path to the data directory containing JSONL files
+        conversations_dir: Path to conversations directory (defaults to data_dir/claude if not specified)
+    """
+
+    stats = {
+        "conversations": {},
+        "sensors": {},
+        "actions": {},
+        "thoughts": {},
+        "photos": {},
+        "water": {},
+        "light": {},
+        "messages": {},
+        "project": {},
+    }
+
+    # Conversation stats
+    # Use provided conversations_dir or default to data_dir/claude
+    claude_dir = conversations_dir or data_dir / "claude"
+    if claude_dir.exists():
+        conversation_files = list(claude_dir.glob("*.jsonl"))
+        stats["conversations"]["total_count"] = len(conversation_files)
+
+        total_tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
+        total_messages = 0
+        tool_calls = defaultdict(int)
+
+        for conv_file in conversation_files:
+            messages = load_jsonl(conv_file)
+            # Track seen message IDs to prevent double-counting
+            # Claude Code writes multiple JSONL entries with the same message ID (one per tool call)
+            seen_message_ids = set()
+
+            for msg in messages:
+                if msg.get("type") == "assistant" and "message" in msg:
+                    # Get message ID to deduplicate token counting
+                    msg_id = msg.get("message", {}).get("id")
+
+                    # Only count usage once per unique message ID
+                    if msg_id and msg_id not in seen_message_ids:
+                        seen_message_ids.add(msg_id)
+                        total_messages += 1
+
+                        usage = msg.get("message", {}).get("usage", {})
+                        total_tokens["input"] += usage.get("input_tokens", 0)
+                        total_tokens["output"] += usage.get("output_tokens", 0)
+                        total_tokens["cache_read"] += usage.get("cache_read_input_tokens", 0)
+
+                        cache_creation = usage.get("cache_creation", {})
+                        if isinstance(cache_creation, dict):
+                            total_tokens["cache_creation"] += cache_creation.get("ephemeral_5m_input_tokens", 0)
+                            total_tokens["cache_creation"] += cache_creation.get("ephemeral_1h_input_tokens", 0)
+
+                    # Count tool calls (still count all, as each entry has different tool_use items)
+                    content = msg.get("message", {}).get("content", [])
+                    if isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict) and item.get("type") == "tool_use":
+                                tool_name = item.get("name", "unknown")
+                                tool_calls[tool_name] += 1
+
+        stats["conversations"]["total_tokens"] = total_tokens
+        stats["conversations"]["total_messages"] = total_messages
+        stats["conversations"]["tool_calls"] = dict(tool_calls)
+
+        # Cost estimation (approximate rates for Claude 3.5 Sonnet)
+        # Input: $3/MTok, Output: $15/MTok, Cache write: $3.75/MTok, Cache read: $0.30/MTok
+        input_cost = (total_tokens["input"] / 1_000_000) * 3.0
+        output_cost = (total_tokens["output"] / 1_000_000) * 15.0
+        cache_write_cost = (total_tokens["cache_creation"] / 1_000_000) * 3.75
+        cache_read_cost = (total_tokens["cache_read"] / 1_000_000) * 0.30
+
+        stats["conversations"]["estimated_cost_usd"] = {
+            "input": round(input_cost, 2),
+            "output": round(output_cost, 2),
+            "cache_write": round(cache_write_cost, 2),
+            "cache_read": round(cache_read_cost, 2),
+            "total": round(input_cost + output_cost + cache_write_cost + cache_read_cost, 2)
+        }
+
+    # Add sensor and action stats using shared helper
+    _add_sensor_and_action_stats(stats, data_dir)
 
     return stats
 
