@@ -847,3 +847,27 @@ def test_get_gallery_ui_offset_beyond_total(client, tmp_path, monkeypatch):
     assert '<div class="photo-card">' not in response.text
     # No "Load More" button when no more photos
     assert "Load More" not in response.text
+
+
+def test_messages_ui_escapes_quotes_in_reply_button(client, clean_message_history):
+    """Test that message content with quotes is properly HTML-escaped in onclick attributes"""
+    # Add a message with both single and double quotes in content
+    human_messages_module.messages_to_human.append({
+        "message_id": "msg_test_quotes",
+        "timestamp": "2025-10-31T12:00:00+00:00",
+        "content": "Test with \"double quotes\" and 'single quotes' to verify escaping",
+        "in_reply_to": None
+    })
+
+    response = client.get("/messages")
+
+    assert response.status_code == 200
+    # Verify the onclick attribute contains HTML-escaped entities
+    # json.dumps() will create: "Test with \"double quotes\" and 'single quotes'..."
+    # html.escape(quote=True) will convert to: &quot;Test with \&quot;double quotes\&quot; and &#x27;single quotes&#x27;...&quot;
+    assert "&quot;" in response.text  # Escaped double quotes
+    assert "&#x27;" in response.text or "&#39;" in response.text  # Escaped single quotes (both are valid)
+    # Verify the reply button exists
+    assert "Reply to this message" in response.text
+    # Verify onclick is present (it should be properly formed)
+    assert "onclick=" in response.text
