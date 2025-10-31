@@ -742,7 +742,7 @@ async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
                     <div class="message-content">{msg['content']}</div>
                     <div class="message-footer">
                         <strong>ID:</strong> <code>{msg['message_id']}</code><br>
-                        <button type="button" class="reply-btn" onclick="setReplyTo({msg_id_json}, {msg_preview_json})">Reply to this message</button>
+                        <button type="button" class="reply-btn" onclick='setReplyTo({msg_id_json}, {msg_preview_json})'>Reply to this message</button>
                     </div>
                 </div>"""
 
