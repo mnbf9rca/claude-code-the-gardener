@@ -56,6 +56,15 @@
 #define WIFI_RECONNECT_INTERVAL 30000
 
 // ============================================================================
+// NTP and RTC Configuration
+// ============================================================================
+
+// RTC resync interval (seconds)
+// How often to update RTC from NTP-synced system time
+// ESP32 system time auto-syncs with NTP in background, we copy to RTC periodically
+#define RTC_RESYNC_INTERVAL 3600  // 1 hour (3600 seconds)
+
+// ============================================================================
 // HTTP Server Configuration
 // ============================================================================
 

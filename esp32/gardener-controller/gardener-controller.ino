@@ -18,6 +18,7 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <time.h>
+#include <esp_sntp.h>
 #include "config.h"
 
 // ============================================================================
@@ -46,6 +47,9 @@ unsigned long lastMoistureReadTime = 0;
 // WiFi connection tracking
 unsigned long lastWiFiCheck = 0;
 bool wifiConnected = false;
+
+// RTC sync tracking
+time_t lastRtcSync = 0;  // Unix timestamp of last RTC sync
 
 // ============================================================================
 // Helper Functions
@@ -133,6 +137,30 @@ void checkPumpTimeout() {
   }
 }
 
+/**
+ * Sync RTC from system time (which auto-syncs with NTP in background)
+ * Called periodically to prevent RTC drift
+ */
+void syncRtcFromSystemTime() {
+  time_t now;
+  time(&now);
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+
+  // Only sync if system time is valid (year > 2020)
+  if (timeinfo.tm_year > (2020 - 1900)) {
+    M5.Rtc.setDateTime({
+      { timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday },
+      { timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec }
+    });
+
+    #if DEBUG_SERIAL
+    Serial.printf("RTC synced: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
+                  timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                  timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    #endif
+  }
+}
 
 /**
  * Get ISO8601 formatted timestamp (UTC) from RTC
@@ -469,6 +497,9 @@ void setupNTP() {
   // Configure NTP (UTC timezone, no daylight saving)
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
 
+  // Use smooth sync mode for gradual time adjustments
+  sntp_set_sync_mode(SNTP_SYNC_MODE_SMOOTH);
+
   // Wait for time sync (max 10 seconds)
   int retries = 0;
   time_t now = 0;
@@ -491,6 +522,9 @@ void setupNTP() {
       { timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday },
       { timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec }
     });
+
+    // Record that we just synced the RTC
+    time(&lastRtcSync);
 
     #if DEBUG_SERIAL
     Serial.printf("RTC synced: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
@@ -638,6 +672,13 @@ void loop() {
       WiFi.reconnect();
     }
     lastWiFiCheck = now;
+  }
+
+  // Sync RTC from system time periodically (based on wall-clock time)
+  time_t currentTime = time(nullptr);
+  if (lastRtcSync == 0 || difftime(currentTime, lastRtcSync) >= RTC_RESYNC_INTERVAL) {
+    syncRtcFromSystemTime();
+    time(&lastRtcSync);  // Record current time as last sync
   }
 
   // Yield to allow background tasks and prevent watchdog timeout
