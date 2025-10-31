@@ -505,7 +505,7 @@ void setupNTP() {
 
   while (retries < 10) {
     time(&now);
-    localtime_r(&now, &timeinfo);
+    gmtime_r(&now, &timeinfo);  // Use gmtime_r for explicit UTC (consistent with periodic sync)
     if (timeinfo.tm_year > (2020 - 1900)) {
       // Time is valid (year > 2020)
       break;
