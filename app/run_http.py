@@ -13,13 +13,14 @@ from dotenv import load_dotenv
 import uvicorn
 import httpx
 from starlette.staticfiles import StaticFiles
-from server import mcp
-from web_routes import add_message_routes
-from admin_routes import add_admin_routes
-from utils.logging_config import get_logger
 
-# Load environment variables
+# Load environment variables BEFORE importing local modules that need them
 load_dotenv()
+
+from server import mcp  # noqa E402
+from web_routes import add_message_routes  # noqa E402
+from admin_routes import add_admin_routes  # noqa E402
+from utils.logging_config import get_logger  # noqa E402
 
 # Get logger
 logger = get_logger(__name__)

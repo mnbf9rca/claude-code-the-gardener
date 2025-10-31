@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List
 from pathlib import Path
 import json
+import html as html_module
 import tools.human_messages as human_messages
 from tools.human_messages import _generate_message_id, MAX_MESSAGE_LENGTH
 from tools.camera import capture_real_photo
@@ -721,9 +722,10 @@ async def get_messages_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
             if len(msg['content']) > 50:
                 msg_content_preview += "..."
 
-            # JSON-encode values for safe JavaScript embedding
-            msg_id_json = json.dumps(msg['message_id'])
-            msg_preview_json = json.dumps(msg_content_preview)
+            # JSON-encode values, then HTML-escape for safe embedding in HTML attributes
+            # html_module.escape() converts quotes to entities (&quot;, &#x27;) which are safe in attributes
+            msg_id_json = html_module.escape(json.dumps(msg['message_id']), quote=True)
+            msg_preview_json = html_module.escape(json.dumps(msg_content_preview), quote=True)
 
             # Add reply indicator if this message is replying to another
             reply_indicator = ""
