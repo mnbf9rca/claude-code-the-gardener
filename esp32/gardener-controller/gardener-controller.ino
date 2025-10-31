@@ -42,7 +42,6 @@ unsigned long lastDisplayUpdate = 0;
 
 // Moisture reading cache
 int lastMoistureReading = 0;
-unsigned long lastMoistureReadTime = 0;
 
 // WiFi connection tracking
 unsigned long lastWiFiCheck = 0;
@@ -235,7 +234,6 @@ void handleGetMoisture(AsyncWebServerRequest *request) {
   // Read sensor
   int moisture = readMoisture();
   lastMoistureReading = moisture;
-  lastMoistureReadTime = millis();
 
   // Build JSON response
   StaticJsonDocument<JSON_BUFFER_SIZE> doc;
