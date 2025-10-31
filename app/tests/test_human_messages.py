@@ -459,3 +459,135 @@ def test_message_persistence(tmp_path, clean_message_history):
     messages = test_history2.get_all()
     assert len(messages) == 1
     assert messages[0]["message_id"] == "msg_20251020_100000_001"
+
+
+@pytest.mark.asyncio
+async def test_list_messages_with_agent_replies(test_mcp, clean_message_history):
+    """Test that agent_reply_ids correctly identifies agent replies"""
+
+    # Add a human message
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_human_001",
+            "timestamp": "2025-10-20T10:00:00+00:00",
+            "content": "Human message 1",
+            "in_reply_to": None,
+        }
+    )
+
+    # Add agent replies to the human message
+    human_messages_module.messages_to_human.append(
+        {
+            "message_id": "msg_agent_001",
+            "timestamp": "2025-10-20T10:01:00+00:00",
+            "content": "Agent reply 1",
+            "in_reply_to": "msg_human_001",
+        }
+    )
+    human_messages_module.messages_to_human.append(
+        {
+            "message_id": "msg_agent_002",
+            "timestamp": "2025-10-20T10:02:00+00:00",
+            "content": "Agent reply 2",
+            "in_reply_to": "msg_human_001",
+        }
+    )
+
+    # Add an unrelated agent message
+    human_messages_module.messages_to_human.append(
+        {
+            "message_id": "msg_agent_003",
+            "timestamp": "2025-10-20T10:03:00+00:00",
+            "content": "Unrelated agent message",
+            "in_reply_to": None,
+        }
+    )
+
+    tool = test_mcp._tool_manager._tools["list_messages_from_human"]
+
+    tool_result = await tool.run(arguments={})
+    result_dict = json.loads(tool_result.content[0].text)
+
+    assert result_dict["count"] == 1
+    assert len(result_dict["messages"][0]["agent_reply_ids"]) == 2
+    assert "msg_agent_001" in result_dict["messages"][0]["agent_reply_ids"]
+    assert "msg_agent_002" in result_dict["messages"][0]["agent_reply_ids"]
+    assert "msg_agent_003" not in result_dict["messages"][0]["agent_reply_ids"]
+
+
+@pytest.mark.asyncio
+async def test_list_messages_no_agent_replies(test_mcp, clean_message_history):
+    """Test that agent_reply_ids is empty when no agent replies exist"""
+
+    # Add a human message with no replies
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_human_002",
+            "timestamp": "2025-10-20T12:00:00+00:00",
+            "content": "Human message without replies",
+            "in_reply_to": None,
+        }
+    )
+
+    tool = test_mcp._tool_manager._tools["list_messages_from_human"]
+
+    tool_result = await tool.run(arguments={})
+    result_dict = json.loads(tool_result.content[0].text)
+
+    assert result_dict["count"] == 1
+    assert result_dict["messages"][0]["agent_reply_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_list_messages_multiple_humans_with_replies(test_mcp, clean_message_history):
+    """Test agent_reply_ids with multiple human messages each having different replies"""
+
+    # Add two human messages
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_human_003",
+            "timestamp": "2025-10-20T13:00:00+00:00",
+            "content": "First human message",
+            "in_reply_to": None,
+        }
+    )
+    human_messages_module.messages_from_human.append(
+        {
+            "message_id": "msg_human_004",
+            "timestamp": "2025-10-20T14:00:00+00:00",
+            "content": "Second human message",
+            "in_reply_to": None,
+        }
+    )
+
+    # Add agent replies to first human message
+    human_messages_module.messages_to_human.append(
+        {
+            "message_id": "msg_agent_004",
+            "timestamp": "2025-10-20T13:01:00+00:00",
+            "content": "Reply to first human",
+            "in_reply_to": "msg_human_003",
+        }
+    )
+
+    # Add agent reply to second human message
+    human_messages_module.messages_to_human.append(
+        {
+            "message_id": "msg_agent_005",
+            "timestamp": "2025-10-20T14:01:00+00:00",
+            "content": "Reply to second human",
+            "in_reply_to": "msg_human_004",
+        }
+    )
+
+    tool = test_mcp._tool_manager._tools["list_messages_from_human"]
+
+    tool_result = await tool.run(arguments={})
+    result_dict = json.loads(tool_result.content[0].text)
+
+    assert result_dict["count"] == 2
+    # Messages are newest first, so msg_human_004 is first
+    assert result_dict["messages"][0]["message_id"] == "msg_human_004"
+    assert result_dict["messages"][0]["agent_reply_ids"] == ["msg_agent_005"]
+    assert result_dict["messages"][1]["message_id"] == "msg_human_003"
+    assert result_dict["messages"][1]["agent_reply_ids"] == ["msg_agent_004"]
