@@ -164,6 +164,7 @@ class MessageEntry(BaseModel):
     timestamp: str
     content: str
     in_reply_to: Optional[str] = None
+    agent_reply_ids: List[str] = Field(default_factory=list, description="List of agent message IDs that reply to this message")
 
 
 class ListMessagesResponse(BaseModel):
@@ -241,7 +242,8 @@ def setup_human_messages_tools(mcp: FastMCP):
             include_content: Whether to include full message content (default true)
 
         Returns:
-            List of messages with metadata and optionally content
+            List of messages with metadata, optionally content, and agent_reply_ids
+            (list of agent message IDs that replied to each message)
         """
         # Get recent messages (reversed to get newest first)
         all_messages = messages_from_human.get_all()[::-1]  # Newest first
@@ -249,14 +251,25 @@ def setup_human_messages_tools(mcp: FastMCP):
         # Apply pagination
         paginated = all_messages[offset:offset + limit]
 
+        # Get all agent messages for reply tracking
+        all_agent_messages = messages_to_human.get_all()
+
         # Create message entries
         message_entries = []
         for msg in paginated:
+            # Find agent replies to this message
+            agent_reply_ids = [
+                agent_msg["message_id"]
+                for agent_msg in all_agent_messages
+                if agent_msg.get("in_reply_to") == msg["message_id"]
+            ]
+
             entry_data = {
                 "message_id": msg["message_id"],
                 "timestamp": msg["timestamp"],
                 "content": msg["content"] if include_content else "",
-                "in_reply_to": msg.get("in_reply_to")
+                "in_reply_to": msg.get("in_reply_to"),
+                "agent_reply_ids": agent_reply_ids
             }
             message_entries.append(MessageEntry(**entry_data))
 

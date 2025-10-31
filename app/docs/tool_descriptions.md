@@ -85,7 +85,7 @@ Returns:
 
 - `fetch_notes()` - Retrieve the current note content (e.g. markdown, etc.). Returns an empty string if no note exists.
 
-- `list_messages_from_human(limit=10, offset=0, include_content=True)` - Lists all messages sent from the human caretaker to the agent, sorted newest first. Returns an empty list if no messages exist.
+- `list_messages_from_human(limit=10, offset=0, include_content=True)` - Lists all messages sent from the human caretaker to the agent, sorted newest first. Returns an empty list if no messages exist. Each message includes `agent_reply_ids` showing which agent messages have replied to it.
 
 Parameters:
 
@@ -103,11 +103,14 @@ Returns:
       "message_id": "1234",
       "in_reply_to": "5678" or None,
       "timestamp": "ISO8601",
-      "content": "string"
+      "content": "string",
+      "agent_reply_ids": ["msg_20251101_120000_001", "msg_20251101_130000_002"]
     }
   ]
 }
 ```
+
+The `agent_reply_ids` field contains a list of agent message IDs where `in_reply_to` matches this message's `message_id`. This allows the agent to quickly check if it has already responded to a human message.
 
 ## Action Log Service
 
