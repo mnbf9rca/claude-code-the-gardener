@@ -49,5 +49,6 @@
   "sandbox": {
     "enabled": false,
     "autoAllowBashIfSandboxed": true
-  }
+  },
+  "cleanupPeriodDays": 0
 }
