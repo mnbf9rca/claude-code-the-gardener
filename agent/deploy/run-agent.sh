@@ -154,11 +154,9 @@ fi
 # Initialize git repo if not already initialized (defensive)
 if [ ! -d "$BACKUP_DIR/.git" ]; then
     echo "[$(date -Iseconds)]   Initializing git repository" | tee -a "$LOG_FILE"
-    (cd "$BACKUP_DIR" && git init)
+    (cd "$BACKUP_DIR" && git init --initial-branch=main)
     (cd "$BACKUP_DIR" && git config user.name "Gardener Backup")
     (cd "$BACKUP_DIR" && git config user.email "backup@gardener.local")
-    # Allow group members to access this repo (prevents "dubious ownership" errors)
-    (cd "$BACKUP_DIR" && git config --local safe.directory '*')
 
     # Create .gitignore
     cat > "$BACKUP_DIR/.gitignore" << 'EOF'

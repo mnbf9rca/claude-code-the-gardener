@@ -127,7 +127,7 @@ fi
 
 if [ ! -d "$BACKUP_DIR/.git" ]; then
     echo "  Creating git repository in $BACKUP_DIR"
-    sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git init"
+    sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git init --initial-branch=main"
     sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git config user.name 'Gardener Backup'"
     sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git config user.email 'backup@gardener.local'"
 
@@ -144,8 +144,8 @@ else
     echo "✓ Git repository already exists at $BACKUP_DIR"
 fi
 
-# Always configure safe.directory (works for both new and existing repos)
-sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git config --local safe.directory '*'"
+# Add to system gitconfig so all users (including group members) can access the repo
+git config --system --add safe.directory "$BACKUP_DIR"
 
 # 3. Install Claude Code CLI as gardener user
 CLAUDE_BIN="$GARDENER_HOME/.local/bin/claude"

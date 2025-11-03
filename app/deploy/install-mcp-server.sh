@@ -307,7 +307,7 @@ fi
 # Initialize git repository in data directory
 if [ ! -d "$MCP_DATA_DIR/.git" ]; then
     echo "  Initializing git repository in $MCP_DATA_DIR"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git init"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git init --initial-branch=main"
     sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config user.name 'MCP Server Backup'"
     sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config user.email 'backup@mcpserver.local'"
 
@@ -331,8 +331,8 @@ else
     echo "✓ Git repository already exists"
 fi
 
-# Always configure safe.directory (works for both new and existing repos)
-sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config --local safe.directory '*'"
+# Add to system gitconfig so all users (including group members) can access the repo
+git config --system --add safe.directory "$MCP_DATA_DIR"
 
 # Copy backup script to mcpserver home
 BACKUP_SCRIPT_SRC="$REPO_ROOT/agent/deploy/backup-mcp-data.sh"

@@ -21,11 +21,9 @@ cd "$DATA_DIR"
 # Initialize git repo if not already initialized (defensive)
 if [ ! -d ".git" ]; then
     echo "$LOG_PREFIX Initializing git repository in $DATA_DIR"
-    git init
+    git init --initial-branch=main
     git config user.name "MCP Server Backup"
     git config user.email "backup@mcpserver.local"
-    # Allow group members to access this repo (prevents "dubious ownership" errors)
-    git config --local safe.directory '*'
 
     # Create .gitignore to exclude photos and temp files
     cat > .gitignore <<EOF
