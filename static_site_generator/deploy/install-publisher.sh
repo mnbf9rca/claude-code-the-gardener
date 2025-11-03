@@ -233,7 +233,7 @@ echo ""
 
 # Add publisher output directory to system gitconfig for group access
 OUTPUT_DIR="${INSTALL_DIR}/output"
-git config --system --add safe.directory "$OUTPUT_DIR"
+add_safe_directory "$OUTPUT_DIR"
 
 # Summary and next steps
 echo "=================================================="

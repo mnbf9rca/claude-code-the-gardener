@@ -305,15 +305,7 @@ if [ ! -d "$MCP_DATA_DIR" ]; then
 fi
 
 # Initialize git repository in data directory
-if [ ! -d "$MCP_DATA_DIR/.git" ]; then
-    echo "  Initializing git repository in $MCP_DATA_DIR"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git init --initial-branch=main"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config user.name 'MCP Server Backup'"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config user.email 'backup@mcpserver.local'"
-
-    # Create .gitignore
-    sudo -u "$MCP_USER" bash -c "cat > '$MCP_DATA_DIR/.gitignore' << 'EOF'
-# Exclude photos (too large for git)
+GITIGNORE_DATA="# Exclude photos (too large for git)
 *.jpg
 *.jpeg
 *.png
@@ -321,18 +313,13 @@ if [ ! -d "$MCP_DATA_DIR/.git" ]; then
 # Exclude temporary files
 *.tmp
 *.swp
-*.log
-EOF"
+*.log"
 
-    # Make initial commit
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git add -A && git commit -m 'Initial commit' || true"
-    echo "✓ Git repository initialized"
-else
-    echo "✓ Git repository already exists"
-fi
+init_git_backup_repo "$MCP_USER" "$MCP_DATA_DIR" "MCP data" \
+    "MCP Server Backup" "backup@mcpserver.local" "$GITIGNORE_DATA"
 
 # Add to system gitconfig so all users (including group members) can access the repo
-git config --system --add safe.directory "$MCP_DATA_DIR"
+add_safe_directory "$MCP_DATA_DIR"
 
 # 11b. Install git backup system for photos
 echo ""
@@ -357,21 +344,11 @@ if [ ! -d "$MCP_PHOTOS_DIR" ]; then
 fi
 
 # Initialize git repository in photos directory
-if [ ! -d "$MCP_PHOTOS_DIR/.git" ]; then
-    echo "  Initializing git repository in $MCP_PHOTOS_DIR"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git init --initial-branch=main"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git config user.name 'MCP Photos Backup'"
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git config user.email 'backup@mcpserver.local'"
-
-    # Make initial commit
-    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git add -A && git commit -m 'Initial commit' || true"
-    echo "✓ Git repository initialized"
-else
-    echo "✓ Git repository already exists"
-fi
+init_git_backup_repo "$MCP_USER" "$MCP_PHOTOS_DIR" "MCP photos" \
+    "MCP Photos Backup" "backup@mcpserver.local" ""
 
 # Add to system gitconfig
-git config --system --add safe.directory "$MCP_PHOTOS_DIR"
+add_safe_directory "$MCP_PHOTOS_DIR"
 
 # Copy backup scripts to mcpserver home
 BACKUP_SCRIPT_SRC="$REPO_ROOT/agent/deploy/backup-mcp-data.sh"
