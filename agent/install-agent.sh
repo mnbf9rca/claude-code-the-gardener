@@ -117,6 +117,36 @@ setup_acl_group_access "$GARDENER_USER" "$GARDENER_HOME"
 
 echo "✓ Directories created and ACLs configured"
 
+# 2b. Initialize conversation backup git repository
+BACKUP_DIR="$GARDENER_HOME/claude-backup"
+echo "Initializing conversation backup git repository..."
+
+if [ ! -d "$BACKUP_DIR" ]; then
+    sudo -u "$GARDENER_USER" mkdir -p "$BACKUP_DIR"
+fi
+
+if [ ! -d "$BACKUP_DIR/.git" ]; then
+    echo "  Creating git repository in $BACKUP_DIR"
+    sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git init"
+    sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git config user.name 'Gardener Backup'"
+    sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git config user.email 'backup@gardener.local'"
+
+    # Create .gitignore
+    sudo -u "$GARDENER_USER" bash -c "cat > '$BACKUP_DIR/.gitignore' << 'EOF'
+# Exclude temporary files
+*.tmp
+*.swp
+*.log
+EOF"
+
+    echo "✓ Git repository initialized at $BACKUP_DIR"
+else
+    echo "✓ Git repository already exists at $BACKUP_DIR"
+fi
+
+# Always configure safe.directory (works for both new and existing repos)
+sudo -u "$GARDENER_USER" bash -c "cd '$BACKUP_DIR' && git config --local safe.directory '*'"
+
 # 3. Install Claude Code CLI as gardener user
 CLAUDE_BIN="$GARDENER_HOME/.local/bin/claude"
 if [ -x "$CLAUDE_BIN" ]; then

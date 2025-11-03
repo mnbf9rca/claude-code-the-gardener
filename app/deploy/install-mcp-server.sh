@@ -282,7 +282,112 @@ else
     SERVICE_IS_RUNNING=false
 fi
 
-# 11. Summary
+# 11. Install git backup system
+echo ""
+echo "Installing MCP data git backup system..."
+
+# Determine data directory path (resolve relative paths)
+DATA_DIR_RAW=$(grep "^DATA_DIR=" "$MCP_HOME/.env" | cut -d'=' -f2- | tr -d '[:space:]')
+if [[ "$DATA_DIR_RAW" = /* ]]; then
+    # Absolute path
+    MCP_DATA_DIR="$DATA_DIR_RAW"
+else
+    # Relative path - resolve from app directory
+    MCP_DATA_DIR="$(cd "$MCP_APP_DIR" && cd "$DATA_DIR_RAW" && pwd)"
+fi
+
+echo "  Data directory: $MCP_DATA_DIR"
+
+# Create data directory if it doesn't exist
+if [ ! -d "$MCP_DATA_DIR" ]; then
+    echo "  Creating data directory: $MCP_DATA_DIR"
+    sudo -u "$MCP_USER" mkdir -p "$MCP_DATA_DIR"
+fi
+
+# Initialize git repository in data directory
+if [ ! -d "$MCP_DATA_DIR/.git" ]; then
+    echo "  Initializing git repository in $MCP_DATA_DIR"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git init"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config user.name 'MCP Server Backup'"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config user.email 'backup@mcpserver.local'"
+
+    # Create .gitignore
+    sudo -u "$MCP_USER" bash -c "cat > '$MCP_DATA_DIR/.gitignore' << 'EOF'
+# Exclude photos (too large for git)
+*.jpg
+*.jpeg
+*.png
+
+# Exclude temporary files
+*.tmp
+*.swp
+*.log
+EOF"
+
+    # Make initial commit
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git add -A && git commit -m 'Initial commit' || true"
+    echo "✓ Git repository initialized"
+else
+    echo "✓ Git repository already exists"
+fi
+
+# Always configure safe.directory (works for both new and existing repos)
+sudo -u "$MCP_USER" bash -c "cd '$MCP_DATA_DIR' && git config --local safe.directory '*'"
+
+# Copy backup script to mcpserver home
+BACKUP_SCRIPT_SRC="$REPO_ROOT/agent/deploy/backup-mcp-data.sh"
+BACKUP_SCRIPT_DEST="$MCP_HOME/backup-mcp-data.sh"
+
+if [ ! -f "$BACKUP_SCRIPT_SRC" ]; then
+    echo "⚠ Warning: Backup script not found at $BACKUP_SCRIPT_SRC"
+    echo "  Skipping backup system installation"
+else
+    install -m 755 -o "$MCP_USER" -g "$MCP_USER" \
+        "$BACKUP_SCRIPT_SRC" "$BACKUP_SCRIPT_DEST"
+    echo "✓ Copied backup-mcp-data.sh"
+
+    # Install systemd service and timer for backup
+    BACKUP_SERVICE_NAME="mcpserver-data-backup.service"
+    BACKUP_TIMER_NAME="mcpserver-data-backup.timer"
+    BACKUP_SERVICE_FILE="/etc/systemd/system/$BACKUP_SERVICE_NAME"
+    BACKUP_TIMER_FILE="/etc/systemd/system/$BACKUP_TIMER_NAME"
+
+    BACKUP_SERVICE_TEMPLATE="$REPO_ROOT/agent/deploy/mcpserver-data-backup.service.template"
+    BACKUP_TIMER_TEMPLATE="$REPO_ROOT/agent/deploy/mcpserver-data-backup.timer.template"
+
+    if [ -f "$BACKUP_SERVICE_TEMPLATE" ] && [ -f "$BACKUP_TIMER_TEMPLATE" ]; then
+        # Process service template
+        sed -e "s|__MCPSERVER_USER__|$MCP_USER|g" \
+            -e "s|__MCPSERVER_HOME__|$MCP_HOME|g" \
+            -e "s|__MCPSERVER_DATA_DIR__|$MCP_DATA_DIR|g" \
+            "$BACKUP_SERVICE_TEMPLATE" > "$BACKUP_SERVICE_FILE"
+        chmod 644 "$BACKUP_SERVICE_FILE"
+
+        # Process timer template
+        sed "s|__SERVICE_NAME__|$BACKUP_SERVICE_NAME|g" \
+            "$BACKUP_TIMER_TEMPLATE" > "$BACKUP_TIMER_FILE"
+        chmod 644 "$BACKUP_TIMER_FILE"
+
+        systemctl daemon-reload
+        echo "✓ Backup systemd units installed"
+
+        # Enable and start the timer
+        if systemctl is-active --quiet "$BACKUP_TIMER_NAME"; then
+            systemctl restart "$BACKUP_TIMER_NAME"
+            echo "✓ Backup timer restarted"
+        else
+            systemctl enable "$BACKUP_TIMER_NAME"
+            systemctl start "$BACKUP_TIMER_NAME"
+            echo "✓ Backup timer enabled and started"
+        fi
+    else
+        echo "⚠ Warning: Backup systemd templates not found"
+        echo "  Service template: $BACKUP_SERVICE_TEMPLATE"
+        echo "  Timer template: $BACKUP_TIMER_TEMPLATE"
+    fi
+fi
+
+# 12. Summary
 echo ""
 echo "=== Installation Complete ==="
 echo ""

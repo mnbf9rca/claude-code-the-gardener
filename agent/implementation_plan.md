@@ -67,6 +67,58 @@ Healthchecks remain in run-agent.sh rather than systemd ExecStartPost/ExecStopPo
 - Health monitoring before and after each execution
 - No session continuity across runs (fresh Claude instance each time)
 
+## Git Backup System
+
+To protect against data loss on the RPI, automatic git versioning is implemented for all generated data. Two independent backup systems run in parallel:
+
+### MCP Server Data Backup
+- **Location**: `/home/mcpserver/data/.git` (in-place git repository)
+- **Service**: `mcpserver-data-backup.service` + `.timer`
+- **Frequency**: Every 15 minutes (OnUnitInactiveSec=15min)
+- **Owner**: mcpserver user
+- **Triggers**: Systemd timer (independent of agent runs)
+- **Commits**: All JSONL files (moisture, water, actions, thoughts, camera, notes, etc.)
+- **Excludes**: Photos (*.jpg, *.png), temporary files (*.tmp, *.swp, *.log)
+
+### Gardener Conversation Backup
+- **Location**: `/home/gardener/claude-backup/` (backup copy of conversation data)
+- **Trigger**: Integrated into `run-agent.sh` - runs after each agent execution
+- **Frequency**: After each agent run (~15 minutes)
+- **Owner**: gardener user
+- **Process**:
+  1. Rsync conversations from `/home/gardener/.claude/projects/-home-gardener-workspace/`
+  2. Git add and commit changes to backup repository
+  3. Errors logged but don't fail agent run
+
+### Configuration
+- **Always-on**: No configuration required - works automatically after installation
+- **Local commits only**: No remote push dependency (can be added later)
+- **Idempotent**: Scripts auto-initialize git repos if missing (defensive)
+- **Change detection**: Only commits when changes detected (skips if no changes)
+- **Timestamped commits**: Each commit message includes ISO 8601 timestamp
+
+### Installation
+- MCP backup: Installed via `app/deploy/install-mcp-server.sh`
+- Gardener backup: Installed via `agent/install-agent.sh`
+- Both initialize git repositories and set up required infrastructure
+
+### Monitoring
+- **MCP backup**: `journalctl -u mcpserver-data-backup -f`
+- **MCP backup timer**: `systemctl status mcpserver-data-backup.timer`
+- **Gardener backup**: Logs appear in agent run logs
+
+### Restore Procedure
+1. Stop relevant services
+2. Navigate to git repository (e.g., `cd /home/mcpserver/data`)
+3. View history: `git log --oneline`
+4. Restore to specific commit: `git reset --hard <commit-hash>`
+5. Or restore specific files: `git checkout <commit-hash> -- <file>`
+6. Restart services
+
+### Sync Integration
+- `sync_data.sh` excludes `.git/` directories from rsync to avoid syncing git objects
+- Backup repositories remain on RPI only
+
 ## Gatekeeper Reset Mechanism
 
 The plant care system uses a gatekeeper pattern to ensure the agent assesses plant status before taking actions. The gatekeeper flag must be reset between agent runs.

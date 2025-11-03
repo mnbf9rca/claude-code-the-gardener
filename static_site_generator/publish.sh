@@ -131,6 +131,9 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     echo -e "${GREEN}  ✓ Git repository initialized${NC}"
 fi
 
+# Always configure safe.directory (works for both new and existing repos)
+git config --local safe.directory '*'
+
 # Check for changes
 echo -e "${BLUE}🔍 Checking for changes...${NC}"
 

@@ -139,5 +139,63 @@ else
     healthcheck "/fail" "$(tail -c 102400 "$LOG_FILE")"  # Failure endpoint with logs
 fi
 
+# Backup Claude conversations to git repository
+BACKUP_DIR="$HOME/claude-backup"
+PROJECTS_DIR="$HOME/.claude/projects/-home-gardener-workspace"
+
+echo "[$(date -Iseconds)] Backing up conversations to git" | tee -a "$LOG_FILE"
+
+# Create backup directory if it doesn't exist
+if [ ! -d "$BACKUP_DIR" ]; then
+    echo "[$(date -Iseconds)]   Creating backup directory: $BACKUP_DIR" | tee -a "$LOG_FILE"
+    mkdir -p "$BACKUP_DIR"
+fi
+
+# Initialize git repo if not already initialized (defensive)
+if [ ! -d "$BACKUP_DIR/.git" ]; then
+    echo "[$(date -Iseconds)]   Initializing git repository" | tee -a "$LOG_FILE"
+    (cd "$BACKUP_DIR" && git init)
+    (cd "$BACKUP_DIR" && git config user.name "Gardener Backup")
+    (cd "$BACKUP_DIR" && git config user.email "backup@gardener.local")
+    # Allow group members to access this repo (prevents "dubious ownership" errors)
+    (cd "$BACKUP_DIR" && git config --local safe.directory '*')
+
+    # Create .gitignore
+    cat > "$BACKUP_DIR/.gitignore" << 'EOF'
+# Exclude temporary files
+*.tmp
+*.swp
+*.log
+EOF
+fi
+
+# Sync conversations to backup directory (only if source exists)
+if [ -d "$PROJECTS_DIR" ]; then
+    echo "[$(date -Iseconds)]   Syncing conversations from $PROJECTS_DIR" | tee -a "$LOG_FILE"
+    rsync -a --delete "$PROJECTS_DIR/" "$BACKUP_DIR/" 2>&1 | tee -a "$LOG_FILE" || {
+        echo "[$(date -Iseconds)]   WARNING: rsync failed, continuing anyway" | tee -a "$LOG_FILE"
+    }
+
+    # Commit changes (if any)
+    (
+        cd "$BACKUP_DIR"
+        git add -A
+        if ! git diff --cached --quiet; then
+            TIMESTAMP=$(date -Iseconds)
+            if git commit -m "Conversation backup: $TIMESTAMP"; then
+                echo "[$(date -Iseconds)]   ✓ Conversations backed up successfully" | tee -a "$LOG_FILE"
+            else
+                echo "[$(date -Iseconds)]   WARNING: Git commit failed" | tee -a "$LOG_FILE"
+            fi
+        else
+            echo "[$(date -Iseconds)]   No changes to backup" | tee -a "$LOG_FILE"
+        fi
+    ) 2>&1 | tee -a "$LOG_FILE" || {
+        echo "[$(date -Iseconds)]   WARNING: Backup git operations failed" | tee -a "$LOG_FILE"
+    }
+else
+    echo "[$(date -Iseconds)]   WARNING: Projects directory not found: $PROJECTS_DIR" | tee -a "$LOG_FILE"
+fi
+
 echo "[$(date -Iseconds)] Agent run complete" | tee -a "$LOG_FILE"
 exit $EXEC_EXIT_CODE
