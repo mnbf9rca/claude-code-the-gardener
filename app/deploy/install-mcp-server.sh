@@ -334,7 +334,46 @@ fi
 # Add to system gitconfig so all users (including group members) can access the repo
 git config --system --add safe.directory "$MCP_DATA_DIR"
 
-# Copy backup script to mcpserver home
+# 11b. Install git backup system for photos
+echo ""
+echo "Installing MCP photos git backup system..."
+
+# Determine photos directory path (resolve relative paths)
+PHOTOS_DIR_RAW=$(grep "^CAMERA_SAVE_PATH=" "$MCP_HOME/.env" | cut -d'=' -f2- | tr -d '[:space:]')
+if [[ "$PHOTOS_DIR_RAW" = /* ]]; then
+    # Absolute path
+    MCP_PHOTOS_DIR="$PHOTOS_DIR_RAW"
+else
+    # Relative path - resolve from app directory
+    MCP_PHOTOS_DIR="$(cd "$MCP_APP_DIR" && cd "$PHOTOS_DIR_RAW" && pwd)"
+fi
+
+echo "  Photos directory: $MCP_PHOTOS_DIR"
+
+# Create photos directory if it doesn't exist
+if [ ! -d "$MCP_PHOTOS_DIR" ]; then
+    echo "  Creating photos directory: $MCP_PHOTOS_DIR"
+    sudo -u "$MCP_USER" mkdir -p "$MCP_PHOTOS_DIR"
+fi
+
+# Initialize git repository in photos directory
+if [ ! -d "$MCP_PHOTOS_DIR/.git" ]; then
+    echo "  Initializing git repository in $MCP_PHOTOS_DIR"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git init --initial-branch=main"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git config user.name 'MCP Photos Backup'"
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git config user.email 'backup@mcpserver.local'"
+
+    # Make initial commit
+    sudo -u "$MCP_USER" bash -c "cd '$MCP_PHOTOS_DIR' && git add -A && git commit -m 'Initial commit' || true"
+    echo "✓ Git repository initialized"
+else
+    echo "✓ Git repository already exists"
+fi
+
+# Add to system gitconfig
+git config --system --add safe.directory "$MCP_PHOTOS_DIR"
+
+# Copy backup scripts to mcpserver home
 BACKUP_SCRIPT_SRC="$REPO_ROOT/agent/deploy/backup-mcp-data.sh"
 BACKUP_SCRIPT_DEST="$MCP_HOME/backup-mcp-data.sh"
 
@@ -384,6 +423,59 @@ else
         echo "⚠ Warning: Backup systemd templates not found"
         echo "  Service template: $BACKUP_SERVICE_TEMPLATE"
         echo "  Timer template: $BACKUP_TIMER_TEMPLATE"
+    fi
+fi
+
+# Copy photos backup script
+PHOTOS_BACKUP_SCRIPT_SRC="$REPO_ROOT/agent/deploy/backup-mcp-photos.sh"
+PHOTOS_BACKUP_SCRIPT_DEST="$MCP_HOME/backup-mcp-photos.sh"
+
+if [ ! -f "$PHOTOS_BACKUP_SCRIPT_SRC" ]; then
+    echo "⚠ Warning: Photos backup script not found at $PHOTOS_BACKUP_SCRIPT_SRC"
+    echo "  Skipping photos backup system installation"
+else
+    install -m 755 -o "$MCP_USER" -g "$MCP_USER" \
+        "$PHOTOS_BACKUP_SCRIPT_SRC" "$PHOTOS_BACKUP_SCRIPT_DEST"
+    echo "✓ Copied backup-mcp-photos.sh"
+
+    # Install systemd service and timer for photos backup
+    PHOTOS_BACKUP_SERVICE_NAME="mcpserver-photos-backup.service"
+    PHOTOS_BACKUP_TIMER_NAME="mcpserver-photos-backup.timer"
+    PHOTOS_BACKUP_SERVICE_FILE="/etc/systemd/system/$PHOTOS_BACKUP_SERVICE_NAME"
+    PHOTOS_BACKUP_TIMER_FILE="/etc/systemd/system/$PHOTOS_BACKUP_TIMER_NAME"
+
+    PHOTOS_BACKUP_SERVICE_TEMPLATE="$REPO_ROOT/agent/deploy/mcpserver-photos-backup.service.template"
+    PHOTOS_BACKUP_TIMER_TEMPLATE="$REPO_ROOT/agent/deploy/mcpserver-photos-backup.timer.template"
+
+    if [ -f "$PHOTOS_BACKUP_SERVICE_TEMPLATE" ] && [ -f "$PHOTOS_BACKUP_TIMER_TEMPLATE" ]; then
+        # Process service template
+        sed -e "s|__MCPSERVER_USER__|$MCP_USER|g" \
+            -e "s|__MCPSERVER_HOME__|$MCP_HOME|g" \
+            -e "s|__MCPSERVER_PHOTOS_DIR__|$MCP_PHOTOS_DIR|g" \
+            "$PHOTOS_BACKUP_SERVICE_TEMPLATE" > "$PHOTOS_BACKUP_SERVICE_FILE"
+        chmod 644 "$PHOTOS_BACKUP_SERVICE_FILE"
+
+        # Process timer template
+        sed "s|__SERVICE_NAME__|$PHOTOS_BACKUP_SERVICE_NAME|g" \
+            "$PHOTOS_BACKUP_TIMER_TEMPLATE" > "$PHOTOS_BACKUP_TIMER_FILE"
+        chmod 644 "$PHOTOS_BACKUP_TIMER_FILE"
+
+        systemctl daemon-reload
+        echo "✓ Photos backup systemd units installed"
+
+        # Enable and start the timer
+        if systemctl is-active --quiet "$PHOTOS_BACKUP_TIMER_NAME"; then
+            systemctl restart "$PHOTOS_BACKUP_TIMER_NAME"
+            echo "✓ Photos backup timer restarted"
+        else
+            systemctl enable "$PHOTOS_BACKUP_TIMER_NAME"
+            systemctl start "$PHOTOS_BACKUP_TIMER_NAME"
+            echo "✓ Photos backup timer enabled and started"
+        fi
+    else
+        echo "⚠ Warning: Photos backup systemd templates not found"
+        echo "  Service template: $PHOTOS_BACKUP_SERVICE_TEMPLATE"
+        echo "  Timer template: $PHOTOS_BACKUP_TIMER_TEMPLATE"
     fi
 fi
 
