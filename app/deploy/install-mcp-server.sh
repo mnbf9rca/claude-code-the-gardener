@@ -292,8 +292,8 @@ if [[ "$DATA_DIR_RAW" = /* ]]; then
     # Absolute path
     MCP_DATA_DIR="$DATA_DIR_RAW"
 else
-    # Relative path - resolve from app directory
-    MCP_DATA_DIR="$(cd "$MCP_APP_DIR" && cd "$DATA_DIR_RAW" && pwd)"
+    # Relative path - resolve from app directory using realpath
+    MCP_DATA_DIR="$(realpath -m "$MCP_APP_DIR/$DATA_DIR_RAW")"
 fi
 
 echo "  Data directory: $MCP_DATA_DIR"
@@ -344,8 +344,8 @@ if [[ "$PHOTOS_DIR_RAW" = /* ]]; then
     # Absolute path
     MCP_PHOTOS_DIR="$PHOTOS_DIR_RAW"
 else
-    # Relative path - resolve from app directory
-    MCP_PHOTOS_DIR="$(cd "$MCP_APP_DIR" && cd "$PHOTOS_DIR_RAW" && pwd)"
+    # Relative path - resolve from app directory using realpath
+    MCP_PHOTOS_DIR="$(realpath -m "$MCP_APP_DIR/$PHOTOS_DIR_RAW")"
 fi
 
 echo "  Photos directory: $MCP_PHOTOS_DIR"
