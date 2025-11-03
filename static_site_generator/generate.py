@@ -379,7 +379,7 @@ def main():
     notes_html = notes_template.render(
         nav_base="",
         current_notes=current_notes,
-        versions=notes_versions[-50:],  # Last 50 versions
+        versions=notes_versions[-200:],  # Last 200 versions - 4x per hour, ~100/day, ~2 days
         stats=overall_stats,
         generation_time=generation_time,
         git_commit=git_commit,
