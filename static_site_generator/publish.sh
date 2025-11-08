@@ -197,7 +197,9 @@ aws s3 sync . "s3://$S3_BUCKET" \
     --delete \
     --exclude ".git/*" \
     --exclude ".DS_Store" \
+    --exclude ".gitignore" \
     --exclude "photos/*" \
+    --exclude "photos" \
     --cache-control "public, max-age=3600" \
     --metadata-directive REPLACE \
     $DRY_RUN
