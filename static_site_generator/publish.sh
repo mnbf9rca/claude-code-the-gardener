@@ -128,7 +128,19 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init --initial-branch=main
     git config user.name "Claude the Gardener Publisher"
     git config user.email "publisher@gardener.local"
+
+    # Create .gitignore to exclude photos (large binary files that don't need tracking)
+    cat > .gitignore << 'EOF'
+# Exclude photos directory - large binary files that rarely change
+# and would cause the git repo to grow uncontrollably
+photos/
+
+# Exclude system files
+.DS_Store
+EOF
+
     echo -e "${GREEN}  ✓ Git repository initialized${NC}"
+    echo -e "${GREEN}  ✓ Created .gitignore (excluding photos/)${NC}"
 fi
 
 # Check for changes
@@ -158,13 +170,36 @@ echo ""
 
 # Upload to S3
 echo -e "${BLUE}☁️  Uploading to S3...${NC}"
+echo ""
 
-# Sync to S3 with proper content types and cache headers
-# AWS CLI automatically uses AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION from environment
+# Step 1: Sync photos WITHOUT --delete to preserve them forever in S3
+# Photos are valuable historical records and should never be deleted
+if [[ -d "photos" ]] && [[ -n "$(ls -A photos 2>/dev/null)" ]]; then
+    echo "  📸 Syncing photos (never deleted)..."
+    aws s3 sync photos/ "s3://$S3_BUCKET/photos/" \
+        --cache-control "public, max-age=31536000" \
+        --metadata-directive REPLACE \
+        $DRY_RUN
+
+    PHOTOS_EXIT_CODE=$?
+    if [[ $PHOTOS_EXIT_CODE -ne 0 ]]; then
+        echo -e "${RED}  ✗ Photos sync failed with exit code: $PHOTOS_EXIT_CODE${NC}"
+        exit $PHOTOS_EXIT_CODE
+    fi
+    echo -e "${GREEN}  ✓ Photos synced${NC}"
+    echo ""
+fi
+
+# Step 2: Sync everything else WITH --delete (excluding photos)
+# This ensures HTML/CSS/JS files are properly updated and old files are removed
+echo "  🌐 Syncing site content (HTML, CSS, JS)..."
 aws s3 sync . "s3://$S3_BUCKET" \
     --delete \
     --exclude ".git/*" \
     --exclude ".DS_Store" \
+    --exclude ".gitignore" \
+    --exclude "photos/*" \
+    --exclude "photos" \
     --cache-control "public, max-age=3600" \
     --metadata-directive REPLACE \
     $DRY_RUN
@@ -172,7 +207,7 @@ aws s3 sync . "s3://$S3_BUCKET" \
 SYNC_EXIT_CODE=$?
 
 if [[ $SYNC_EXIT_CODE -ne 0 ]]; then
-    echo -e "${RED}  ✗ S3 sync failed with exit code: $SYNC_EXIT_CODE${NC}"
+    echo -e "${RED}  ✗ Site content sync failed with exit code: $SYNC_EXIT_CODE${NC}"
     echo ""
     echo "Common issues:"
     echo "  - Check AWS credentials are configured correctly"
