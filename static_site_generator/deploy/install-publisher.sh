@@ -231,6 +231,10 @@ if systemctl is-active --quiet "$TIMER_NAME"; then
 fi
 echo ""
 
+# Add publisher output directory to system gitconfig for group access
+OUTPUT_DIR="${INSTALL_DIR}/output"
+add_safe_directory "$OUTPUT_DIR"
+
 # Summary and next steps
 echo "=================================================="
 echo -e "${GREEN}✅ Installation complete!${NC}"

@@ -1,0 +1,17 @@
+[Unit]
+Description=MCP Server Data Git Backup Timer
+Requires=__SERVICE_NAME__
+
+[Timer]
+# First run: 2 minutes after boot (after MCP server has started)
+OnBootSec=2min
+
+# Subsequent runs: 15 minutes after previous backup completes
+# This ensures a fixed gap between runs, regardless of backup duration
+OnUnitInactiveSec=15min
+
+# The service to trigger
+Unit=__SERVICE_NAME__
+
+[Install]
+WantedBy=timers.target

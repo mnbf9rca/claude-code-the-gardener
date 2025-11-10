@@ -125,7 +125,7 @@ cd "$OUTPUT_DIR"
 
 if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     echo -e "${BLUE}🔧 Initializing git repository for change tracking...${NC}"
-    git init
+    git init --initial-branch=main
     git config user.name "Claude the Gardener Publisher"
     git config user.email "publisher@gardener.local"
 

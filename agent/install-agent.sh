@@ -117,6 +117,25 @@ setup_acl_group_access "$GARDENER_USER" "$GARDENER_HOME"
 
 echo "✓ Directories created and ACLs configured"
 
+# 2b. Initialize conversation backup git repository
+BACKUP_DIR="$GARDENER_HOME/claude-backup"
+echo "Initializing conversation backup git repository..."
+
+if [ ! -d "$BACKUP_DIR" ]; then
+    sudo -u "$GARDENER_USER" mkdir -p "$BACKUP_DIR"
+fi
+
+GITIGNORE_GARDENER="# Exclude temporary files
+*.tmp
+*.swp
+*.log"
+
+init_git_backup_repo "$GARDENER_USER" "$BACKUP_DIR" "Gardener conversations" \
+    "Gardener Backup" "backup@gardener.local" "$GITIGNORE_GARDENER"
+
+# Add to system gitconfig so all users (including group members) can access the repo
+add_safe_directory "$BACKUP_DIR"
+
 # 3. Install Claude Code CLI as gardener user
 CLAUDE_BIN="$GARDENER_HOME/.local/bin/claude"
 if [ -x "$CLAUDE_BIN" ]; then

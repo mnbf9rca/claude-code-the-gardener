@@ -193,3 +193,96 @@ add_sudo_user_to_group() {
         fi
     fi
 }
+
+# Initialize a git repository for backup purposes
+# Creates repo, sets user/email, creates .gitignore, makes initial commit
+#
+# Arguments:
+#   $1 - Service user name (e.g., "mcpserver" or "gardener")
+#   $2 - Repository directory path (absolute path)
+#   $3 - Repository name for display (e.g., "MCP Data Backup")
+#   $4 - Git user name (e.g., "MCP Server Backup")
+#   $5 - Git user email (e.g., "backup@mcpserver.local")
+#   $6 - Optional .gitignore content (pass empty string to skip)
+#
+# Behavior:
+#   - Skips if .git directory already exists
+#   - Initializes with main branch
+#   - Configures user name and email
+#   - Creates .gitignore if content provided
+#   - Makes initial commit (if files exist)
+#
+# Example:
+#   init_git_backup_repo "mcpserver" "/home/mcpserver/data" "MCP data" \
+#       "MCP Server Backup" "backup@mcpserver.local" "*.jpg\n*.png"
+init_git_backup_repo() {
+    local service_user="$1"
+    local repo_dir="$2"
+    local display_name="$3"
+    local git_user_name="$4"
+    local git_user_email="$5"
+    local gitignore_content="${6:-}"
+
+    if [ -z "$service_user" ] || [ -z "$repo_dir" ] || [ -z "$display_name" ] || \
+       [ -z "$git_user_name" ] || [ -z "$git_user_email" ]; then
+        echo "ERROR: init_git_backup_repo requires all arguments" >&2
+        return 1
+    fi
+
+    # Check if already initialized
+    if [ -d "$repo_dir/.git" ]; then
+        echo "✓ Git repository already exists"
+        return 0
+    fi
+
+    echo "  Initializing git repository in $repo_dir"
+
+    # Initialize with main branch
+    sudo -u "$service_user" bash -c "cd '$repo_dir' && git init --initial-branch=main"
+
+    # Configure user
+    sudo -u "$service_user" bash -c "cd '$repo_dir' && git config user.name '$git_user_name'"
+    sudo -u "$service_user" bash -c "cd '$repo_dir' && git config user.email '$git_user_email'"
+
+    # Create .gitignore if content provided
+    if [ -n "$gitignore_content" ]; then
+        sudo -u "$service_user" bash -c "cat > '$repo_dir/.gitignore' << 'EOF'
+$gitignore_content
+EOF"
+    fi
+
+    # Make initial commit
+    sudo -u "$service_user" bash -c "cd '$repo_dir' && git add -A && git commit -m 'Initial commit' || true"
+
+    echo "✓ Git repository initialized"
+}
+
+# Add a directory to system-level git safe.directory config
+# Prevents "dubious ownership" errors for group members
+#
+# Arguments:
+#   $1 - Directory path to add (absolute path)
+#
+# Behavior:
+#   - Checks if directory is already in system gitconfig
+#   - Adds if not present (idempotent)
+#   - Requires root privileges (should be called from install scripts running as sudo)
+#
+# Example:
+#   add_safe_directory "/home/mcpserver/data"
+add_safe_directory() {
+    local dir_path="$1"
+
+    if [ -z "$dir_path" ]; then
+        echo "ERROR: add_safe_directory requires directory path argument" >&2
+        return 1
+    fi
+
+    # Check if already in system gitconfig
+    if git config --system --get-all safe.directory | grep -qx "$dir_path" 2>/dev/null; then
+        return 0  # Already present, silently skip
+    fi
+
+    # Add to system gitconfig
+    git config --system --add safe.directory "$dir_path"
+}

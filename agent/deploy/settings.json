@@ -50,5 +50,5 @@
     "enabled": false,
     "autoAllowBashIfSandboxed": true
   },
-  "cleanupPeriodDays": 0
+  "cleanupPeriodDays": 1000
 }

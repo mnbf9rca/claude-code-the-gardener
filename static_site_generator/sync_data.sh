@@ -66,15 +66,19 @@ mkdir -p "${LOCAL_PHOTOS_DIR}"
 # Sync MCP server data
 echo -e "${BLUE}📊 Syncing MCP server data...${NC}"
 # Exclude light_state.json which has permission issues and isn't needed for static site
+# Exclude .git directory (local backup repo, not needed for static site)
 rsync -av --no-perms --update ${DRY_RUN} \
     --exclude='light_state.json' \
+    --exclude='.git/' \
     "${DEFAULT_SOURCE_HOST}:${SOURCE_DATA_PATH}" \
     "${LOCAL_DATA_DIR}"
 report_rsync_status $? "MCP data"
 
 # Sync Claude conversation history
 echo -e "${BLUE}💬 Syncing Claude conversation history...${NC}"
+# Exclude .git directory (local backup repo, not needed for static site)
 rsync -av --no-perms --update ${DRY_RUN} \
+    --exclude='.git/' \
     "${DEFAULT_SOURCE_HOST}:${SOURCE_CLAUDE_PATH}" \
     "${LOCAL_DATA_DIR}/claude/"
 report_rsync_status $? "Claude conversations"
