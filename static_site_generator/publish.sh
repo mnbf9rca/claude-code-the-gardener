@@ -136,13 +136,25 @@ fi
 cat > .gitignore << 'EOF'
 # Exclude photos directory - large binary files that rarely change
 # and would cause the git repo to grow uncontrollably
-photos/
+photos/*.jpg
+photos/*.jpeg
+photos/*.png
+
+# But track the index file so we know when photos change
+!photos/index.txt
 
 # Exclude system files
 .DS_Store
 EOF
 
-echo -e "${GREEN}  ✓ .gitignore configured (excluding photos/)${NC}"
+echo -e "${GREEN}  ✓ .gitignore configured (excluding photo files, tracking index)${NC}"
+
+# Generate photo index for change detection
+# This allows git to detect when photos are added/removed without tracking the large binaries
+if [[ -d "photos" ]]; then
+    ls photos/ 2>/dev/null | sort > photos/index.txt || echo "" > photos/index.txt
+    echo -e "${GREEN}  ✓ Photo index generated${NC}"
+fi
 
 # Check for changes
 echo -e "${BLUE}🔍 Checking for changes...${NC}"
