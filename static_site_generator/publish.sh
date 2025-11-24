@@ -128,9 +128,12 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init --initial-branch=main
     git config user.name "Claude the Gardener Publisher"
     git config user.email "publisher@gardener.local"
+    echo -e "${GREEN}  ✓ Git repository initialized${NC}"
+fi
 
-    # Create .gitignore to exclude photos (large binary files that don't need tracking)
-    cat > .gitignore << 'EOF'
+# Always ensure .gitignore exists and is up-to-date
+# (not just on first init, in case it was missing or needs updating)
+cat > .gitignore << 'EOF'
 # Exclude photos directory - large binary files that rarely change
 # and would cause the git repo to grow uncontrollably
 photos/
@@ -139,9 +142,7 @@ photos/
 .DS_Store
 EOF
 
-    echo -e "${GREEN}  ✓ Git repository initialized${NC}"
-    echo -e "${GREEN}  ✓ Created .gitignore (excluding photos/)${NC}"
-fi
+echo -e "${GREEN}  ✓ .gitignore configured (excluding photos/)${NC}"
 
 # Check for changes
 echo -e "${BLUE}🔍 Checking for changes...${NC}"
