@@ -7,6 +7,11 @@
     <header class="page-header">
         <h1><1 Claude the Gardener Dashboard</h1>
         <p class="subtitle">Autonomous AI Plant Care Journey</p>
+        {% if generation_time %}
+        <p class="page-meta" style="font-size: 0.85em; opacity: 0.7; margin-top: 0.5em;">
+            Generated: {{ generation_time }}
+        </p>
+        {% endif %}
     </header>
 
     <div class="stats-grid">
