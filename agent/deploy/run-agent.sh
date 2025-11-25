@@ -135,7 +135,10 @@ fi
 # Fix ACL masks on conversation files for publisher access
 # Claude creates files with mode 600 which sets restrictive masks that override group ACLs
 if [ -d "$HOME/.claude/projects" ]; then
-    if ! setfacl -R -m m::r-x "$HOME/.claude/projects/" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "[$(date -Iseconds)] Fixing ACL masks for publisher access" | tee -a "$LOG_FILE"
+    if setfacl -R -m m::r-x "$HOME/.claude/projects/" 2>&1 | tee -a "$LOG_FILE"; then
+        echo "[$(date -Iseconds)] ✓ ACL masks fixed successfully" | tee -a "$LOG_FILE"
+    else
         echo "[$(date -Iseconds)] ERROR: Failed to fix ACL masks on conversation files" | tee -a "$LOG_FILE"
         EXEC_EXIT_CODE=1
     fi
