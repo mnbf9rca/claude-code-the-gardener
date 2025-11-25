@@ -7,7 +7,7 @@ Automated deployment for Claude Code agent running on Raspberry Pi.
 - Raspberry Pi with Debian 13 (Trixie)
 - Repository cloned by admin user
 - MCP plant-tools server running (http://localhost:8000/mcp)
-- Anthropic API key
+- Claude Code OAuth token (generate with: `claude setup-token`)
 - Healthchecks.io account (optional but recommended)
 
 ## Quick Start
@@ -19,7 +19,7 @@ Create `.env.agent` from the example template **before running installation**:
 ```bash
 cd agent
 cp .env.agent.example deploy/.env.agent
-nano deploy/.env.agent  # Edit with your API key and healthcheck URL
+nano deploy/.env.agent  # Edit with your OAuth token and healthcheck URL
 ```
 
 **Note:** The installation script will fail if `deploy/.env.agent` is missing.
@@ -99,7 +99,7 @@ To update the agent prompt, MCP configuration, or other settings:
 ## Troubleshooting
 
 **Service won't start:**
-- Check `.env.agent` exists and contains valid `ANTHROPIC_API_KEY`
+- Check `.env.agent` exists and contains valid `CLAUDE_CODE_OAUTH_TOKEN`
 - Verify MCP server is running: `curl http://localhost:8000/mcp`
 - View logs: `journalctl -u gardener-agent -n 50`
 
@@ -108,7 +108,7 @@ To update the agent prompt, MCP configuration, or other settings:
 - Remove stale lock: `sudo rm /home/gardener/.gardener-agent.lock`
 
 **Claude authentication errors:**
-- Ensure `ANTHROPIC_API_KEY` is set correctly in `.env.agent`
+- Ensure `CLAUDE_CODE_OAUTH_TOKEN` is set correctly in `.env.agent`
 - Test as gardener user: `sudo -u gardener -i` then check environment
 
 **Execution failures:**
@@ -138,7 +138,7 @@ The gardener user:
 **Directory structure:**
 ```
 /home/gardener/
-├── .env.agent           # API key (root:gardener 640) - readable but not writable
+├── .env.agent           # OAuth token (root:gardener 640) - readable but not writable
 ├── prompt.txt           # Agent instructions (root:root 644) - readable
 ├── .mcp.json            # MCP config (root:root 644) - readable
 ├── run-agent.sh         # Execution script (root:root 755)

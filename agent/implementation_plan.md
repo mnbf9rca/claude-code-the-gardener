@@ -45,21 +45,22 @@ Healthchecks remain in run-agent.sh rather than systemd ExecStartPost/ExecStopPo
 ### Configuration Files
 - **prompt.txt**: Agent prompt for each execution
 - **.mcp.json**: MCP server config (plant-tools HTTP endpoint)
-- **.env.agent.example**: Template for ANTHROPIC_API_KEY and HEALTHCHECK_URL
+- **.env.agent.example**: Template for CLAUDE_CODE_OAUTH_TOKEN and HEALTHCHECK_URL
 - **settings.json**: Claude Code permissions and output style
 - **gardener-agent.service**: Systemd service definition
 
 ## Deployment Steps
-1. Create `.env.agent` from template with API key and healthcheck URL
-2. Run: `sudo bash agent/install-agent.sh`
-3. Test manually: `sudo -u gardener /home/gardener/run-agent.sh` (will run once and exit)
-4. Enable timer: `sudo systemctl enable --now gardener-agent.timer`
-5. Monitor: `journalctl -u gardener-agent -f` or healthchecks.io
-6. Check timer: `systemctl status gardener-agent.timer` and `systemctl list-timers`
+1. Generate OAuth token: `claude setup-token`
+2. Create `.env.agent` from template with OAuth token and healthcheck URL
+3. Run: `sudo bash agent/install-agent.sh`
+4. Test manually: `sudo -u gardener /home/gardener/run-agent.sh` (will run once and exit)
+5. Enable timer: `sudo systemctl enable --now gardener-agent.timer`
+6. Monitor: `journalctl -u gardener-agent -f` or healthchecks.io
+7. Check timer: `systemctl status gardener-agent.timer` and `systemctl list-timers`
 
 ## Key Decisions
 - Files copied (not symlinked) - gardener has zero repo access
-- ANTHROPIC_API_KEY for authentication (no OAuth token expiry)
+- CLAUDE_CODE_OAUTH_TOKEN for authentication (long-lived OAuth token)
 - **Timer-based scheduling**: OnUnitInactiveSec ensures 15-minute gap after run completes
 - **Oneshot service**: Runs once per timer trigger, exits with status code
 - **Dual gatekeeper reset**: ExecStartPre (defensive) + ExecStopPost (normal cleanup) with curl retry logic
