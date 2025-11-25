@@ -66,7 +66,7 @@ def get_water_data(data_dir: Path) -> List[Dict[str, Any]]:
     for event in events:
         try:
             timestamp = parse_timestamp(event["timestamp"])
-            ml_dispensed = event.get("ml_dispensed", 0)
+            ml_dispensed = event.get("ml", 0)
             cumulative_ml += ml_dispensed
 
             chart_data.append({

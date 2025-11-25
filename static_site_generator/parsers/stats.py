@@ -165,7 +165,7 @@ def _add_sensor_and_action_stats(stats: Dict[str, Any], data_dir: Path) -> None:
     # Water pump stats
     water_file = data_dir / "water_pump_history.jsonl"
     water_events = load_jsonl(water_file)
-    total_ml = sum(e.get("ml_dispensed", 0) for e in water_events)
+    total_ml = sum(e.get("ml", 0) for e in water_events)
     stats["water"]["total_ml_dispensed"] = total_ml
     stats["water"]["total_events"] = len(water_events)
 
@@ -356,7 +356,7 @@ def get_daily_summary(data_dir: Path) -> List[Dict[str, Any]]:
         date = get_date(record.get("timestamp"))
         if date:
             daily_data[date]["date"] = date
-            daily_data[date]["water_ml"] += record.get("ml_dispensed", 0)
+            daily_data[date]["water_ml"] += record.get("ml", 0)
 
     # Process light
     light_file = data_dir / "light_history.jsonl"

@@ -135,7 +135,7 @@ def _add_water_events_to_timeline(data_dir: Path, timeline: List[Dict[str, Any]]
                 "timestamp": event["timestamp"],
                 "unix": int(timestamp.timestamp() * 1000),
                 "data": event,
-                "summary": f"Dispensed {event.get('ml_dispensed', 0)}ml water",
+                "summary": f"Dispensed {event.get('ml', 0)}ml water",
             })
         except (ValueError, TypeError, KeyError):
             continue
@@ -225,7 +225,8 @@ def create_action_summary(action: Dict[str, Any]) -> str:
 
     if action_type == "water":
         if isinstance(details, dict):
-            ml = details.get("ml_dispensed", "unknown")
+            # Check both "ml" and "ml_dispensed" for backwards compatibility
+            ml = details.get("ml", details.get("ml_dispensed", "unknown"))
             return f"Dispensed {ml}ml water"
         return f"Water action: {details}"
 

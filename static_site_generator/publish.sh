@@ -128,19 +128,32 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init --initial-branch=main
     git config user.name "Claude the Gardener Publisher"
     git config user.email "publisher@gardener.local"
+    echo -e "${GREEN}  ✓ Git repository initialized${NC}"
+fi
 
-    # Create .gitignore to exclude photos (large binary files that don't need tracking)
-    cat > .gitignore << 'EOF'
+# Always ensure .gitignore exists and is up-to-date
+# (not just on first init, in case it was missing or needs updating)
+cat > .gitignore << 'EOF'
 # Exclude photos directory - large binary files that rarely change
 # and would cause the git repo to grow uncontrollably
-photos/
+photos/*.jpg
+photos/*.jpeg
+photos/*.png
+
+# But track the index file so we know when photos change
+!photos/index.txt
 
 # Exclude system files
 .DS_Store
 EOF
 
-    echo -e "${GREEN}  ✓ Git repository initialized${NC}"
-    echo -e "${GREEN}  ✓ Created .gitignore (excluding photos/)${NC}"
+echo -e "${GREEN}  ✓ .gitignore configured (excluding photo files, tracking index)${NC}"
+
+# Generate photo index for change detection
+# This allows git to detect when photos are added/removed without tracking the large binaries
+if [[ -d "photos" ]]; then
+    ls photos/ 2>/dev/null | sort > photos/index.txt || echo "" > photos/index.txt
+    echo -e "${GREEN}  ✓ Photo index generated${NC}"
 fi
 
 # Check for changes
