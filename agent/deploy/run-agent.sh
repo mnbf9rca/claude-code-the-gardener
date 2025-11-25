@@ -170,7 +170,7 @@ fi
 # Sync conversations to backup directory (only if source exists)
 if [ -d "$PROJECTS_DIR" ]; then
     echo "[$(date -Iseconds)]   Syncing conversations from $PROJECTS_DIR" | tee -a "$LOG_FILE"
-    rsync -a --delete --exclude='.git' "$PROJECTS_DIR/" "$BACKUP_DIR/" 2>&1 | tee -a "$LOG_FILE" || {
+    rsync -a --delete --filter='protect .git' "$PROJECTS_DIR/" "$BACKUP_DIR/" 2>&1 | tee -a "$LOG_FILE" || {
         echo "[$(date -Iseconds)]   WARNING: rsync failed, continuing anyway" | tee -a "$LOG_FILE"
     }
 
