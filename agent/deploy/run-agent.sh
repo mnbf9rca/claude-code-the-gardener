@@ -132,6 +132,15 @@ if grep -q "/login" "$LOG_FILE"; then
     EXEC_EXIT_CODE=1
 fi
 
+# Fix ACL masks on conversation files for publisher access
+# Claude creates files with mode 600 which sets restrictive masks that override group ACLs
+if [ -d "$HOME/.claude/projects" ]; then
+    if ! setfacl -R -m m::r-x "$HOME/.claude/projects/" 2>&1 | tee -a "$LOG_FILE"; then
+        echo "[$(date -Iseconds)] ERROR: Failed to fix ACL masks on conversation files" | tee -a "$LOG_FILE"
+        EXEC_EXIT_CODE=1
+    fi
+fi
+
 # Send appropriate healthcheck with log content (last 100KB)
 if [ "$EXEC_EXIT_CODE" -eq 0 ]; then
     healthcheck "" "$(tail -c 102400 "$LOG_FILE")"  # Success endpoint with logs
