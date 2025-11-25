@@ -32,6 +32,37 @@ from parsers import stats, conversations, sensors, actions
 from parsers.formatting_utils import markdown_to_html
 
 
+def write_if_changed(file_path, new_content):
+    """
+    Write file only if content has changed.
+
+    This preserves file timestamps when content is identical, which allows
+    aws s3 sync to correctly skip unchanged files instead of re-uploading
+    the entire site every time.
+
+    Args:
+        file_path: Path object or string path to file
+        new_content: String content to write
+
+    Returns:
+        bool: True if file was written, False if skipped (unchanged)
+    """
+    file_path = Path(file_path)
+
+    # If file exists, check if content changed
+    if file_path.exists():
+        try:
+            existing_content = file_path.read_text()
+            if existing_content == new_content:
+                return False  # Content unchanged, skip write
+        except Exception:
+            pass  # If read fails, proceed with write
+
+    # Write the file (either new file or content changed)
+    file_path.write_text(new_content)
+    return True
+
+
 def parse_args():
     """Parse command line arguments."""
     # Default paths relative to script location
@@ -190,9 +221,9 @@ def main():
     # Export data as JSON for JavaScript
     print()
     print("Exporting data for JavaScript...")
-    (output_dir / "data" / "sensor_data.json").write_text(json.dumps(sensor_data, indent=2))
-    (output_dir / "data" / "timeline.json").write_text(json.dumps(timeline[:1000], indent=2))  # Limit to 1000 recent events
-    (output_dir / "data" / "stats.json").write_text(json.dumps(overall_stats, indent=2))
+    write_if_changed(output_dir / "data" / "sensor_data.json", json.dumps(sensor_data, indent=2))
+    write_if_changed(output_dir / "data" / "timeline.json", json.dumps(timeline[:1000], indent=2))  # Limit to 1000 recent events
+    write_if_changed(output_dir / "data" / "stats.json", json.dumps(overall_stats, indent=2))
 
     # Generate pages
     print()
@@ -213,7 +244,7 @@ def main():
         generation_time=generation_time,
         git_commit=git_commit,
     )
-    (output_dir / "index.html").write_text(index_html)
+    write_if_changed(output_dir / "index.html", index_html)
 
     # Conversations list
     print("  - conversations/index.html (conversation browser)")
@@ -263,7 +294,7 @@ def main():
         generation_time=generation_time,
         git_commit=git_commit,
     )
-    (output_dir / "conversations" / "index.html").write_text(conv_list_html)
+    write_if_changed(output_dir / "conversations" / "index.html", conv_list_html)
 
     # Individual conversation pages
     print(f"  - Generating {len(all_conversations)} conversation detail pages...")
@@ -275,7 +306,7 @@ def main():
             generation_time=generation_time,
             git_commit=git_commit,
         )
-        (output_dir / "conversations" / f"{conv['session_id']}.html").write_text(conv_html)
+        write_if_changed(output_dir / "conversations" / f"{conv['session_id']}.html", conv_html)
 
     # Sensors page
     print("  - sensors.html (sensor charts)")
@@ -287,7 +318,7 @@ def main():
         generation_time=generation_time,
         git_commit=git_commit,
     )
-    (output_dir / "sensors.html").write_text(sensors_html)
+    write_if_changed(output_dir / "sensors.html", sensors_html)
 
     # Photos page
     print("  - photos.html (photo gallery)")
@@ -312,7 +343,7 @@ def main():
         generation_time=generation_time,
         git_commit=git_commit,
     )
-    (output_dir / "photos.html").write_text(photos_html)
+    write_if_changed(output_dir / "photos.html", photos_html)
 
     # Messages page
     print("  - messages.html (human/agent messages)")
@@ -357,7 +388,7 @@ def main():
         generation_time=generation_time,
         git_commit=git_commit,
     )
-    (output_dir / "messages.html").write_text(messages_html)
+    write_if_changed(output_dir / "messages.html", messages_html)
 
     # Notes evolution page
     print("  - notes.html (notes evolution)")
@@ -384,7 +415,7 @@ def main():
         generation_time=generation_time,
         git_commit=git_commit,
     )
-    (output_dir / "notes.html").write_text(notes_html)
+    write_if_changed(output_dir / "notes.html", notes_html)
 
     # Copy static assets
     print()
