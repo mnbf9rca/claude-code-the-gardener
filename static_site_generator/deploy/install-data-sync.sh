@@ -89,15 +89,15 @@ if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] Would create push script at $SCRIPT_PATH"
 else
   echo "Creating push-to-github.sh script..."
-  cat > "$SCRIPT_PATH" << EOF
+  cat > "$SCRIPT_PATH" << 'EOF'
 #!/bin/bash
 set -e
 
-STAGING_DIR="/home/${SYNC_USER}/gardener-site"
+STAGING_DIR="/home/gardener-publisher/gardener-site"
 cd "$STAGING_DIR"
 
 # Configure git user if not already set
-if ! git config user.email >/dev/null 2>&1; then
+if ! git config user.email >/dev/null 2>&1 || ! git config user.name >/dev/null 2>&1; then
   git config user.email "gardener@raspberrypi"
   git config user.name "Claude the Gardener Bot"
 fi
@@ -120,10 +120,16 @@ rsync -av --no-delete /home/gardener/workspace/ workspace/ 2>/dev/null || echo "
 rsync -av --no-delete /home/gardener/logs/ logs/ 2>/dev/null || echo "Skipped: /home/gardener/logs/"
 
 # Pull remote changes before committing
-git pull --rebase origin main || {
-  echo "ERROR: Failed to pull from remote. Manual intervention required."
+if ! git pull --rebase origin main; then
+  echo "ERROR: Failed to pull from remote."
+  # Check if we're in a rebase state
+  if [ -d ".git/rebase-merge" ] || [ -d ".git/rebase-apply" ]; then
+    echo "Aborting rebase..."
+    git rebase --abort || true
+  fi
+  echo "Manual intervention required: cd $STAGING_DIR && git status"
   exit 1
-}
+fi
 
 # Commit and push if changes exist
 git add data/ photos/ workspace/ logs/ 2>/dev/null || true
