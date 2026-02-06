@@ -692,7 +692,11 @@ def get_highlights(conversations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def parse_conversations(claude_dir: Path) -> list[dict]:
     """
-    Parse all conversation files and return as list of dicts.
+    Parse all conversation files and return a lightweight list of dicts.
+
+    This function delegates to the main conversation parsing helpers to ensure
+    consistent handling of the underlying JSONL format, then derives a compact
+    JSON-serializable summary of each conversation.
 
     Args:
         claude_dir: Path to claude conversation directory
@@ -700,58 +704,40 @@ def parse_conversations(claude_dir: Path) -> list[dict]:
     Returns:
         List of conversation metadata dicts
     """
-    conversations = []
+    conversations: list[dict] = []
 
     if not claude_dir.exists():
         return conversations
 
-    for conv_file in sorted(claude_dir.glob("*.jsonl")):
-        conv = {
-            "id": conv_file.stem,
-            "file": conv_file.name,
+    # Reuse the existing parser logic instead of re-parsing JSONL here
+    all_conversations = get_all_conversations(claude_dir)
+
+    for conv in all_conversations:
+        # Start with basic metadata, falling back to sensible defaults
+        summary: dict[str, Any] = {
+            "id": conv.get("id") or conv.get("session_id"),
+            "file": conv.get("file_name") or conv.get("file") or "",
             "messages": [],
-            "total_tokens": 0,
-            "tool_calls": 0,
-            "start_time": None,
-            "end_time": None
+            "total_tokens": sum(conv.get("tokens", {}).values()),
+            "tool_calls": conv.get("tool_call_count", 0),
+            "start_time": conv.get("start_time"),
+            "end_time": conv.get("end_time"),
         }
 
-        with open(conv_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
+        # Build lightweight message summaries from the canonical message format
+        for msg in conv.get("messages", []):
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                preview = content[:200]
+            else:
+                preview = str(content)[:200]
 
-                try:
-                    msg = json.loads(line)
-                except json.JSONDecodeError as e:
-                    import sys
-                    print(f"Warning: Skipping malformed JSON in {conv_file}: {e}", file=sys.stderr)
-                    continue
+            summary["messages"].append({
+                "role": msg.get("role", "unknown"),
+                "type": msg.get("type", "text"),
+                "content": preview,
+            })
 
-                # Track timestamps
-                if "timestamp" in msg:
-                    ts = msg["timestamp"]
-                    if conv["start_time"] is None:
-                        conv["start_time"] = ts
-                    conv["end_time"] = ts
-
-                # Track tokens
-                if "usage" in msg:
-                    conv["total_tokens"] += msg["usage"].get("input_tokens", 0)
-                    conv["total_tokens"] += msg["usage"].get("output_tokens", 0)
-
-                # Track tool calls
-                if msg.get("type") == "tool_use":
-                    conv["tool_calls"] += 1
-
-                # Add message summary (truncate content)
-                conv["messages"].append({
-                    "role": msg.get("role", "unknown"),
-                    "type": msg.get("type", "text"),
-                    "content": str(msg.get("content", ""))[:200]
-                })
-
-        conversations.append(conv)
+        conversations.append(summary)
 
     return conversations

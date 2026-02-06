@@ -344,46 +344,38 @@ def parse_timeline(data_dir: Path, limit_days: int = 7) -> list[dict]:
     # Parse action log
     action_file = data_dir / "action_log.jsonl"
     if action_file.exists():
-        with open(action_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                    event_time = datetime.fromisoformat(event.get("timestamp", ""))
-                    if event_time >= cutoff:
-                        timeline.append({
-                            "type": "action",
-                            "timestamp": event.get("timestamp"),
-                            "description": event.get("action", "Unknown action")
-                        })
-                except (json.JSONDecodeError, ValueError) as e:
-                    import sys
-                    print(f"Warning: Skipping malformed entry in {action_file}: {e}", file=sys.stderr)
-                    continue
+        for event in load_jsonl(action_file):
+            try:
+                event_time = parse_timestamp(event.get("timestamp"))
+            except (ValueError, TypeError, KeyError):
+                continue
+
+            if not event_time or event_time < cutoff:
+                continue
+
+            timeline.append({
+                "type": "action",
+                "timestamp": event.get("timestamp"),
+                "description": event.get("action", "Unknown action")
+            })
 
     # Parse thinking log
     thinking_file = data_dir / "thinking.jsonl"
     if thinking_file.exists():
-        with open(thinking_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                    event_time = datetime.fromisoformat(event.get("timestamp", ""))
-                    if event_time >= cutoff:
-                        timeline.append({
-                            "type": "thought",
-                            "timestamp": event.get("timestamp"),
-                            "description": event.get("thought", "")[:200]
-                        })
-                except (json.JSONDecodeError, ValueError) as e:
-                    import sys
-                    print(f"Warning: Skipping malformed entry in {thinking_file}: {e}", file=sys.stderr)
-                    continue
+        for event in load_jsonl(thinking_file):
+            try:
+                event_time = parse_timestamp(event.get("timestamp"))
+            except (ValueError, TypeError, KeyError):
+                continue
+
+            if not event_time or event_time < cutoff:
+                continue
+
+            timeline.append({
+                "type": "thought",
+                "timestamp": event.get("timestamp"),
+                "description": event.get("thought", "")[:200]
+            })
 
     # Sort by timestamp descending
     timeline.sort(key=lambda x: x["timestamp"], reverse=True)

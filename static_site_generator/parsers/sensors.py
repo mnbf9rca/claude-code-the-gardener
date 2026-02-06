@@ -67,12 +67,12 @@ def get_water_data(data_dir: Path) -> List[Dict[str, Any]]:
     for event in events:
         try:
             timestamp = parse_timestamp(event["timestamp"])
-            ml_dispensed = event.get("ml", 0)
-            cumulative_ml += ml_dispensed
+            ml = event.get("ml", 0)
+            cumulative_ml += ml
 
             chart_data.append({
                 "timestamp": timestamp.isoformat(),
-                "ml_dispensed": ml_dispensed,
+                "ml": ml,
                 "cumulative_ml": cumulative_ml,
                 "unix": int(timestamp.timestamp() * 1000),
             })
@@ -198,7 +198,7 @@ def get_sensor_summary(data_dir: Path) -> Dict[str, Any]:
         },
         "water": {
             "last_watering": water[-1]["timestamp"] if water else None,
-            "last_amount": water[-1]["ml_dispensed"] if water else 0,
+            "last_amount": water[-1]["ml"] if water else 0,
             "total_ml": water[-1]["cumulative_ml"] if water else 0,
             "total_events": len(water),
         }
@@ -232,74 +232,12 @@ def parse_sensors(data_dir: Path) -> dict:
     """
     Parse sensor data and return for Chart.js consumption.
 
+    Delegates to get_combined_sensor_data() for consistent parsing.
+
     Args:
         data_dir: Path to data directory
 
     Returns:
         dict with keys: moisture, light, water
     """
-    sensors = {
-        "moisture": [],
-        "light": [],
-        "water": []
-    }
-
-    # Parse moisture sensor
-    moisture_file = data_dir / "moisture_sensor_history.jsonl"
-    if moisture_file.exists():
-        with open(moisture_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                    sensors["moisture"].append({
-                        "timestamp": event.get("timestamp"),
-                        "value": event.get("raw_value", 0)
-                    })
-                except json.JSONDecodeError as e:
-                    import sys
-                    print(f"Warning: Skipping malformed JSON in {moisture_file}: {e}", file=sys.stderr)
-                    continue
-
-    # Parse light history
-    light_file = data_dir / "light_history.jsonl"
-    if light_file.exists():
-        with open(light_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                    sensors["light"].append({
-                        "timestamp": event.get("timestamp"),
-                        "action": event.get("action", "unknown"),
-                        "duration_minutes": event.get("duration_minutes", 0)
-                    })
-                except json.JSONDecodeError as e:
-                    import sys
-                    print(f"Warning: Skipping malformed JSON in {light_file}: {e}", file=sys.stderr)
-                    continue
-
-    # Parse water pump
-    water_file = data_dir / "water_pump_history.jsonl"
-    if water_file.exists():
-        with open(water_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                    sensors["water"].append({
-                        "timestamp": event.get("timestamp"),
-                        "ml_dispensed": event.get("ml", 0)
-                    })
-                except json.JSONDecodeError as e:
-                    import sys
-                    print(f"Warning: Skipping malformed JSON in {water_file}: {e}", file=sys.stderr)
-                    continue
-
-    return sensors
+    return get_combined_sensor_data(data_dir)
