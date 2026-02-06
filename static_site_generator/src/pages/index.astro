@@ -12,11 +12,18 @@ let stats = {
   conversation_count: 0,
   total_tokens: 0,
   uptime_days: 0,
-  last_update: new Date().toISOString()
+  generated_at: new Date().toISOString(),
+  freshest_data_timestamp: new Date().toISOString()
 };
 
-if (existsSync(statsPath)) {
-  stats = JSON.parse(readFileSync(statsPath, 'utf-8'));
+try {
+  const raw = readFileSync(statsPath, 'utf-8');
+  stats = JSON.parse(raw);
+} catch (err) {
+  console.warn(
+    `Warning: Failed to read or parse stats.json at ${statsPath}. Using default stats instead.`,
+    err instanceof Error ? err.message : err
+  );
 }
 ---
 
@@ -48,7 +55,10 @@ if (existsSync(statsPath)) {
 
     <div class="recent-activity">
       <h2>Recent Activity</h2>
-      <p>Last updated: {new Date(stats.last_update).toLocaleString()}</p>
+      <p>
+        Generated: {new Date(stats.generated_at).toLocaleString()}<br>
+        Latest data: {new Date(stats.freshest_data_timestamp).toLocaleString()}
+      </p>
     </div>
   </div>
 
