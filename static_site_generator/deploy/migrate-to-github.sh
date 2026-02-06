@@ -32,7 +32,6 @@ fi
 
 # Stop old services
 OLD_TIMER="gardener-site-publisher.timer"
-OLD_SERVICE="gardener-site-publisher.service"
 
 if systemctl is-active --quiet "$OLD_TIMER"; then
   if [ "$DRY_RUN" = true ]; then
@@ -67,13 +66,13 @@ if [ "$DRY_RUN" = true ]; then
   echo "=== Dry Run Complete ==="
   echo ""
   echo "To execute migration, run:"
-  echo "  sudo bash $(basename $0)"
+  echo "  sudo bash $(basename "$0")"
   exit 0
 fi
 
 echo ""
 echo "Running installation script..."
-bash "$(dirname $0)/install-data-sync.sh"
+bash "$(dirname "$0")/install-data-sync.sh"
 
 echo ""
 echo "=== Migration Complete ==="

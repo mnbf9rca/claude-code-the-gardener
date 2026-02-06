@@ -718,7 +718,16 @@ def parse_conversations(claude_dir: Path) -> list[dict]:
 
         with open(conv_file) as f:
             for line in f:
-                msg = json.loads(line)
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError as e:
+                    import sys
+                    print(f"Warning: Skipping malformed JSON in {conv_file}: {e}", file=sys.stderr)
+                    continue
 
                 # Track timestamps
                 if "timestamp" in msg:

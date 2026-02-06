@@ -388,6 +388,10 @@ def parse_stats(data_dir: Path) -> dict:
     """
     Parse statistics and return as dictionary for JSON serialization.
 
+    NOTE: Claude Code writes multiple JSONL entries with the same message ID
+    (one per tool call). This function deduplicates token counts using
+    message IDs to avoid overcounting. See calculate_overall_stats() for reference.
+
     Args:
         data_dir: Path to data directory
 
@@ -395,6 +399,7 @@ def parse_stats(data_dir: Path) -> dict:
         dict with keys: total_water_ml, conversation_count, total_tokens,
                        total_cost_usd, uptime_days, last_update
     """
+    import sys
     from datetime import datetime, timezone
 
     stats = {
@@ -406,25 +411,70 @@ def parse_stats(data_dir: Path) -> dict:
         "last_update": datetime.now(timezone.utc).isoformat()
     }
 
+    all_timestamps = []
+
     # Parse water pump history
     water_file = data_dir / "water_pump_history.jsonl"
     if water_file.exists():
         with open(water_file) as f:
             for line in f:
-                event = json.loads(line)
-                stats["total_water_ml"] += event.get("ml_dispensed", 0)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                    stats["total_water_ml"] += event.get("ml", 0)
+                    # Collect timestamp for uptime calculation
+                    if "timestamp" in event:
+                        try:
+                            all_timestamps.append(parse_timestamp(event["timestamp"]))
+                        except (ValueError, TypeError):
+                            pass
+                except json.JSONDecodeError as e:
+                    print(f"Warning: Skipping malformed JSON in {water_file}: {e}", file=sys.stderr)
+                    continue
 
     # Parse conversations for token counts
     claude_dir = data_dir / "claude"
     if claude_dir.exists():
         for conv_file in claude_dir.glob("*.jsonl"):
             stats["conversation_count"] += 1
+            seen_message_ids = set()  # Track to prevent double-counting
+
             with open(conv_file) as f:
                 for line in f:
-                    msg = json.loads(line)
-                    if "usage" in msg:
-                        stats["total_tokens"] += msg["usage"].get("input_tokens", 0)
-                        stats["total_tokens"] += msg["usage"].get("output_tokens", 0)
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Skipping malformed JSON in {conv_file}: {e}", file=sys.stderr)
+                        continue
+
+                    # Collect timestamps for uptime calculation
+                    if "timestamp" in msg:
+                        try:
+                            all_timestamps.append(parse_timestamp(msg["timestamp"]))
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Only count tokens once per unique message ID
+                    if msg.get("type") == "assistant" and "message" in msg:
+                        msg_id = msg.get("message", {}).get("id")
+                        if msg_id and msg_id not in seen_message_ids:
+                            seen_message_ids.add(msg_id)
+                            usage = msg.get("message", {}).get("usage", {})
+                            stats["total_tokens"] += usage.get("input_tokens", 0)
+                            stats["total_tokens"] += usage.get("output_tokens", 0)
+
+    # Calculate uptime from timestamps
+    if all_timestamps:
+        all_timestamps.sort()
+        start = all_timestamps[0]
+        now = datetime.now(timezone.utc)
+        stats["uptime_days"] = (now - start).days
 
     # Estimate cost (rough approximation)
     stats["total_cost_usd"] = stats["total_tokens"] * 0.000003  # ~$3 per 1M tokens

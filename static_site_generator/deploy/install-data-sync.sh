@@ -36,12 +36,17 @@ if [ ! -f "$SSH_KEY" ]; then
   echo ""
   cat "${SSH_KEY}.pub"
   echo ""
-  read -p "Press Enter after adding the key to GitHub..."
+  read -r -p "Press Enter after adding the key to GitHub..."
 fi
+
+# Add GitHub to known_hosts
+echo "Adding GitHub to known_hosts..."
+sudo -u gardener mkdir -p /home/gardener/.ssh
+sudo -u gardener sh -c 'ssh-keyscan github.com >> /home/gardener/.ssh/known_hosts 2>/dev/null'
 
 # Test SSH connectivity
 echo "Testing GitHub SSH connectivity..."
-if sudo -u gardener ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+if sudo -u gardener ssh -T git@github.com 2>&1 | grep -q -E "(successfully authenticated|You've successfully)"; then
   echo "✓ GitHub SSH authentication successful"
 else
   echo "WARNING: GitHub SSH authentication may not be working"
@@ -57,14 +62,28 @@ set -e
 STAGING_DIR="/home/gardener/gardener-site"
 cd "$STAGING_DIR"
 
+# Configure git user if not already set
+if ! git config user.email >/dev/null 2>&1; then
+  git config user.email "gardener@raspberrypi"
+  git config user.name "Claude the Gardener Bot"
+fi
+
 echo "[$(date)] Starting data sync..."
 
+# Validate source paths
+if [ ! -d "/home/mcpserver/data" ]; then
+  echo "WARNING: /home/mcpserver/data not found - skipping data sync"
+fi
+if [ ! -d "/home/mcpserver/photos" ]; then
+  echo "WARNING: /home/mcpserver/photos not found - skipping photos sync"
+fi
+
 # Sync all data sources (--no-delete preserves history)
-rsync -av --no-delete /home/mcpserver/data/ data/ || true
-rsync -av --no-delete /home/mcpserver/photos/ photos/ || true
-rsync -av --no-delete /home/gardener/.claude/ data/claude/ || true
-rsync -av --no-delete /home/gardener/workspace/ workspace/ || true
-rsync -av --no-delete /home/gardener/logs/ logs/ || true
+rsync -av --no-delete /home/mcpserver/data/ data/ 2>/dev/null || echo "Skipped: /home/mcpserver/data/"
+rsync -av --no-delete /home/mcpserver/photos/ photos/ 2>/dev/null || echo "Skipped: /home/mcpserver/photos/"
+rsync -av --no-delete /home/gardener/.claude/ data/claude/ 2>/dev/null || echo "Skipped: /home/gardener/.claude/"
+rsync -av --no-delete /home/gardener/workspace/ workspace/ 2>/dev/null || echo "Skipped: /home/gardener/workspace/"
+rsync -av --no-delete /home/gardener/logs/ logs/ 2>/dev/null || echo "Skipped: /home/gardener/logs/"
 
 # Commit and push if changes exist
 git add data/ photos/ workspace/ logs/ 2>/dev/null || true

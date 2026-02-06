@@ -249,33 +249,57 @@ def parse_sensors(data_dir: Path) -> dict:
     if moisture_file.exists():
         with open(moisture_file) as f:
             for line in f:
-                event = json.loads(line)
-                sensors["moisture"].append({
-                    "timestamp": event.get("timestamp"),
-                    "value": event.get("raw_value", 0)
-                })
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                    sensors["moisture"].append({
+                        "timestamp": event.get("timestamp"),
+                        "value": event.get("raw_value", 0)
+                    })
+                except json.JSONDecodeError as e:
+                    import sys
+                    print(f"Warning: Skipping malformed JSON in {moisture_file}: {e}", file=sys.stderr)
+                    continue
 
     # Parse light history
     light_file = data_dir / "light_history.jsonl"
     if light_file.exists():
         with open(light_file) as f:
             for line in f:
-                event = json.loads(line)
-                sensors["light"].append({
-                    "timestamp": event.get("timestamp"),
-                    "action": event.get("action", "unknown"),
-                    "duration_minutes": event.get("duration_minutes", 0)
-                })
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                    sensors["light"].append({
+                        "timestamp": event.get("timestamp"),
+                        "action": event.get("action", "unknown"),
+                        "duration_minutes": event.get("duration_minutes", 0)
+                    })
+                except json.JSONDecodeError as e:
+                    import sys
+                    print(f"Warning: Skipping malformed JSON in {light_file}: {e}", file=sys.stderr)
+                    continue
 
     # Parse water pump
     water_file = data_dir / "water_pump_history.jsonl"
     if water_file.exists():
         with open(water_file) as f:
             for line in f:
-                event = json.loads(line)
-                sensors["water"].append({
-                    "timestamp": event.get("timestamp"),
-                    "ml_dispensed": event.get("ml_dispensed", 0)
-                })
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                    sensors["water"].append({
+                        "timestamp": event.get("timestamp"),
+                        "ml_dispensed": event.get("ml", 0)
+                    })
+                except json.JSONDecodeError as e:
+                    import sys
+                    print(f"Warning: Skipping malformed JSON in {water_file}: {e}", file=sys.stderr)
+                    continue
 
     return sensors
