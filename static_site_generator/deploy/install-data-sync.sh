@@ -89,11 +89,11 @@ if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] Would create push script at $SCRIPT_PATH"
 else
   echo "Creating push-to-github.sh script..."
-  cat > "$SCRIPT_PATH" << 'EOF'
+  cat > "$SCRIPT_PATH" << EOF
 #!/bin/bash
 set -e
 
-STAGING_DIR="/home/gardener-publisher/gardener-site"
+STAGING_DIR="/home/${SYNC_USER}/gardener-site"
 cd "$STAGING_DIR"
 
 # Configure git user if not already set
