@@ -688,3 +688,61 @@ def get_highlights(conversations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             })
 
     return highlights
+
+
+def parse_conversations(claude_dir: Path) -> list[dict]:
+    """
+    Parse all conversation files and return as list of dicts.
+
+    Args:
+        claude_dir: Path to claude conversation directory
+
+    Returns:
+        List of conversation metadata dicts
+    """
+    conversations = []
+
+    if not claude_dir.exists():
+        return conversations
+
+    for conv_file in sorted(claude_dir.glob("*.jsonl")):
+        conv = {
+            "id": conv_file.stem,
+            "file": conv_file.name,
+            "messages": [],
+            "total_tokens": 0,
+            "tool_calls": 0,
+            "start_time": None,
+            "end_time": None
+        }
+
+        with open(conv_file) as f:
+            for line in f:
+                msg = json.loads(line)
+
+                # Track timestamps
+                if "timestamp" in msg:
+                    ts = msg["timestamp"]
+                    if conv["start_time"] is None:
+                        conv["start_time"] = ts
+                    conv["end_time"] = ts
+
+                # Track tokens
+                if "usage" in msg:
+                    conv["total_tokens"] += msg["usage"].get("input_tokens", 0)
+                    conv["total_tokens"] += msg["usage"].get("output_tokens", 0)
+
+                # Track tool calls
+                if msg.get("type") == "tool_use":
+                    conv["tool_calls"] += 1
+
+                # Add message summary (truncate content)
+                conv["messages"].append({
+                    "role": msg.get("role", "unknown"),
+                    "type": msg.get("type", "text"),
+                    "content": str(msg.get("content", ""))[:200]
+                })
+
+        conversations.append(conv)
+
+    return conversations

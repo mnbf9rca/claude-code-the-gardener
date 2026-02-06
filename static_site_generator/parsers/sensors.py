@@ -3,6 +3,7 @@ Parser for sensor data (moisture, light, water pump).
 Prepares time-series data for charting.
 """
 
+import json
 from pathlib import Path
 from typing import Dict, List, Any
 from .stats import load_jsonl, parse_timestamp
@@ -225,3 +226,56 @@ def calculate_trend(values: List[float]) -> str:
         return "decreasing"
     else:
         return "stable"
+
+
+def parse_sensors(data_dir: Path) -> dict:
+    """
+    Parse sensor data and return for Chart.js consumption.
+
+    Args:
+        data_dir: Path to data directory
+
+    Returns:
+        dict with keys: moisture, light, water
+    """
+    sensors = {
+        "moisture": [],
+        "light": [],
+        "water": []
+    }
+
+    # Parse moisture sensor
+    moisture_file = data_dir / "moisture_sensor_history.jsonl"
+    if moisture_file.exists():
+        with open(moisture_file) as f:
+            for line in f:
+                event = json.loads(line)
+                sensors["moisture"].append({
+                    "timestamp": event.get("timestamp"),
+                    "value": event.get("raw_value", 0)
+                })
+
+    # Parse light history
+    light_file = data_dir / "light_history.jsonl"
+    if light_file.exists():
+        with open(light_file) as f:
+            for line in f:
+                event = json.loads(line)
+                sensors["light"].append({
+                    "timestamp": event.get("timestamp"),
+                    "action": event.get("action", "unknown"),
+                    "duration_minutes": event.get("duration_minutes", 0)
+                })
+
+    # Parse water pump
+    water_file = data_dir / "water_pump_history.jsonl"
+    if water_file.exists():
+        with open(water_file) as f:
+            for line in f:
+                event = json.loads(line)
+                sensors["water"].append({
+                    "timestamp": event.get("timestamp"),
+                    "ml_dispensed": event.get("ml_dispensed", 0)
+                })
+
+    return sensors
