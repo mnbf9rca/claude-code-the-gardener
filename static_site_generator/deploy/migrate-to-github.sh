@@ -18,16 +18,17 @@ if [ "$EUID" -ne 0 ] && [ "$DRY_RUN" = false ]; then
 fi
 
 # Backup old configuration
-if [ -f "/home/gardener/.env.publish" ]; then
+OLD_ENV_FILE="/home/gardener-publisher/app/.env.publish"
+if [ -f "$OLD_ENV_FILE" ]; then
   if [ "$DRY_RUN" = true ]; then
-    echo "[DRY RUN] Would backup .env.publish to .env.publish.backup"
+    echo "[DRY RUN] Would backup $OLD_ENV_FILE to ${OLD_ENV_FILE}.backup"
   else
     echo "Backing up old .env.publish..."
-    cp /home/gardener/.env.publish /home/gardener/.env.publish.backup
-    echo "✓ Backup created"
+    cp "$OLD_ENV_FILE" "${OLD_ENV_FILE}.backup"
+    echo "✓ Backup created at ${OLD_ENV_FILE}.backup"
   fi
 else
-  echo "No .env.publish found (already migrated?)"
+  echo "No .env.publish found at $OLD_ENV_FILE (already migrated or not installed?)"
 fi
 
 # Stop old services
@@ -47,7 +48,7 @@ else
 fi
 
 # Remove old output/.git (change tracking)
-OLD_OUTPUT_GIT="/home/gardener/claude-code-the-gardener/static_site_generator/output/.git"
+OLD_OUTPUT_GIT="/home/gardener-publisher/app/output/.git"
 if [ -d "$OLD_OUTPUT_GIT" ]; then
   if [ "$DRY_RUN" = true ]; then
     echo "[DRY RUN] Would remove $OLD_OUTPUT_GIT"

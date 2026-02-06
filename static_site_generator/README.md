@@ -10,23 +10,54 @@
 
 ## Architecture (New)
 
-**Two-Repository Strategy:**
+### Raspberry Pi User Architecture
+
+**Multi-user setup for security and isolation:**
+
+- **`gardener`** - Runs Claude Code only
+  - Isolated: Cannot access hardware/sensors directly
+  - Stores conversations in `~/.claude/projects/`
+- **`mcpserver`** - Runs MCP server with hardware access
+  - Isolated: Cannot run arbitrary code
+  - Stores sensor data in `~/data/` and `~/photos/`
+- **`gardener-publisher`** - NEW ROLE: Syncs data to GitHub
+  - Previously: Generated HTML locally and published to S3 with AWS credentials
+  - Now: Only pushes raw data to GitHub (no AWS credentials needed)
+  - Has group read access to `mcpserver` and `gardener` data
+  - Runs systemd timer every 15 minutes
+
+### Two-Repository Strategy
 
 1. **gardener-site** (data + CI) - Raw JSONL, photos, logs pushed by Pi every 15 minutes + GitHub Actions workflow
 2. **claude-code-the-gardener** (code) - Python parsers + Astro site
 
-**Pipeline:**
+### Data Flow Pipeline
+
 ```
-Pi → Push data to gardener-site → GitHub Actions triggers →
-  Checkout code repo → Run Python parsers → Build Astro →
-  Deploy to S3 → Invalidate CloudFront
+Pi (gardener-publisher user):
+  - Syncs from /home/mcpserver/data → gardener-site/data/
+  - Syncs from /home/mcpserver/photos → gardener-site/photos/
+  - Syncs from /home/gardener/.claude/ → gardener-site/data/claude/
+  - Pushes to GitHub every 15 min
+
+GitHub Actions (on push to gardener-site):
+  - Checkouts claude-code-the-gardener (code repo)
+  - Runs Python parsers to generate JSON
+  - Builds Astro static site
+  - Deploys to S3 + invalidates CloudFront
 ```
 
-**Why this change?**
-- Simpler Pi setup (no AWS credentials needed)
-- Centralized deployment via CI
+### Why This Change?
+
+**Before:** `gardener-publisher` generated HTML locally and pushed to S3 with AWS credentials
+
+**After:** `gardener-publisher` only pushes raw data to GitHub; CI does the rest
+
+**Benefits:**
+- No AWS credentials on Pi (uses GitHub OIDC in CI)
+- Centralized deployment via GitHub Actions
+- All historical data preserved in git
 - Better for future UX iterations with Astro
-- All historical data archived in git
 - Automatic rebuilds on data updates
 
 ## Quick Start (Local Development)
@@ -70,23 +101,53 @@ Output in `dist/` directory
 
 ## Raspberry Pi Setup
 
-**Fresh Install:**
+### Prerequisites
+
+The Pi must already have these users configured:
+- `gardener` - Running Claude Code
+- `mcpserver` - Running MCP server with data in `/home/mcpserver/{data,photos}`
+- `gardener-publisher` - Has group access to both users (set up by install-publisher.sh)
+
+### Fresh Install (No Old Publisher)
+
+If you've never run the old publisher system:
 
 ```bash
-sudo bash deploy/install-data-sync.sh
+# From the claude-code-the-gardener repo
+sudo bash static_site_generator/deploy/install-data-sync.sh
 ```
 
-**Migrate from Old System:**
+This will:
+1. Clone `gardener-site` repo to `/home/gardener-publisher/gardener-site`
+2. Generate SSH key for GitHub (you'll add it to GitHub Settings > SSH Keys)
+3. Create push script that syncs data every 15 minutes
+4. Install systemd timer to run as `gardener-publisher` user
+
+### Migrate from Old Publisher
+
+If the old publisher is currently running:
 
 ```bash
-sudo bash deploy/migrate-to-github.sh --dry-run  # Preview
-sudo bash deploy/migrate-to-github.sh            # Execute
+sudo bash static_site_generator/deploy/migrate-to-github.sh --dry-run  # Preview
+sudo bash static_site_generator/deploy/migrate-to-github.sh            # Execute
 ```
 
-**Monitor:**
+This will:
+1. Backup old `.env.publish` from `/home/gardener-publisher/app/`
+2. Stop old `gardener-site-publisher.timer`
+3. Run the installation script above
+
+### Monitor
 
 ```bash
+# Watch sync logs
 journalctl -u gardener-data-sync -f
+
+# Check timer status
+systemctl status gardener-data-sync.timer
+
+# Trigger manual sync
+sudo systemctl start gardener-data-sync.service
 ```
 
 ## Project Structure

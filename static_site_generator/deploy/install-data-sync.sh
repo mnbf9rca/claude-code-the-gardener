@@ -2,8 +2,9 @@
 set -e
 
 REPO_URL="https://github.com/mnbf9rca/gardener-site.git"
-REPO_DIR="/home/gardener/gardener-site"
-SCRIPT_PATH="/home/gardener/push-to-github.sh"
+SYNC_USER="gardener-publisher"
+REPO_DIR="/home/${SYNC_USER}/gardener-site"
+SCRIPT_PATH="/home/${SYNC_USER}/push-to-github.sh"
 SERVICE_FILE="/etc/systemd/system/gardener-data-sync.service"
 TIMER_FILE="/etc/systemd/system/gardener-data-sync.timer"
 
@@ -16,20 +17,27 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Verify sync user exists
+if ! id "$SYNC_USER" &>/dev/null; then
+  echo "ERROR: User $SYNC_USER does not exist"
+  echo "This should be the gardener-publisher user with access to data"
+  exit 1
+fi
+
 # Clone or update repository
 if [ -d "$REPO_DIR" ]; then
   echo "✓ Repository already exists at $REPO_DIR"
 else
   echo "Cloning gardener-site repository..."
-  sudo -u gardener git clone "$REPO_URL" "$REPO_DIR"
+  sudo -u "$SYNC_USER" git clone "$REPO_URL" "$REPO_DIR"
   echo "✓ Repository cloned"
 fi
 
 # Check for SSH key
-SSH_KEY="/home/gardener/.ssh/id_ed25519"
+SSH_KEY="/home/${SYNC_USER}/.ssh/id_ed25519"
 if [ ! -f "$SSH_KEY" ]; then
   echo "Generating SSH key for GitHub authentication..."
-  sudo -u gardener ssh-keygen -t ed25519 -C "gardener@pi" -f "$SSH_KEY" -N ""
+  sudo -u "$SYNC_USER" ssh-keygen -t ed25519 -C "${SYNC_USER}@pi" -f "$SSH_KEY" -N ""
   echo ""
   echo "=== ACTION REQUIRED ==="
   echo "Add this SSH public key to GitHub (Settings > SSH Keys):"
@@ -41,16 +49,16 @@ fi
 
 # Add GitHub to known_hosts
 echo "Adding GitHub to known_hosts..."
-sudo -u gardener mkdir -p /home/gardener/.ssh
-sudo -u gardener sh -c 'ssh-keyscan github.com >> /home/gardener/.ssh/known_hosts 2>/dev/null'
+sudo -u "$SYNC_USER" mkdir -p "/home/${SYNC_USER}/.ssh"
+sudo -u "$SYNC_USER" sh -c "ssh-keyscan github.com >> /home/${SYNC_USER}/.ssh/known_hosts 2>/dev/null"
 
 # Test SSH connectivity
 echo "Testing GitHub SSH connectivity..."
-if sudo -u gardener ssh -T git@github.com 2>&1 | grep -q -E "(successfully authenticated|You've successfully)"; then
+if sudo -u "$SYNC_USER" ssh -T git@github.com 2>&1 | grep -q -E "(successfully authenticated|You've successfully)"; then
   echo "✓ GitHub SSH authentication successful"
 else
   echo "WARNING: GitHub SSH authentication may not be working"
-  echo "Manual test: sudo -u gardener ssh -T git@github.com"
+  echo "Manual test: sudo -u $SYNC_USER ssh -T git@github.com"
 fi
 
 # Create push script
@@ -59,7 +67,7 @@ cat > "$SCRIPT_PATH" << 'EOF'
 #!/bin/bash
 set -e
 
-STAGING_DIR="/home/gardener/gardener-site"
+STAGING_DIR="/home/gardener-publisher/gardener-site"
 cd "$STAGING_DIR"
 
 # Configure git user if not already set
@@ -96,9 +104,11 @@ git commit -m "Data update $(date -Iseconds)"
 if git push origin main; then
   echo "Successfully pushed to GitHub"
 
-  # Clean up old logs on Pi (keep 21 days)
-  find /home/gardener/logs/ -type f -mtime +21 -delete 2>/dev/null || true
-  echo "Cleaned logs older than 21 days from Pi"
+  # Clean up old logs on Pi (keep 21 days) if logs directory exists
+  if [ -d "/home/gardener/logs" ]; then
+    find /home/gardener/logs/ -type f -mtime +21 -delete 2>/dev/null || true
+    echo "Cleaned logs older than 21 days from Pi"
+  fi
 else
   echo "ERROR: Failed to push to GitHub"
   exit 1
@@ -106,7 +116,7 @@ fi
 EOF
 
 chmod +x "$SCRIPT_PATH"
-chown gardener:gardener "$SCRIPT_PATH"
+chown "${SYNC_USER}:${SYNC_USER}" "$SCRIPT_PATH"
 echo "✓ Push script created at $SCRIPT_PATH"
 
 # Create systemd service
@@ -118,8 +128,8 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=gardener
-WorkingDirectory=/home/gardener
+User=${SYNC_USER}
+WorkingDirectory=/home/${SYNC_USER}
 ExecStart=$SCRIPT_PATH
 StandardOutput=journal
 StandardError=journal
