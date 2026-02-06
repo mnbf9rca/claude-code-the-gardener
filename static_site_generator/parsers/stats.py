@@ -397,10 +397,13 @@ def parse_stats(data_dir: Path) -> dict:
 
     Returns:
         dict with keys: total_water_ml, conversation_count, total_tokens,
-                       total_cost_usd, uptime_days, last_update
+                       total_cost_usd, uptime_days, generated_at, freshest_data_timestamp
     """
     import sys
     from datetime import datetime, timezone
+
+    # Track all timestamps to derive freshest_data_timestamp
+    all_timestamps: list[datetime] = []
 
     stats = {
         "total_water_ml": 0,
@@ -408,10 +411,9 @@ def parse_stats(data_dir: Path) -> dict:
         "total_tokens": 0,
         "total_cost_usd": 0.0,
         "uptime_days": 0,
-        "last_update": datetime.now(timezone.utc).isoformat()
+        "generated_at": datetime.now(timezone.utc).isoformat(),  # When stats were generated
+        "freshest_data_timestamp": None  # Most recent data point
     }
-
-    all_timestamps = []
 
     # Parse water pump history
     water_file = data_dir / "water_pump_history.jsonl"
@@ -424,10 +426,11 @@ def parse_stats(data_dir: Path) -> dict:
                 try:
                     event = json.loads(line)
                     stats["total_water_ml"] += event.get("ml", 0)
-                    # Collect timestamp for uptime calculation
+                    # Collect timestamp for uptime calculation and freshest data tracking
                     if "timestamp" in event:
                         try:
-                            all_timestamps.append(parse_timestamp(event["timestamp"]))
+                            ts = parse_timestamp(event["timestamp"])
+                            all_timestamps.append(ts)
                         except (ValueError, TypeError):
                             pass
                 except json.JSONDecodeError as e:
@@ -453,10 +456,11 @@ def parse_stats(data_dir: Path) -> dict:
                         print(f"Warning: Skipping malformed JSON in {conv_file}: {e}", file=sys.stderr)
                         continue
 
-                    # Collect timestamps for uptime calculation
+                    # Collect timestamps for uptime calculation and freshest data tracking
                     if "timestamp" in msg:
                         try:
-                            all_timestamps.append(parse_timestamp(msg["timestamp"]))
+                            ts = parse_timestamp(msg["timestamp"])
+                            all_timestamps.append(ts)
                         except (ValueError, TypeError):
                             pass
 
@@ -478,5 +482,12 @@ def parse_stats(data_dir: Path) -> dict:
 
     # Estimate cost (rough approximation)
     stats["total_cost_usd"] = stats["total_tokens"] * 0.000003  # ~$3 per 1M tokens
+
+    # Set freshest data timestamp from actual data
+    if all_timestamps:
+        stats["freshest_data_timestamp"] = max(all_timestamps).isoformat()
+    else:
+        # No data found, set to generated time
+        stats["freshest_data_timestamp"] = stats["generated_at"]
 
     return stats
