@@ -8,7 +8,7 @@ if [ "$1" = "--dry-run" ]; then
   echo ""
 fi
 
-REPO_URL="https://github.com/mnbf9rca/gardener-site.git"
+REPO_URL="git@github.com:mnbf9rca/gardener-site.git"
 SYNC_USER="gardener-publisher"
 REPO_DIR="/home/${SYNC_USER}/gardener-site"
 SCRIPT_PATH="/home/${SYNC_USER}/push-to-github.sh"
@@ -118,6 +118,12 @@ rsync -av --no-delete /home/mcpserver/photos/ photos/ 2>/dev/null || echo "Skipp
 rsync -av --no-delete /home/gardener/.claude/ data/claude/ 2>/dev/null || echo "Skipped: /home/gardener/.claude/"
 rsync -av --no-delete /home/gardener/workspace/ workspace/ 2>/dev/null || echo "Skipped: /home/gardener/workspace/"
 rsync -av --no-delete /home/gardener/logs/ logs/ 2>/dev/null || echo "Skipped: /home/gardener/logs/"
+
+# Pull remote changes before committing
+git pull --rebase origin main || {
+  echo "ERROR: Failed to pull from remote. Manual intervention required."
+  exit 1
+}
 
 # Commit and push if changes exist
 git add data/ photos/ workspace/ logs/ 2>/dev/null || true
