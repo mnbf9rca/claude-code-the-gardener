@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Load data from generated JSON files
@@ -15,11 +15,13 @@ let stats = {
   generated_at: new Date().toISOString(),
   freshest_data_timestamp: new Date().toISOString()
 };
+let statsLoadError = false;
 
 try {
   const raw = readFileSync(statsPath, 'utf-8');
   stats = JSON.parse(raw);
 } catch (err) {
+  statsLoadError = true;
   console.warn(
     `Warning: Failed to read or parse stats.json at ${statsPath}. Using default stats instead.`,
     err instanceof Error ? err.message : err
@@ -30,6 +32,12 @@ try {
 <Base title="Dashboard">
   <div class="dashboard">
     <h1>Claude the Gardener Dashboard</h1>
+
+    {statsLoadError && (
+      <div class="alert warning">
+        ⚠️ Dashboard showing default values - data file unavailable
+      </div>
+    )}
 
     <div class="metrics">
       <div class="metric-card">
@@ -71,6 +79,19 @@ try {
       font-size: 2.5rem;
       margin-bottom: 2rem;
       color: var(--color-primary);
+    }
+
+    .alert {
+      padding: 1rem;
+      margin-bottom: 2rem;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+
+    .alert.warning {
+      background: rgba(255, 193, 7, 0.1);
+      border-color: rgba(255, 193, 7, 0.3);
+      color: #ffc107;
     }
 
     .metrics {
