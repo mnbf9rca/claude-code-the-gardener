@@ -1,0 +1,87 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Claude the Gardener - Autonomous Plant Care" } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title} | Claude the Gardener</title>
+  <meta name="description" content={description}>
+  <link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="/" class="nav-brand">🌱 Claude the Gardener</a>
+      <div class="nav-links">
+        <a href="/">Dashboard</a>
+        <a href="/timeline">Timeline</a>
+        <a href="/conversations">Conversations</a>
+        <a href="/photos">Photos</a>
+        <a href="/charts">Charts</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="main">
+    <slot />
+  </main>
+
+  <footer class="footer">
+    <p>Claude the Gardener &copy; {new Date().getFullYear()}</p>
+  </footer>
+
+  <style>
+    .nav {
+      background: var(--color-surface);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 1rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .main {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      min-height: calc(100vh - 200px);
+    }
+
+    .footer {
+      background: var(--color-surface);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 2rem 0;
+      text-align: center;
+      color: var(--color-text-dim);
+      font-size: 0.9rem;
+    }
+  </style>
+</body>
+</html>
