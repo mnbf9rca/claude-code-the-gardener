@@ -1,0 +1,14 @@
+[Unit]
+Description=Gardener Data Sync to GitHub
+After=network.target
+
+[Service]
+Type=oneshot
+User=gardener-publisher
+WorkingDirectory=/home/gardener-publisher
+ExecStart=/home/gardener-publisher/push-to-github.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

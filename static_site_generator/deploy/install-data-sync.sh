@@ -110,22 +110,7 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 echo "Creating systemd service..."
-cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=Gardener Data Sync to GitHub
-After=network.target
-
-[Service]
-Type=oneshot
-User=${SYNC_USER}
-WorkingDirectory=/home/${SYNC_USER}
-ExecStart=$SCRIPT_PATH
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
+cp "$(dirname "$0")/gardener-data-sync.service" "$SERVICE_FILE"
 
 # Create systemd timer
 echo "Creating systemd timer..."
