@@ -47,18 +47,6 @@ else
   echo "Old timer not active (already migrated?)"
 fi
 
-# Remove old output/.git (change tracking)
-OLD_OUTPUT_GIT="/home/gardener-publisher/app/output/.git"
-if [ -d "$OLD_OUTPUT_GIT" ]; then
-  if [ "$DRY_RUN" = true ]; then
-    echo "[DRY RUN] Would remove $OLD_OUTPUT_GIT"
-  else
-    echo "Removing old output/.git directory..."
-    rm -rf "$OLD_OUTPUT_GIT"
-    echo "✓ Old git tracking removed"
-  fi
-fi
-
 # Run installation script
 if [ "$DRY_RUN" = true ]; then
   echo ""
@@ -86,4 +74,5 @@ echo "  sudo systemctl enable --now $OLD_TIMER"
 echo ""
 echo "After 1 week of stability, clean up old system:"
 echo "  sudo rm /etc/systemd/system/gardener-site-publisher.{service,timer}"
+echo "  sudo rm -rf /home/gardener-publisher/app/output/.git"
 echo "  sudo systemctl daemon-reload"
