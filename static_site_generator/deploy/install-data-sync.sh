@@ -114,18 +114,7 @@ cp "$(dirname "$0")/gardener-data-sync.service" "$SERVICE_FILE"
 
 # Create systemd timer
 echo "Creating systemd timer..."
-cat > "$TIMER_FILE" << EOF
-[Unit]
-Description=Run Gardener Data Sync every 15 minutes
-
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=15min
-AccuracySec=1min
-
-[Install]
-WantedBy=timers.target
-EOF
+cp "$(dirname "$0")/gardener-data-sync.timer" "$TIMER_FILE"
 
 # Reload systemd
 systemctl daemon-reload
