@@ -31,20 +31,7 @@ if ! id "$SYNC_USER" &>/dev/null; then
   exit 1
 fi
 
-# Clone or update repository
-if [ -d "$REPO_DIR" ]; then
-  echo "✓ Repository already exists at $REPO_DIR"
-else
-  if [ "$DRY_RUN" = true ]; then
-    echo "[DRY RUN] Would clone $REPO_URL to $REPO_DIR"
-  else
-    echo "Cloning gardener-site repository..."
-    sudo -u "$SYNC_USER" git clone "$REPO_URL" "$REPO_DIR"
-    echo "✓ Repository cloned"
-  fi
-fi
-
-# Check for SSH key
+# Check for SSH key (must happen before clone)
 SSH_KEY="/home/${SYNC_USER}/.ssh/id_ed25519"
 if [ ! -f "$SSH_KEY" ]; then
   if [ "$DRY_RUN" = true ]; then
@@ -65,7 +52,7 @@ else
   echo "✓ SSH key already exists at $SSH_KEY"
 fi
 
-# Add GitHub to known_hosts
+# Add GitHub to known_hosts (must happen before clone)
 if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] Would add GitHub to known_hosts"
   echo "[DRY RUN] Would test SSH connectivity to GitHub"
@@ -81,6 +68,19 @@ else
   else
     echo "WARNING: GitHub SSH authentication may not be working"
     echo "Manual test: sudo -u $SYNC_USER ssh -T git@github.com"
+  fi
+fi
+
+# Clone or update repository (after SSH setup)
+if [ -d "$REPO_DIR" ]; then
+  echo "✓ Repository already exists at $REPO_DIR"
+else
+  if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN] Would clone $REPO_URL to $REPO_DIR"
+  else
+    echo "Cloning gardener-site repository..."
+    sudo -u "$SYNC_USER" git clone "$REPO_URL" "$REPO_DIR"
+    echo "✓ Repository cloned"
   fi
 fi
 
