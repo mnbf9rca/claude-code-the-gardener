@@ -51,7 +51,7 @@ Complete these steps before deploying the R2 sync script to the Pi.
    |-------------|-------|
    | `R2_SECRET_KEY` | Secret Access Key from Step 2 |
 
-   | variable Name | Value |
+   | Variable Name | Value |
    |-------------|-------|
    | `R2_ACCESS_KEY` | Access Key ID from Step 2 |
    | `R2_ENDPOINT` | `https://<account_id>.r2.cloudflarestorage.com` |
