@@ -26,8 +26,31 @@ CPUQuota=50%
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=tmpfs
 ReadWritePaths=/tmp
+
+# Bind-mount only needed directories (read-only)
+BindReadOnlyPaths=/home/gardener-publisher/.config/rclone
+BindReadOnlyPaths=/home/mcpserver/photos
+BindReadOnlyPaths=/home/gardener/.claude
+BindReadOnlyPaths=/home/gardener/logs
+BindReadOnlyPaths=/home/mcpserver/data
+BindReadOnlyPaths=/home/gardener/workspace
+
+# Additional kernel/system protections
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+
+# Network restrictions
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# System call filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 
 # Restart policy (oneshot doesn't restart, timer handles scheduling)
 Restart=no

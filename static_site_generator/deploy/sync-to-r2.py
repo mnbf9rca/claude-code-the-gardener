@@ -34,6 +34,41 @@ SOURCES = {
     "workspace": Path("/home/gardener/workspace"),
 }
 
+# Hidden directories/files that are allowed (not skipped)
+ALLOWED_HIDDEN = {'.claude'}
+
+# R2 single-part upload limit (5GB)
+MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024  # 5GB in bytes
+
+
+def retry_rclone(cmd: list, max_retries: int = 3, backoff: float = 2.0) -> subprocess.CompletedProcess:
+    """
+    Execute rclone command with exponential backoff retry.
+
+    Handles transient network failures and R2 rate limiting gracefully.
+
+    Args:
+        cmd: rclone command as list
+        max_retries: Maximum number of retry attempts (default 3)
+        backoff: Base backoff time in seconds (default 2.0)
+
+    Returns:
+        CompletedProcess result (may be failed after all retries)
+    """
+    for attempt in range(max_retries):
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            return result
+
+        # Don't retry on last attempt
+        if attempt < max_retries - 1:
+            wait_time = backoff ** attempt
+            print(f"  ⚠ Retry {attempt + 1}/{max_retries} in {wait_time:.1f}s...")
+            time.sleep(wait_time)
+
+    return result  # Return last failed attempt
+
 
 def download_manifest() -> Dict:
     """
@@ -43,16 +78,12 @@ def download_manifest() -> Dict:
     """
     manifest_path = TMPFS_DIR / "current-manifest.json"
 
-    # Download from R2
-    result = subprocess.run(
-        [
-            "rclone", "copyto",
-            f"{R2_REMOTE}:{R2_BUCKET}/manifests/current.json",
-            str(manifest_path)
-        ],
-        capture_output=True,
-        text=True
-    )
+    # Download from R2 with retry
+    result = retry_rclone([
+        "rclone", "copyto",
+        f"{R2_REMOTE}:{R2_BUCKET}/manifests/current.json",
+        str(manifest_path)
+    ])
 
     # If file doesn't exist (first run), return empty manifest
     if result.returncode != 0:
@@ -66,7 +97,11 @@ def download_manifest() -> Dict:
         print(f"✓ Downloaded manifest: {len(manifest.get('files', {}))} files")
         return manifest
     except json.JSONDecodeError as e:
-        print(f"ERROR: Corrupt manifest: {e}")
+        print(f"ERROR: Corrupt manifest detected")
+        print(f"  File: {manifest_path}")
+        print(f"  Error: {e}")
+        print(f"  Recovery: Delete {manifest_path} to trigger full re-sync")
+        print(f"    rm {manifest_path}")
         sys.exit(1)
 
 
@@ -95,13 +130,8 @@ def scan_filesystem() -> Dict:
             if not file_path.is_file():
                 continue
 
-            # Skip .git directories entirely
-            if '.git' in file_path.parts:
-                continue
-
-            # Skip other hidden files/directories except .claude
-            parts_list = list(file_path.parts)
-            if any(part.startswith('.') and part != '.claude' for part in parts_list):
+            # Skip hidden files/directories except specifically allowed ones
+            if any(part.startswith('.') and part not in ALLOWED_HIDDEN for part in file_path.parts):
                 continue
 
             try:
@@ -177,18 +207,19 @@ def get_r2_path(file_key: str) -> str:
     High-volume sources (photos, transcripts, logs, notes) get day-level folders.
     Low-volume sources (data, workspace) stay flat.
 
+    Preserves full relative path including subdirectories to prevent collisions.
+
     Examples:
-        photos/plant_123.jpg → raw/photos/2026/02/10/plant_123.jpg
+        photos/batch1/plant_123.jpg → raw/photos/2026/02/10/batch1/plant_123.jpg
         data/action_log.jsonl → raw/data/action_log.jsonl
     """
     source, rel_path = file_key.split("/", 1)
-    filename = Path(rel_path).name
 
-    # High-volume sources get date hierarchy
+    # High-volume sources get date hierarchy (preserves subdirectories)
     if source in ["photos", "claude_transcripts", "logs", "notes_archive"]:
         today = datetime.now(timezone.utc)
         date_path = f"{today.year:04d}/{today.month:02d}/{today.day:02d}"
-        return f"raw/{source}/{date_path}/{filename}"
+        return f"raw/{source}/{date_path}/{rel_path}"
     else:
         # Low-volume sources stay flat
         return f"raw/{source}/{rel_path}"
@@ -218,6 +249,13 @@ def upload_file(file_key: str, dry_run: bool = False) -> bool:
     """
     try:
         local_path = get_local_path(file_key)
+
+        # Validate file size before upload
+        file_size = local_path.stat().st_size
+        if file_size > MAX_FILE_SIZE:
+            print(f"  ⚠ Skipping {file_key}: exceeds 5GB limit ({file_size / 1e9:.2f}GB)")
+            return False
+
         r2_path = get_r2_path(file_key)
         r2_full_path = f"{R2_REMOTE}:{R2_BUCKET}/{r2_path}"
 
@@ -225,22 +263,25 @@ def upload_file(file_key: str, dry_run: bool = False) -> bool:
             print(f"  [DRY RUN] Would upload: {file_key} → {r2_path}")
             return True
 
-        # Upload with rclone
-        result = subprocess.run(
-            ["rclone", "copyto", str(local_path), r2_full_path],
-            capture_output=True,
-            text=True
-        )
+        # Upload with rclone (with retry)
+        result = retry_rclone(["rclone", "copyto", str(local_path), r2_full_path])
 
         if result.returncode != 0:
-            print(f"  ✗ Failed: {file_key}")
-            print(f"    Error: {result.stderr}")
+            print(f"  ✗ Upload failed: {file_key}")
+            print(f"    Local: {local_path}")
+            print(f"    R2: {r2_path}")
+            if result.stderr:
+                print(f"    Error: {result.stderr.strip()}")
+            print(f"    Will retry on next sync")
             return False
 
         return True
 
     except Exception as e:
-        print(f"  ✗ Error uploading {file_key}: {e}")
+        print(f"  ✗ Unexpected error uploading {file_key}")
+        print(f"    Error type: {type(e).__name__}")
+        print(f"    Error: {e}")
+        print(f"    Will retry on next sync")
         return False
 
 
@@ -248,21 +289,23 @@ def upload_changes(changes: Dict, dry_run: bool = False) -> Dict:
     """
     Upload all new and modified files to R2.
 
-    Returns summary of upload results.
+    Returns summary with list of successfully uploaded files for manifest consistency.
     """
     files_to_upload = changes["created"] + changes["modified"]
 
     if not files_to_upload:
-        return {"uploaded": 0, "failed": 0}
+        return {"uploaded": 0, "failed": 0, "uploaded_files": set()}
 
     print(f"\nUploading {len(files_to_upload)} files...")
 
     uploaded = 0
     failed = 0
+    uploaded_files = set()
 
     for file_key in files_to_upload:
         if upload_file(file_key, dry_run):
             uploaded += 1
+            uploaded_files.add(file_key)
         else:
             failed += 1
 
@@ -270,7 +313,7 @@ def upload_changes(changes: Dict, dry_run: bool = False) -> Dict:
         if (uploaded + failed) % 10 == 0:
             print(f"  Progress: {uploaded + failed}/{len(files_to_upload)}")
 
-    return {"uploaded": uploaded, "failed": failed}
+    return {"uploaded": uploaded, "failed": failed, "uploaded_files": uploaded_files}
 
 
 def record_deltas(changes: Dict, new_manifest: Dict, dry_run: bool = False):
@@ -345,16 +388,32 @@ def record_deltas(changes: Dict, new_manifest: Dict, dry_run: bool = False):
 
     print(f"\nRecording delta log: {delta_path}")
 
-    # Upload via rclone rcat (stdin)
+    # Upload via rclone rcat (stdin) with retry
     delta_json = json.dumps(delta_data, indent=2)
-    result = subprocess.run(
-        ["rclone", "rcat", r2_delta_path],
-        input=delta_json.encode(),
-        capture_output=True
-    )
+    result = retry_rclone(["rclone", "rcat", r2_delta_path], max_retries=3, backoff=2.0)
+
+    # Need to pass input separately since retry_rclone doesn't handle it
+    # Rerun with input on each retry
+    for attempt in range(3):
+        result = subprocess.run(
+            ["rclone", "rcat", r2_delta_path],
+            input=delta_json.encode(),
+            capture_output=True
+        )
+        if result.returncode == 0:
+            break
+        if attempt < 2:
+            wait_time = 2.0 ** attempt
+            print(f"  ⚠ Delta upload retry {attempt + 1}/3 in {wait_time:.1f}s...")
+            time.sleep(wait_time)
 
     if result.returncode != 0:
-        print(f"  ⚠ Failed to record delta: {result.stderr.decode()}")
+        print(f"  ⚠ Failed to record delta log")
+        print(f"    Path: {delta_path}")
+        if result.stderr:
+            print(f"    Error: {result.stderr.decode().strip()}")
+        print(f"    Impact: Audit trail incomplete, but sync continues")
+        print(f"    Will retry on next sync")
     else:
         print(f"  ✓ Delta recorded: {len(events)} events")
 
@@ -374,16 +433,30 @@ def upload_manifest(manifest: Dict, dry_run: bool = False):
 
     print(f"\nUploading updated manifest...")
 
-    # Upload via rclone rcat
+    # Upload via rclone rcat with retry
     manifest_json = json.dumps(manifest, indent=2)
-    result = subprocess.run(
-        ["rclone", "rcat", manifest_path],
-        input=manifest_json.encode(),
-        capture_output=True
-    )
+
+    # Retry logic for rcat with input
+    for attempt in range(3):
+        result = subprocess.run(
+            ["rclone", "rcat", manifest_path],
+            input=manifest_json.encode(),
+            capture_output=True
+        )
+        if result.returncode == 0:
+            break
+        if attempt < 2:
+            wait_time = 2.0 ** attempt
+            print(f"  ⚠ Manifest upload retry {attempt + 1}/3 in {wait_time:.1f}s...")
+            time.sleep(wait_time)
 
     if result.returncode != 0:
-        print(f"  ✗ Failed to upload manifest: {result.stderr.decode()}")
+        print(f"  ✗ CRITICAL: Failed to upload manifest")
+        print(f"    Path: manifests/current.json")
+        if result.stderr:
+            print(f"    Error: {result.stderr.decode().strip()}")
+        print(f"    Impact: Next sync will re-process all files")
+        print(f"    Recovery: Check R2 connectivity and retry sync")
         sys.exit(1)
 
     print(f"  ✓ Manifest uploaded: {len(manifest['files'])} files tracked")
@@ -425,6 +498,14 @@ def main():
         # Step 4: Upload new and modified files
         upload_results = upload_changes(changes, dry_run)
 
+        # Remove failed uploads from manifest for consistency
+        if upload_results['failed'] > 0 and not dry_run:
+            files_to_upload = set(changes['created'] + changes['modified'])
+            failed_files = files_to_upload - upload_results['uploaded_files']
+            for file_key in failed_files:
+                new_manifest['files'].pop(file_key, None)
+            print(f"  ⚠ {len(failed_files)} files excluded from manifest due to upload failures")
+
         # Step 5: Record delta events
         record_deltas(changes, new_manifest, dry_run)
 
@@ -445,9 +526,17 @@ def main():
         print("\n\nSync interrupted by user")
         sys.exit(130)
     except Exception as e:
-        print(f"\n✗ Sync failed: {e}")
+        print(f"\n✗ Sync failed with unexpected error")
+        print(f"  Error type: {type(e).__name__}")
+        print(f"  Error: {e}")
+        print(f"\nDebug information:")
         import traceback
         traceback.print_exc()
+        print(f"\nTroubleshooting:")
+        print(f"  1. Check logs: journalctl -u gardener-r2-sync -n 100")
+        print(f"  2. Verify R2 access: rclone lsd r2-gardener:gardener-data")
+        print(f"  3. Check Pi paths exist and are readable")
+        print(f"  4. See docs/MIGRATION-R2.md for common issues")
         sys.exit(1)
 
 
