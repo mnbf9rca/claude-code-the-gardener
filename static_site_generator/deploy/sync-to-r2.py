@@ -252,15 +252,14 @@ def detect_changes(old_manifest: Dict, new_manifest: Dict) -> Dict:
 
     # Files in both - check if modified
     potentially_modified = old_files & new_files
-    last_sync_time = old_manifest.get("timestamp", 0) or 0
 
     modified = set()
     for file_key in potentially_modified:
         old_info = old_manifest["files"][file_key]
         new_info = new_manifest["files"][file_key]
 
-        # Modified if: mtime newer than last sync OR size changed
-        if (new_info["mtime"] > last_sync_time or
+        # Modified if: mtime or size changed since last sync
+        if (new_info["mtime"] != old_info["mtime"] or
             new_info["size"] != old_info["size"]):
             modified.add(file_key)
 
