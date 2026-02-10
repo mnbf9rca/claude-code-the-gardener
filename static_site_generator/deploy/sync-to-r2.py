@@ -131,7 +131,11 @@ def download_manifest() -> Dict:
 
 def scan_filesystem() -> Dict:
     """
-    Scan current Pi filesystem state.
+    Scan current Pi filesystem state using rclone's native filtering.
+
+    Uses rclone lsjson with filter file to efficiently scan directories,
+    respecting .git exclusions without recursing into them. Much faster
+    than Python directory walking and handles filtering natively.
 
     Uses mtime + size for change detection (no expensive hashing).
     Reads from mounted directories, no SD writes.
@@ -141,43 +145,70 @@ def scan_filesystem() -> Dict:
     files = {}
     scanned_count = 0
 
+    # Path to rclone filter file
+    script_dir = Path(__file__).parent
+    filter_file = script_dir / "rclone-filters.txt"
+
+    if not filter_file.exists():
+        print(f"  ✗ ERROR: Filter file not found: {filter_file}")
+        print(f"    Cannot scan without filters (would include .git)")
+        sys.exit(1)
+
     for source_name, source_path in SOURCES.items():
         if not source_path.exists():
             print(f"  ⚠ Skipping {source_name}: path not found")
             continue
 
         print(f"  Scanning {source_name}...", end=" ", flush=True)
+
+        # Use rclone lsjson to scan with native filtering
+        # This respects .git exclusion WITHOUT recursing into .git
+        # Security: Command is hardcoded, only source_path is dynamic from trusted config
+        result = subprocess.run([
+            "rclone", "lsjson", str(source_path),
+            "--recursive",
+            "--filter-from", str(filter_file),
+            "--files-only",
+            "--no-modtime",  # We'll use stat() for accurate mtime
+        ], capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"✗ FAILED")
+            print(f"    Error scanning {source_name}: {result.stderr.strip()}")
+            print(f"    Skipping this source")
+            continue
+
+        # Parse rclone JSON output
+        try:
+            rclone_files = json.loads(result.stdout) if result.stdout.strip() else []
+        except json.JSONDecodeError as e:
+            print(f"✗ FAILED")
+            print(f"    Error parsing rclone output for {source_name}: {e}")
+            print(f"    Skipping this source")
+            continue
+
         source_file_count = 0
+        skipped_large = 0
 
-        # Recursively scan all files
-        for file_path in source_path.rglob("*"):
-            if not file_path.is_file():
-                continue
+        for item in rclone_files:
+            file_path = source_path / item["Path"]
 
-            # Skip hidden files/directories except specifically allowed ones
-            if any(part.startswith('.') and part not in ALLOWED_HIDDEN for part in file_path.parts):
-                hidden_parts = [part for part in file_path.parts if part.startswith('.') and part not in ALLOWED_HIDDEN]
-                print(f"\n  ⚠ Skipping hidden file: {file_path}")
-                print(f"    Hidden component(s): {', '.join(hidden_parts)}")
-                print(f"    Reason: Hidden files excluded unless in allowed list: {ALLOWED_HIDDEN}")
+            # Skip files exceeding 5GB R2 single-part upload limit
+            if item["Size"] > MAX_FILE_SIZE:
+                if skipped_large == 0:  # Only print first occurrence
+                    print(f"\n  ⚠ Skipping {skipped_large + 1} file(s) exceeding 5GB limit")
+                skipped_large += 1
                 continue
 
             try:
+                # Get accurate mtime from filesystem (rclone's can be inconsistent)
                 stat = file_path.stat()
 
-                # Skip files exceeding 5GB R2 single-part upload limit
-                if stat.st_size > MAX_FILE_SIZE:
-                    print(f"\n  ⚠ Skipping large file: {file_path}")
-                    print(f"    Size: {stat.st_size / 1e9:.2f}GB")
-                    print(f"    Limit: {MAX_FILE_SIZE / 1e9:.0f}GB (R2 single-part upload limit)")
-                    print(f"    Reason: File exceeds R2 single-part upload maximum")
-                    continue
-
-                rel_path = str(file_path.relative_to(source_path))
+                rel_path = item["Path"]
                 file_key = f"{source_name}/{rel_path}"
 
                 files[file_key] = {
-                    "size": stat.st_size,
+                    "size": item["Size"],
                     "mtime": stat.st_mtime,
                 }
 
@@ -185,10 +216,14 @@ def scan_filesystem() -> Dict:
                 scanned_count += 1
 
             except (PermissionError, OSError) as e:
-                print(f"\n  ⚠ Cannot read {file_path}: {e}")
+                # Rare: rclone listed it but we can't stat it
+                print(f"\n  ⚠ Cannot access {file_path}: {e}")
                 continue
 
-        print(f"{source_file_count} files")
+        status = f"{source_file_count} files"
+        if skipped_large > 0:
+            status += f" ({skipped_large} >5GB skipped)"
+        print(status)
 
     return {
         "timestamp": time.time(),
