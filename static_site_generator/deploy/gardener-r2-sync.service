@@ -10,8 +10,8 @@ User=gardener-publisher
 Group=gardener-publisher
 WorkingDirectory=/home/gardener-publisher
 
-# Use system Python (no virtual env needed)
-ExecStart=/usr/bin/python3 /home/gardener-publisher/sync-to-r2.py
+# Use system Python with unbuffered output for real-time logging
+ExecStart=/usr/bin/python3 -u /home/gardener-publisher/sync-to-r2.py
 
 # Logging
 StandardOutput=journal
