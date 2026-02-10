@@ -22,6 +22,17 @@ if ! id "$SYNC_USER" &>/dev/null; then
   exit 1
 fi
 
+# Check rclone is installed
+if ! command -v rclone &>/dev/null; then
+  echo "ERROR: rclone is not installed"
+  echo ""
+  echo "Install rclone first:"
+  echo "  sudo apt update && sudo apt install rclone -y"
+  echo ""
+  echo "Then run this installer again."
+  exit 1
+fi
+
 echo "Installing R2 sync for user: $SYNC_USER"
 echo ""
 

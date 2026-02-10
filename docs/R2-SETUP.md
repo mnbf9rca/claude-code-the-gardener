@@ -61,9 +61,24 @@ Complete these steps before deploying the R2 sync script to the Pi.
 
 ---
 
-## Step 4: Test R2 Access with rclone
+## Step 4: Install and Test R2 Access with rclone
 
-On your **development machine** (not Pi yet), test R2 access:
+### Install rclone
+
+On your **development machine** (and later on Pi):
+
+```bash
+# Debian/Ubuntu/Raspberry Pi OS
+sudo apt update && sudo apt install rclone -y
+
+# macOS
+brew install rclone
+
+# Verify installation
+rclone version
+```
+
+### Configure and Test
 
 ```bash
 # Configure rclone remote

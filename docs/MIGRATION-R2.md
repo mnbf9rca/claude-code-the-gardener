@@ -7,7 +7,7 @@ This guide walks through migrating from Git-based to R2-based data storage.
 Before starting:
 
 - ✅ R2 bucket created and accessible
-- ✅ rclone configured on Pi
+- ✅ rclone installed on Pi (will be configured during Phase 1)
 - ✅ GitHub secrets configured (R2_SECRET_KEY) and variables (R2_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET)
 - ✅ Current Git sync working (baseline for comparison)
 
@@ -21,6 +21,10 @@ Before starting:
 # On Pi
 cd /home/gardener-publisher/claude-code-the-gardener
 git pull origin feat/r2-data-architecture
+
+# Install rclone if not already installed
+sudo apt update && sudo apt install rclone -y
+rclone version  # Verify installation
 
 # Install R2 sync
 cd static_site_generator/deploy
