@@ -35,9 +35,6 @@ SOURCES = {
     "workspace": Path("/home/gardener/workspace"),
 }
 
-# Hidden directories/files that are allowed (not skipped)
-ALLOWED_HIDDEN = {'.claude'}
-
 # R2 single-part upload limit (5GB)
 MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024  # 5GB in bytes
 
