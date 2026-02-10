@@ -389,11 +389,8 @@ def record_deltas(changes: Dict, new_manifest: Dict, dry_run: bool = False):
     print(f"\nRecording delta log: {delta_path}")
 
     # Upload via rclone rcat (stdin) with retry
+    # Note: Can't use retry_rclone() here because rclone rcat requires stdin data
     delta_json = json.dumps(delta_data, indent=2)
-    result = retry_rclone(["rclone", "rcat", r2_delta_path], max_retries=3, backoff=2.0)
-
-    # Need to pass input separately since retry_rclone doesn't handle it
-    # Rerun with input on each retry
     for attempt in range(3):
         result = subprocess.run(
             ["rclone", "rcat", r2_delta_path],
