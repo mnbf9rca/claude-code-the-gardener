@@ -195,20 +195,19 @@ def scan_filesystem() -> Dict:
 
             # Skip files exceeding 5GB R2 single-part upload limit
             if item["Size"] > MAX_FILE_SIZE:
-                if skipped_large == 0:  # Only print first occurrence
-                    print(f"\n  ⚠ Skipping {skipped_large + 1} file(s) exceeding 5GB limit")
                 skipped_large += 1
                 continue
 
             try:
-                # Get accurate mtime from filesystem (rclone's can be inconsistent)
+                # Get accurate size and mtime from filesystem
+                # Use stat() for both to ensure consistency (not mixed with rclone data)
                 stat = file_path.stat()
 
                 rel_path = item["Path"]
                 file_key = f"{source_name}/{rel_path}"
 
                 files[file_key] = {
-                    "size": item["Size"],
+                    "size": stat.st_size,    # Use stat for consistency with mtime
                     "mtime": stat.st_mtime,
                 }
 

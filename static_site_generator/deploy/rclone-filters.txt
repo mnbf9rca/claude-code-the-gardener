@@ -1,13 +1,14 @@
 # rclone filter rules for R2 sync
-# Exclude hidden files/directories except .claude
+# IMPORTANT: rclone processes filters in order, FIRST MATCH WINS
+# Includes (+) must appear BEFORE excludes (-) for exceptions to work
 
-# Exclude all hidden (dot) files and directories
-- .*
-- .*/**
-
-# But include .claude and its contents
+# Include .claude FIRST (exception to hidden file rule)
 + .claude/
 + .claude/**
+
+# Now exclude all other hidden files/directories
+- .*
+- .*/**
 
 # Exclude git directories (belt and suspenders)
 - .git/
