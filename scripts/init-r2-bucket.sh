@@ -107,7 +107,7 @@ echo ""
 
 # Verify structure
 echo "Bucket structure:"
-rclone tree ${REMOTE}:${BUCKET} --dirs-only -L 2
+rclone tree ${REMOTE}:${BUCKET} --dirs-only --level 2
 
 echo ""
 echo "File count:"
