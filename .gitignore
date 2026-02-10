@@ -235,3 +235,5 @@ static_site_generator/output/
 *.bak[0-9][0-9]
 
 settings.local.json
+/docs/plans/
+.env.publish
