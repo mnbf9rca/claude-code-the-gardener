@@ -12,6 +12,7 @@ Usage:
     python3 sync-to-r2.py [--dry-run]
 """
 import json
+import mimetypes
 import subprocess
 import sys
 import time
@@ -334,8 +335,16 @@ def upload_file(file_key: str, dry_run: bool = False) -> bool:
             print(f"  [DRY RUN] Would upload: {file_key} → {r2_path}")
             return True
 
-        # Upload with rclone (with retry)
-        result = retry_rclone(["rclone", "copyto", str(local_path), r2_full_path])
+        # Detect MIME type from file extension
+        mime_type, _ = mimetypes.guess_type(str(local_path))
+        if mime_type is None:
+            mime_type = "application/octet-stream"
+
+        # Upload with rclone (with retry) and set Content-Type
+        result = retry_rclone([
+            "rclone", "copyto", str(local_path), r2_full_path,
+            "--header", f"Content-Type: {mime_type}"
+        ])
 
         if result.returncode != 0:
             print(f"  ✗ Upload failed: {file_key}")
