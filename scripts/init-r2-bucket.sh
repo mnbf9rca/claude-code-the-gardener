@@ -76,9 +76,9 @@ cat <<'EOF' | rclone rcat ${REMOTE}:${BUCKET}/raw/README.md
 This directory contains all raw data files organized by type and date:
 
 - `photos/YYYY/MM/DD/` - Plant photos (39/day)
-- `claude-transcripts/YYYY/MM/DD/` - Claude execution transcripts (148/day)
+- `claude_transcripts/YYYY/MM/DD/` - Claude execution transcripts (148/day)
 - `logs/YYYY/MM/DD/` - Agent logs (60/day)
-- `notes-archive/YYYY/MM/DD/` - Archived notes (56/day)
+- `notes_archive/YYYY/MM/DD/` - Archived notes (56/day)
 - `data/` - JSONL data files (append-only)
 - `workspace/` - Workspace files
 
