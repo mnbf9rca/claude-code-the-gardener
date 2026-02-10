@@ -20,6 +20,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict
 
+# Register custom MIME types for extensions Python doesn't know
+mimetypes.add_type("application/x-ndjson", ".jsonl")
+mimetypes.add_type("text/plain", ".log")
+
 # Configuration
 R2_BUCKET = "gardener-data"
 R2_REMOTE = "r2-gardener"  # rclone remote name
