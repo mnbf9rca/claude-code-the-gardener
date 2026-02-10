@@ -36,12 +36,17 @@ fi
 echo "Installing R2 sync for user: $SYNC_USER"
 echo ""
 
-# Step 1: Copy sync script
-echo "1. Installing sync script..."
+# Step 1: Copy sync script and filter file
+echo "1. Installing sync script and dependencies..."
 cp "$(dirname "$0")/${SCRIPT_NAME}" "${INSTALL_DIR}/"
 chmod +x "${INSTALL_DIR}/${SCRIPT_NAME}"
 chown "${SYNC_USER}:${SYNC_USER}" "${INSTALL_DIR}/${SCRIPT_NAME}"
 echo "   ✓ Script installed: ${INSTALL_DIR}/${SCRIPT_NAME}"
+
+# Copy rclone filter file (required for sync script)
+cp "$(dirname "$0")/rclone-filters.txt" "${INSTALL_DIR}/"
+chown "${SYNC_USER}:${SYNC_USER}" "${INSTALL_DIR}/rclone-filters.txt"
+echo "   ✓ Filter file installed: ${INSTALL_DIR}/rclone-filters.txt"
 
 # Step 2: Install systemd units
 echo "2. Installing systemd units..."

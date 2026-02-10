@@ -30,7 +30,8 @@ ProtectHome=tmpfs
 ReadWritePaths=/tmp
 
 # Bind-mount only needed directories (read-only)
-BindReadOnlyPaths=/home/gardener-publisher  # Script location + rclone config
+# Script location + rclone config + filter file
+BindReadOnlyPaths=/home/gardener-publisher
 BindReadOnlyPaths=/home/mcpserver/photos
 BindReadOnlyPaths=/home/gardener/.claude
 BindReadOnlyPaths=/home/gardener/logs
