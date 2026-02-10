@@ -56,6 +56,9 @@ def retry_rclone(cmd: list, max_retries: int = 3, backoff: float = 2.0) -> subpr
         CompletedProcess result (may be failed after all retries)
     """
     for attempt in range(max_retries):
+        # Security: subprocess.run with list form prevents shell injection.
+        # Command is hardcoded ("rclone"), only paths from trusted sources are dynamic.
+        # List form ensures arguments cannot be misinterpreted as shell commands.
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode == 0:
@@ -66,6 +69,13 @@ def retry_rclone(cmd: list, max_retries: int = 3, backoff: float = 2.0) -> subpr
             wait_time = backoff ** attempt
             print(f"  ⚠ Retry {attempt + 1}/{max_retries} in {wait_time:.1f}s...")
             time.sleep(wait_time)
+
+    # All retries exhausted - print final error for debugging
+    print(f"  ✗ Command failed after {max_retries} attempts")
+    print(f"    Command: {' '.join(cmd)}")
+    print(f"    Exit code: {result.returncode}")
+    if result.stderr:
+        print(f"    Error: {result.stderr.strip()}")
 
     return result  # Return last failed attempt
 
@@ -87,8 +97,22 @@ def download_manifest() -> Dict:
 
     # If file doesn't exist (first run), return empty manifest
     if result.returncode != 0:
-        print("No existing manifest found (first sync)")
-        return {"timestamp": None, "files": {}}
+        # Distinguish between "file not found" (404) vs other errors
+        if "not found" in result.stderr.lower() or "directory not found" in result.stderr.lower():
+            print("No existing manifest found (first sync)")
+            return {"timestamp": None, "files": {}}
+        else:
+            # Network error, auth error, or other problem
+            print("ERROR: Failed to download manifest from R2")
+            print(f"  Remote path: {R2_REMOTE}:{R2_BUCKET}/manifests/current.json")
+            print(f"  Exit code: {result.returncode}")
+            if result.stderr:
+                print(f"  Error: {result.stderr.strip()}")
+            print(f"  Impact: Cannot determine what changed since last sync")
+            print(f"  Recovery: Check R2 connectivity and credentials")
+            print(f"    Test: rclone lsd {R2_REMOTE}:{R2_BUCKET}")
+            print(f"  Continuing with empty manifest (will treat all files as new)")
+            return {"timestamp": None, "files": {}}
 
     # Parse manifest
     try:
@@ -132,10 +156,23 @@ def scan_filesystem() -> Dict:
 
             # Skip hidden files/directories except specifically allowed ones
             if any(part.startswith('.') and part not in ALLOWED_HIDDEN for part in file_path.parts):
+                hidden_parts = [part for part in file_path.parts if part.startswith('.') and part not in ALLOWED_HIDDEN]
+                print(f"\n  ⚠ Skipping hidden file: {file_path}")
+                print(f"    Hidden component(s): {', '.join(hidden_parts)}")
+                print(f"    Reason: Hidden files excluded unless in allowed list: {ALLOWED_HIDDEN}")
                 continue
 
             try:
                 stat = file_path.stat()
+
+                # Skip files exceeding 5GB R2 single-part upload limit
+                if stat.st_size > MAX_FILE_SIZE:
+                    print(f"\n  ⚠ Skipping large file: {file_path}")
+                    print(f"    Size: {stat.st_size / 1e9:.2f}GB")
+                    print(f"    Limit: {MAX_FILE_SIZE / 1e9:.0f}GB (R2 single-part upload limit)")
+                    print(f"    Reason: File exceeds R2 single-part upload maximum")
+                    continue
+
                 rel_path = str(file_path.relative_to(source_path))
                 file_key = f"{source_name}/{rel_path}"
 
@@ -390,6 +427,9 @@ def record_deltas(changes: Dict, new_manifest: Dict, dry_run: bool = False):
 
     # Upload via rclone rcat (stdin) with retry
     # Note: Can't use retry_rclone() here because rclone rcat requires stdin data
+    # Security: subprocess.run with list form prevents shell injection.
+    # Command is hardcoded ("rclone", "rcat"), R2 path is constructed from
+    # trusted sources (bucket name, timestamp). List form ensures no shell expansion.
     delta_json = json.dumps(delta_data, indent=2)
     for attempt in range(3):
         result = subprocess.run(
@@ -433,6 +473,9 @@ def upload_manifest(manifest: Dict, dry_run: bool = False):
     # Upload via rclone rcat with retry
     manifest_json = json.dumps(manifest, indent=2)
 
+    # Security: subprocess.run with list form prevents shell injection.
+    # Command is hardcoded ("rclone", "rcat"), R2 path constructed from
+    # trusted constants (R2_REMOTE, R2_BUCKET). List form ensures safe execution.
     # Retry logic for rcat with input
     for attempt in range(3):
         result = subprocess.run(
