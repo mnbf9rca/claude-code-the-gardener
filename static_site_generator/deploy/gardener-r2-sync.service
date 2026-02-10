@@ -1,0 +1,36 @@
+[Unit]
+Description=Gardener Data Sync to R2
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gardener-publisher
+Group=gardener-publisher
+WorkingDirectory=/home/gardener-publisher
+
+# Use system Python (no virtual env needed)
+ExecStart=/usr/bin/python3 /home/gardener-publisher/sync-to-r2.py
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gardener-r2-sync
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=50%
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/tmp
+
+# Restart policy (oneshot doesn't restart, timer handles scheduling)
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
