@@ -1,0 +1,17 @@
+[Unit]
+Description=Run Gardener Sync every 15 minutes
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+
+[Timer]
+# Start 5 minutes after boot (gives network time to settle)
+OnBootSec=5min
+
+# Run every 15 minutes after previous run completes
+# OnUnitActiveSec (not InactiveSec) ensures a consistent wall-clock cadence
+OnUnitActiveSec=15min
+
+# If Pi was off, run missed syncs when it comes back online
+Persistent=true
+
+[Install]
+WantedBy=timers.target
