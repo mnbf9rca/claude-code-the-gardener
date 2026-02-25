@@ -1,0 +1,36 @@
+name: Process Data
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:            # manual trigger for testing
+
+concurrency:
+  group: process
+  cancel-in-progress: false    # never cancel a running processor
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25        # fail if run takes > 25 min (guards against hangs)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run processor
+        env:
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_ACCESS_KEY_ID: ${{ vars.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+          R2_PHOTOS_BUCKET_NAME: ${{ vars.R2_PHOTOS_BUCKET_NAME }}
+          R2_PHOTOS_PUBLIC_URL: ${{ vars.R2_PHOTOS_PUBLIC_URL }}
+        run: uv run python -m processor.main
