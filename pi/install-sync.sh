@@ -229,6 +229,10 @@ OLD_UNITS=(
     "gardener-site-publisher.service"
 )
 for unit in "${OLD_UNITS[@]}"; do
+    if ! systemctl list-unit-files "$unit" 2>/dev/null | grep -q "$unit"; then
+        echo "   - $unit not found, skipping"
+        continue
+    fi
     if systemctl is-active --quiet "$unit" 2>/dev/null; then
         systemctl stop "$unit"
         echo "   ✓ Stopped $unit"
