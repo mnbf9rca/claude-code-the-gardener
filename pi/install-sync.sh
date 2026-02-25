@@ -132,9 +132,8 @@ echo "   ✓ SSH key exists at ${SSH_KEY}"
 
 # Pre-populate github.com known_hosts if not already present
 if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
-    sudo -u "$SYNC_USER" ssh-keyscan -H github.com \
-        >> "${SSH_DIR}/known_hosts" 2>/dev/null || true
-    chown "${SYNC_USER}:${SYNC_USER}" "${SSH_DIR}/known_hosts"
+    sudo -u "$SYNC_USER" ssh-keyscan -H github.com 2>/dev/null \
+        | sudo -u "$SYNC_USER" tee -a "${SSH_DIR}/known_hosts" > /dev/null || true
     echo "   ✓ github.com added to known_hosts"
 fi
 
