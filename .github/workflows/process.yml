@@ -24,6 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
+        working-directory: gha-processor
 
       - name: Run processor
         env:
@@ -34,3 +35,4 @@ jobs:
           R2_PHOTOS_BUCKET_NAME: ${{ vars.R2_PHOTOS_BUCKET_NAME }}
           R2_PHOTOS_PUBLIC_URL: ${{ vars.R2_PHOTOS_PUBLIC_URL }}
         run: uv run python -m processor.main
+        working-directory: gha-processor
