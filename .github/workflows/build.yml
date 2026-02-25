@@ -1,9 +1,7 @@
 name: Build and Deploy Site
 
 on:
-  schedule:
-    - cron: "0 * * * *"    # every hour
-  workflow_dispatch:         # manual trigger
+  workflow_dispatch:         # manual trigger only until site is implemented
 
 concurrency:
   group: build
