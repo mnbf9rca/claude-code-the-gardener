@@ -138,10 +138,11 @@ if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
 fi
 
 # Test GitHub SSH access — the deploy key must be added to gardener-site repo
-# Use StrictHostKeyChecking=yes so the known_hosts entry just populated is enforced
+# accept-new: uses known_hosts, rejects changed keys (MITM protection), but
+# doesn't refuse valid entries when invoked via sudo (unlike StrictHostKeyChecking=yes)
 if sudo -u "$SYNC_USER" \
         ssh -T \
-        -o StrictHostKeyChecking=yes \
+        -o StrictHostKeyChecking=accept-new \
         -o ConnectTimeout=10 \
         git@github.com 2>&1 | grep -q "successfully authenticated"; then
     echo "   ✓ GitHub SSH authentication works"
