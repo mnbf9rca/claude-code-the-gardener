@@ -109,6 +109,24 @@ fi
 echo "✓ All required source files present"
 echo ""
 
+# Capture pre-install state so we can give accurate next-steps advice later.
+# Distinguish: (a) never installed, (b) installed but disabled by user, (c) enabled.
+# Also track whether a sync is currently running — restarting the timer is safe
+# (it just resets the countdown), but we should not stop or restart the service
+# itself mid-run.
+TIMER_WAS_INSTALLED=false
+TIMER_WAS_ENABLED=false
+SERVICE_IS_ACTIVE=false
+if systemctl list-unit-files "${SERVICE_NAME}.timer" 2>/dev/null | grep -q "${SERVICE_NAME}.timer"; then
+    TIMER_WAS_INSTALLED=true
+fi
+if systemctl is-enabled --quiet "${SERVICE_NAME}.timer" 2>/dev/null; then
+    TIMER_WAS_ENABLED=true
+fi
+if systemctl is-active --quiet "${SERVICE_NAME}.service" 2>/dev/null; then
+    SERVICE_IS_ACTIVE=true
+fi
+
 # ═══════════════════════════════════════════════════════
 # Step 1: Verify SSH key for GitHub push
 # ═══════════════════════════════════════════════════════
@@ -250,30 +268,56 @@ done
 echo ""
 
 # ═══════════════════════════════════════════════════════
-# Step 6: Enable and start new timer
+# Step 6: Timer enable (only for fresh installs)
 # ═══════════════════════════════════════════════════════
-echo "6. Enabling gardener-sync.timer..."
+echo "6. Configuring gardener-sync.timer..."
 
-systemctl enable "${SERVICE_NAME}.timer"
-systemctl start  "${SERVICE_NAME}.timer"
-
-echo "   ✓ Timer enabled and started"
+if ! "$TIMER_WAS_INSTALLED"; then
+    # Fresh install: enable so it survives reboot (user still needs to start it)
+    systemctl enable "${SERVICE_NAME}.timer"
+    echo "   ✓ Timer enabled (fresh install)"
+elif ! "$TIMER_WAS_ENABLED"; then
+    echo "   - Timer was disabled before install — leaving it disabled"
+else
+    echo "   ✓ Timer already enabled"
+fi
 echo ""
 
 # ═══════════════════════════════════════════════════════
-# Done
+# Done — print specific next steps based on pre-install state
 # ═══════════════════════════════════════════════════════
 echo "=== Installation Complete ==="
 echo ""
-echo "Timer status:"
-systemctl status "${SERVICE_NAME}.timer" --no-pager -l
+echo "Next steps:"
 echo ""
-echo "Trigger a manual sync now:"
-echo "  sudo systemctl start ${SERVICE_NAME}.service"
+
+if ! "$TIMER_WAS_INSTALLED"; then
+    echo "  Fresh install. Start the timer:"
+    echo "    sudo systemctl start ${SERVICE_NAME}.timer"
+elif ! "$TIMER_WAS_ENABLED"; then
+    echo "  Timer was previously disabled — leaving it disabled."
+    echo "  To re-enable automatic syncs:"
+    echo "    sudo systemctl enable --now ${SERVICE_NAME}.timer"
+elif "$SERVICE_IS_ACTIVE"; then
+    echo "  A sync is currently in progress. Let it finish, then restart the timer"
+    echo "  to pick up the updated service file and script:"
+    echo "    sudo systemctl restart ${SERVICE_NAME}.timer"
+    echo "  Check if the sync has finished:"
+    echo "    systemctl is-active ${SERVICE_NAME}.service"
+else
+    echo "  Restart the timer to pick up the updated service file and script:"
+    echo "    sudo systemctl restart ${SERVICE_NAME}.timer"
+fi
+
 echo ""
-echo "Watch logs:"
-echo "  journalctl -u ${SERVICE_NAME} -f"
+if ! "$SERVICE_IS_ACTIVE"; then
+    echo "  Trigger a manual sync to verify everything works:"
+    echo "    sudo systemctl start ${SERVICE_NAME}.service"
+    echo ""
+fi
+echo "  Watch logs:"
+echo "    journalctl -u ${SERVICE_NAME} -f"
 echo ""
-echo "Verify R2 data:"
-echo "  sudo -u ${SYNC_USER} rclone ls r2-gardener:gardener-data/raw/data/ | head -20"
-echo "  sudo -u ${SYNC_USER} rclone ls r2-gardener:gardener-data/raw/sessions/ | wc -l"
+echo "  Verify R2 data after sync:"
+echo "    sudo -u ${SYNC_USER} rclone ls r2-gardener:gardener-data/raw/data/ | head -20"
+echo "    sudo -u ${SYNC_USER} rclone ls r2-gardener:gardener-photos/ | wc -l"
