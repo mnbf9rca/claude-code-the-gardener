@@ -237,3 +237,5 @@ static_site_generator/output/
 settings.local.json
 /docs/plans/
 .env.publish
+tmp/
+state/
