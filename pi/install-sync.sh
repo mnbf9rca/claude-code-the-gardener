@@ -139,12 +139,14 @@ if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
 fi
 
 # Test GitHub SSH access — the deploy key must be added to gardener-site repo
-# Capture output so we can display it for debugging regardless of outcome
+# Capture output so we can display it for debugging regardless of outcome.
+# || true required: ssh -T always exits 1 (GitHub has no shell), which would
+# otherwise kill the script under set -e before we can inspect the output.
 SSH_OUTPUT=$(sudo -u "$SYNC_USER" \
     ssh -T \
     -o StrictHostKeyChecking=accept-new \
     -o ConnectTimeout=10 \
-    git@github.com 2>&1)
+    git@github.com 2>&1) || true
 echo "   SSH response: ${SSH_OUTPUT}"
 if echo "${SSH_OUTPUT}" | grep -q "successfully authenticated"; then
     echo "   ✓ GitHub SSH authentication works"
