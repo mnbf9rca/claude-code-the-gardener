@@ -50,7 +50,7 @@ sync_with_dates() {
             "${REMOTE}:${BUCKET}/${r2_dest}/${date_path}/${rel_path}" \
             "${rclone_args[@]}"
         count=$((count + 1))
-    done < <(find "$src" -type f -newer "$STATE_FILE")
+    done < <(find "$src" -type f -newer "$STATE_FILE" -not -path '*/.git/*')
     log "  ${count} new file(s) synced → ${r2_dest}"
 }
 
