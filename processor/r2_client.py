@@ -59,7 +59,10 @@ def get_jsonl_lines(s3, bucket: str, key: str) -> list[dict]:
             try:
                 lines.append(json.loads(raw))
             except json.JSONDecodeError:
-                print(f"WARNING: skipping malformed JSONL line in {bucket}/{key}: {raw[:120]!r}", flush=True)
+                print(
+                    f"WARNING: skipping malformed JSONL line in {bucket}/{key}: {raw[:120]!r}",
+                    flush=True,
+                )
         return lines
     except ClientError as e:
         if e.response["Error"]["Code"] in ("NoSuchKey", "404"):

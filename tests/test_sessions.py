@@ -1,11 +1,10 @@
-import json
 import pytest
+
 from processor.sessions import (
-    match_model_pricing,
     compute_session_cost,
+    match_model_pricing,
     parse_session_stats,
 )
-
 
 PRICING = {
     "fallback_model": "claude-sonnet-4-5",

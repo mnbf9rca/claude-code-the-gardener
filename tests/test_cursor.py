@@ -1,8 +1,6 @@
 import json
-import pytest
-import boto3
-from moto import mock_aws
-from processor.cursor import load_cursor, save_cursor, EPOCH, SENSOR_FILES
+
+from processor.cursor import EPOCH, SENSOR_FILES, load_cursor, save_cursor
 
 
 def test_load_cursor_missing_file_returns_epoch_watermarks(s3):
@@ -16,7 +14,7 @@ def test_load_cursor_missing_file_returns_epoch_watermarks(s3):
 
 
 def test_load_cursor_preserves_existing_watermarks(s3):
-    """Existing watermarks in current_state.json are preserved; missing sensor files default to EPOCH."""
+    """Existing watermarks are preserved; missing sensor files default to EPOCH."""
     existing = {
         "last_run": "2026-02-24T12:00:00Z",
         "watermarks": {
@@ -36,14 +34,14 @@ def test_load_cursor_preserves_existing_watermarks(s3):
     )
     state = load_cursor(s3, "test-bucket")
     assert state["watermarks"]["sessions_last_modified"] == "2026-02-24T10:00:00Z"
-    assert state["watermarks"]["sensor_files"]["moisture_sensor_history.jsonl"] == "2026-02-24T11:00:00Z"
+    moisture_wm = state["watermarks"]["sensor_files"]["moisture_sensor_history.jsonl"]
+    assert moisture_wm == "2026-02-24T11:00:00Z"
     # All sensor files not in existing state must default to EPOCH
     known = {"moisture_sensor_history.jsonl", "light_history.jsonl"}
     for fname in SENSOR_FILES:
         if fname not in known:
-            assert state["watermarks"]["sensor_files"][fname] == EPOCH, (
-                f"{fname} should default to EPOCH but got {state['watermarks']['sensor_files'][fname]!r}"
-            )
+            actual = state["watermarks"]["sensor_files"][fname]
+            assert actual == EPOCH, f"{fname} should be EPOCH but got {actual!r}"
 
 
 def test_save_cursor_writes_last_run(s3):

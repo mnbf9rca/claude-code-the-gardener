@@ -1,0 +1,88 @@
+name: Build and Deploy Site
+
+on:
+  schedule:
+    - cron: "0 * * * *"    # every hour
+  workflow_dispatch:         # manual trigger
+
+concurrency:
+  group: build
+  cancel-in-progress: true  # only latest build matters
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AWS CLI (for S3-compatible R2 sync)
+        run: |
+          pip install awscli --quiet
+
+      - name: Check for new data
+        id: check
+        env:
+          AWS_ACCESS_KEY_ID: ${{ vars.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          aws s3 cp \
+            --endpoint-url "$R2_ENDPOINT_URL" \
+            "s3://${R2_BUCKET_NAME}/state/current_state.json" \
+            /tmp/current_state.json 2>/dev/null || echo '{}' > /tmp/current_state.json
+
+          LAST_RUN=$(python3 -c "
+          import json
+          with open('/tmp/current_state.json') as f:
+              d = json.load(f)
+          print(d.get('last_run', ''))
+          ")
+          echo "last_run=$LAST_RUN" >> "$GITHUB_OUTPUT"
+          echo "Last processor run: $LAST_RUN"
+
+      - name: Download state files from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ vars.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          mkdir -p site/src/data/state/day
+          aws s3 sync \
+            --endpoint-url "$R2_ENDPOINT_URL" \
+            "s3://${R2_BUCKET_NAME}/state/" \
+            site/src/data/state/ \
+            --exclude "summaries/*"
+
+          mkdir -p site/public/state
+          cp -r site/src/data/state/. site/public/state/
+
+          echo "State files downloaded:"
+          ls -la site/src/data/state/
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci
+        working-directory: site
+
+      - name: Build Astro site
+        run: npm run build
+        working-directory: site
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site/dist --project-name=gardener-site

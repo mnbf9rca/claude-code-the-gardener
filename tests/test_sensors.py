@@ -1,13 +1,11 @@
-import json
 import pytest
+
 from processor.sensors import (
     bucket_records_by_day,
-    bucket_records_by_hour,
-    merge_daily_stats,
-    determine_plant_status,
     build_hourly_stats,
+    determine_plant_status,
+    merge_daily_stats,
 )
-
 
 MOISTURE_RECORDS = [
     {"value": 2100, "timestamp": "2026-02-24T06:00:00Z"},
@@ -97,7 +95,8 @@ def test_merge_daily_stats_merges_existing_date():
     new_records = {
         "moisture": {"2026-02-24": [{"value": 1900, "timestamp": "2026-02-24T18:00:00Z"}]},
         "light": {"2026-02-24": [
-            {"timestamp": "2026-02-24T18:00:00+00:00", "event_type": "turn_on", "duration_minutes": 120}
+            {"timestamp": "2026-02-24T18:00:00+00:00", "event_type": "turn_on",
+             "duration_minutes": 120}
         ]},
         "water": {"2026-02-24": [
             {"timestamp": "2026-02-24T18:00:00+00:00", "ml": 15}
@@ -129,7 +128,8 @@ def test_build_hourly_stats_populates_moisture_light_water():
             {"value": 2050, "timestamp": "2026-02-24T08:45:00Z"},
         ]},
         "light": {"2026-02-24": [
-            {"timestamp": "2026-02-24T08:00:00+00:00", "event_type": "turn_on", "duration_minutes": 120},
+            {"timestamp": "2026-02-24T08:00:00+00:00", "event_type": "turn_on",
+             "duration_minutes": 120},
         ]},
         "water": {"2026-02-24": [
             {"timestamp": "2026-02-24T08:10:00+00:00", "ml": 20},
