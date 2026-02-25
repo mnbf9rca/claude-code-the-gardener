@@ -40,7 +40,7 @@ sync_with_dates() {
         return
     fi
 
-    local count=0 copied=0
+    local count=0
     while IFS= read -r file; do
         local mtime date_path rel_path dest_path
         mtime=$(stat -c '%Y' "$file")
@@ -51,22 +51,20 @@ sync_with_dates() {
         else
             dest_path="${bucket}/${date_path}/${rel_path}"
         fi
-        # rclone lsf returns the filename if the object exists in R2, empty if not.
-        # We own the log line so we get the filename; rclone stays silent (ERROR only).
-        if [ -z "$(rclone lsf "${REMOTE}:${dest_path}" --log-level ERROR 2>/dev/null)" ]; then
-            log "  Copying: ${rel_path}"
-            rclone copyto \
-                "$file" \
-                "${REMOTE}:${dest_path}" \
-                --log-level ERROR
-            copied=$((copied + 1))
-        fi
+        # --log-level INFO shows "filename: Copied (new)" for actual copies, silent for skips.
+        # --stats-log-level DEBUG hides the per-transfer stats blocks (Transferred/Checks/Elapsed)
+        # which rclone emits at NOTICE by default and which add noise without useful information.
+        rclone copyto \
+            "$file" \
+            "${REMOTE}:${dest_path}" \
+            --log-level INFO \
+            --stats-log-level DEBUG
         count=$((count + 1))
         if (( count % 100 == 0 )); then
-            log "  ... ${count} examined, ${copied} copied so far"
+            log "  ... ${count} examined so far"
         fi
     done < <(find "$src" -type f -newer "$STATE_FILE" -not -path '*/.git/*')
-    log "  ${count} examined, ${copied} copied → ${bucket}/${r2_dest}"
+    log "  ${count} examined → ${bucket}/${r2_dest}"
 }
 
 log "=== Gardener Sync Start ==="
