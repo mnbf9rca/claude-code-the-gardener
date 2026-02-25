@@ -1,0 +1,59 @@
+[Unit]
+Description=Gardener Data Sync to R2 and GitHub
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gardener-publisher
+Group=gardener-publisher
+WorkingDirectory=/home/gardener-publisher
+
+ExecStart=/home/gardener-publisher/sync-to-r2.sh
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gardener-sync
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=75%
+
+# Security hardening
+# read-only (not tmpfs) so the service can still read its own .ssh/ and rclone config
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+# Write access: workspace staging dir and incremental sync state file
+ReadWritePaths=/home/gardener-publisher/gardener-site
+ReadWritePaths=/home/gardener-publisher/.sync-state
+
+# Explicit read-only bind mounts for source data from other users
+# (belt-and-suspenders; gardener-publisher group membership already grants access)
+BindReadOnlyPaths=/home/mcpserver/data
+BindReadOnlyPaths=/home/mcpserver/photos
+BindReadOnlyPaths=/home/gardener/.claude/projects
+BindReadOnlyPaths=/home/gardener/workspace
+
+# Additional kernel protections
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# System call filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# oneshot: timer handles scheduling; no restart on failure
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,8 @@ Parser for action logs and timeline generation.
 Combines all events (actions, thoughts, sensor readings) into a unified timeline.
 """
 
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Any
 from .stats import load_jsonl, parse_timestamp
@@ -323,3 +325,51 @@ def detect_highlights(timeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     )
 
     return highlights
+
+
+def parse_timeline(data_dir: Path, limit_days: int = 7) -> list[dict]:
+    """
+    Parse timeline events for recent activity.
+
+    Args:
+        data_dir: Path to data directory
+        limit_days: Only return events from last N days (default 7)
+
+    Returns:
+        List of timeline event dicts
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=limit_days)
+    timeline = []
+
+    # Parse action log
+    action_file = data_dir / "action_log.jsonl"
+    if action_file.exists():
+        with open(action_file) as f:
+            for line in f:
+                event = json.loads(line)
+                event_time = datetime.fromisoformat(event.get("timestamp", ""))
+                if event_time >= cutoff:
+                    timeline.append({
+                        "type": "action",
+                        "timestamp": event.get("timestamp"),
+                        "description": event.get("action", "Unknown action")
+                    })
+
+    # Parse thinking log
+    thinking_file = data_dir / "thinking.jsonl"
+    if thinking_file.exists():
+        with open(thinking_file) as f:
+            for line in f:
+                event = json.loads(line)
+                event_time = datetime.fromisoformat(event.get("timestamp", ""))
+                if event_time >= cutoff:
+                    timeline.append({
+                        "type": "thought",
+                        "timestamp": event.get("timestamp"),
+                        "description": event.get("thought", "")[:200]
+                    })
+
+    # Sort by timestamp descending
+    timeline.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    return timeline

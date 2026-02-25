@@ -1,0 +1,106 @@
+---
+import Base from '../layouts/Base.astro';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Load data from generated JSON files
+const dataDir = join(process.cwd(), 'public', 'data');
+const statsPath = join(dataDir, 'stats.json');
+
+let stats = {
+  total_water_ml: 0,
+  conversation_count: 0,
+  total_tokens: 0,
+  uptime_days: 0,
+  last_update: new Date().toISOString()
+};
+
+if (existsSync(statsPath)) {
+  stats = JSON.parse(readFileSync(statsPath, 'utf-8'));
+}
+---
+
+<Base title="Dashboard">
+  <div class="dashboard">
+    <h1>Claude the Gardener Dashboard</h1>
+
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-value">{stats.total_water_ml}ml</div>
+        <div class="metric-label">Total Water Dispensed</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-value">{stats.conversation_count}</div>
+        <div class="metric-label">Conversations</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-value">{(stats.total_tokens / 1000000).toFixed(2)}M</div>
+        <div class="metric-label">Total Tokens</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-value">{stats.uptime_days}</div>
+        <div class="metric-label">Days Running</div>
+      </div>
+    </div>
+
+    <div class="recent-activity">
+      <h2>Recent Activity</h2>
+      <p>Last updated: {new Date(stats.last_update).toLocaleString()}</p>
+    </div>
+  </div>
+
+  <style>
+    .dashboard {
+      padding: 2rem 0;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+      color: var(--color-primary);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .metric-card {
+      background: var(--color-surface);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .metric-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--color-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-label {
+      font-size: 0.9rem;
+      color: var(--color-text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .recent-activity {
+      background: var(--color-surface);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      margin-bottom: 1rem;
+      color: var(--color-text);
+    }
+  </style>
+</Base>

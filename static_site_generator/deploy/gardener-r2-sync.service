@@ -1,0 +1,60 @@
+[Unit]
+Description=Gardener Data Sync to R2
+Documentation=https://github.com/mnbf9rca/claude-code-the-gardener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gardener-publisher
+Group=gardener-publisher
+WorkingDirectory=/home/gardener-publisher
+
+# Use system Python with unbuffered output for real-time logging
+ExecStart=/usr/bin/python3 -u /home/gardener-publisher/sync-to-r2.py
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gardener-r2-sync
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=50%
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=tmpfs
+ReadWritePaths=/tmp
+
+# Bind-mount only needed directories (read-only)
+# Script location + rclone config + filter file
+BindReadOnlyPaths=/home/gardener-publisher
+BindReadOnlyPaths=/home/mcpserver/photos
+BindReadOnlyPaths=/home/gardener/.claude
+BindReadOnlyPaths=/home/gardener/logs
+BindReadOnlyPaths=/home/mcpserver/data
+BindReadOnlyPaths=/home/gardener/workspace
+
+# Additional kernel/system protections
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=true
+
+# Network restrictions
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# System call filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Restart policy (oneshot doesn't restart, timer handles scheduling)
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

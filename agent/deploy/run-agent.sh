@@ -139,61 +139,21 @@ else
     healthcheck "/fail" "$(tail -c 102400 "$LOG_FILE")"  # Failure endpoint with logs
 fi
 
-# Backup Claude conversations to git repository
-BACKUP_DIR="$HOME/claude-backup"
-PROJECTS_DIR="$HOME/.claude/projects/-home-gardener-workspace"
-
-echo "[$(date -Iseconds)] Backing up conversations to git" | tee -a "$LOG_FILE"
-
-# Create backup directory if it doesn't exist
-if [ ! -d "$BACKUP_DIR" ]; then
-    echo "[$(date -Iseconds)]   Creating backup directory: $BACKUP_DIR" | tee -a "$LOG_FILE"
-    mkdir -p "$BACKUP_DIR"
-fi
-
-# Initialize git repo if not already initialized (defensive)
-if [ ! -d "$BACKUP_DIR/.git" ]; then
-    echo "[$(date -Iseconds)]   Initializing git repository" | tee -a "$LOG_FILE"
-    (cd "$BACKUP_DIR" && git init --initial-branch=main)
-    (cd "$BACKUP_DIR" && git config user.name "Gardener Backup")
-    (cd "$BACKUP_DIR" && git config user.email "backup@gardener.local")
-
-    # Create .gitignore
-    cat > "$BACKUP_DIR/.gitignore" << 'EOF'
-# Exclude temporary files
-*.tmp
-*.swp
-*.log
-EOF
-fi
-
-# Sync conversations to backup directory (only if source exists)
-if [ -d "$PROJECTS_DIR" ]; then
-    echo "[$(date -Iseconds)]   Syncing conversations from $PROJECTS_DIR" | tee -a "$LOG_FILE"
-    rsync -a --delete --filter='protect .git' "$PROJECTS_DIR/" "$BACKUP_DIR/" 2>&1 | tee -a "$LOG_FILE" || {
-        echo "[$(date -Iseconds)]   WARNING: rsync failed, continuing anyway" | tee -a "$LOG_FILE"
-    }
-
-    # Commit changes (if any)
-    (
-        cd "$BACKUP_DIR"
-        git add -A
-        if ! git diff --cached --quiet; then
-            TIMESTAMP=$(date -Iseconds)
-            if git commit -m "Conversation backup: $TIMESTAMP"; then
-                echo "[$(date -Iseconds)]   ✓ Conversations backed up successfully" | tee -a "$LOG_FILE"
-            else
-                echo "[$(date -Iseconds)]   WARNING: Git commit failed" | tee -a "$LOG_FILE"
-            fi
+# Fix ACL masks so gardener-publisher can read files for R2 sync.
+# Claude creates files then may chmod +x them; if the base mode had no group/other
+# read bits (e.g. 600 → chmod +x → 711), chmod sets the ACL mask to --x which
+# overrides the directory's default:other::r-x ACL and permanently blocks read.
+# Setting m::r-x after each run restores readability without affecting owner perms.
+for acl_dir in "$HOME/.claude/projects" "$HOME/workspace"; do
+    if [ -d "$acl_dir" ]; then
+        echo "[$(date -Iseconds)] Fixing ACL masks: ${acl_dir}" | tee -a "$LOG_FILE"
+        if setfacl -R -m m::r-x "$acl_dir/" 2>&1 | tee -a "$LOG_FILE"; then
+            echo "[$(date -Iseconds)] ✓ ACL masks fixed: ${acl_dir}" | tee -a "$LOG_FILE"
         else
-            echo "[$(date -Iseconds)]   No changes to backup" | tee -a "$LOG_FILE"
+            echo "[$(date -Iseconds)] WARNING: Failed to fix ACL masks in ${acl_dir}" | tee -a "$LOG_FILE"
         fi
-    ) 2>&1 | tee -a "$LOG_FILE" || {
-        echo "[$(date -Iseconds)]   WARNING: Backup git operations failed" | tee -a "$LOG_FILE"
-    }
-else
-    echo "[$(date -Iseconds)]   WARNING: Projects directory not found: $PROJECTS_DIR" | tee -a "$LOG_FILE"
-fi
+    fi
+done
 
 echo "[$(date -Iseconds)] Agent run complete" | tee -a "$LOG_FILE"
 exit $EXEC_EXIT_CODE

@@ -1,19 +1,24 @@
-# Python virtual environment
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# build output
+dist/
+# generated types
+.astro/
 
-# Generated output directory
-output/
+# dependencies
+node_modules/
 
-# Environment files (secrets)
-.env.publish
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# macOS
+
+# environment variables
+.env
+.env.production
+
+# macOS-specific files
 .DS_Store
 
-# Git repository in output directory (used for change tracking)
-# We track changes locally but don't commit the git repo itself
-output/.git/
+# jetbrains setting folder
+.idea/

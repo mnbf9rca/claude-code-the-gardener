@@ -382,3 +382,51 @@ def get_daily_summary(data_dir: Path) -> List[Dict[str, Any]]:
 
     # Convert to sorted list
     return sorted(daily_data.values(), key=lambda x: x["date"] or "")
+
+
+def parse_stats(data_dir: Path) -> dict:
+    """
+    Parse statistics and return as dictionary for JSON serialization.
+
+    Args:
+        data_dir: Path to data directory
+
+    Returns:
+        dict with keys: total_water_ml, conversation_count, total_tokens,
+                       total_cost_usd, uptime_days, last_update
+    """
+    from datetime import datetime, timezone
+
+    stats = {
+        "total_water_ml": 0,
+        "conversation_count": 0,
+        "total_tokens": 0,
+        "total_cost_usd": 0.0,
+        "uptime_days": 0,
+        "last_update": datetime.now(timezone.utc).isoformat()
+    }
+
+    # Parse water pump history
+    water_file = data_dir / "water_pump_history.jsonl"
+    if water_file.exists():
+        with open(water_file) as f:
+            for line in f:
+                event = json.loads(line)
+                stats["total_water_ml"] += event.get("ml_dispensed", 0)
+
+    # Parse conversations for token counts
+    claude_dir = data_dir / "claude"
+    if claude_dir.exists():
+        for conv_file in claude_dir.glob("*.jsonl"):
+            stats["conversation_count"] += 1
+            with open(conv_file) as f:
+                for line in f:
+                    msg = json.loads(line)
+                    if "usage" in msg:
+                        stats["total_tokens"] += msg["usage"].get("input_tokens", 0)
+                        stats["total_tokens"] += msg["usage"].get("output_tokens", 0)
+
+    # Estimate cost (rough approximation)
+    stats["total_cost_usd"] = stats["total_tokens"] * 0.000003  # ~$3 per 1M tokens
+
+    return stats

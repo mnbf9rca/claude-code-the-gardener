@@ -27,6 +27,11 @@ SuccessExitStatus=143
 # Emergency override: sudo systemctl kill --signal=SIGKILL gardener-agent.service
 TimeoutStopSec=3600
 
+# Ensure files created by the agent are world-readable (664 base → chmod +x → 755, mask r-x).
+# Without this, files created as 600 then chmod +x'd become 711 (mask --x),
+# overriding the directory's default:other::r-x ACL and blocking publisher read access.
+UMask=0022
+
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
