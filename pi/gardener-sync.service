@@ -28,8 +28,9 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 
-# Write access only to workspace staging dir
+# Write access: workspace staging dir and incremental sync state file
 ReadWritePaths=/home/gardener-publisher/gardener-site
+ReadWritePaths=/home/gardener-publisher/.sync-state
 
 # Explicit read-only bind mounts for source data from other users
 # (belt-and-suspenders; gardener-publisher group membership already grants access)

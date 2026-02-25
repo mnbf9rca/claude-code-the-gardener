@@ -11,16 +11,33 @@ BUCKET="gardener-data"
 # Reuses the existing gardener-site repo clone (already has SSH deploy key configured)
 WORKSPACE_STAGING="/home/gardener-publisher/gardener-site"
 
+# State file — touched after each successful sync run.
+# find -newer uses its mtime so only files created/modified since the last
+# successful sync are processed. R2 is append-only: deletes on Pi never
+# propagate to R2.
+#
+# IMPORTANT: this file must be touched manually after the initial MacBook
+# bulk upload so the Pi only handles incremental new files going forward:
+#   sudo touch /home/gardener-publisher/.sync-state
+STATE_FILE="/home/gardener-publisher/.sync-state"
+
 # sync_with_dates SRC R2_DEST_PREFIX [extra rclone args...]
 #
-# Copies files from SRC to R2 organised by file mtime: R2_DEST_PREFIX/YYYY/MM/DD/rel_path
-# Uses rclone copyto per file so the destination path can be constructed from mtime.
-# rclone copyto is idempotent: skips files already in R2 with matching size/mtime.
+# Copies files from SRC that are newer than STATE_FILE to R2, organised by
+# file mtime: R2_DEST_PREFIX/YYYY/MM/DD/rel_path
+# Skips entirely if STATE_FILE does not exist (guards against slow first run
+# before the MacBook initial bulk upload has completed).
 sync_with_dates() {
     local src="$1"
     local r2_dest="$2"
     shift 2
     local -a rclone_args=("$@")
+
+    if [ ! -f "$STATE_FILE" ]; then
+        log "  Skipping ${r2_dest}: no state file at ${STATE_FILE}."
+        log "  Touch it after the initial MacBook bulk sync to enable incremental mode."
+        return
+    fi
 
     local count=0
     while IFS= read -r file; do
@@ -33,8 +50,8 @@ sync_with_dates() {
             "${REMOTE}:${BUCKET}/${r2_dest}/${date_path}/${rel_path}" \
             "${rclone_args[@]}"
         count=$((count + 1))
-    done < <(find "$src" -type f)
-    log "  ${count} file(s) checked/synced → ${r2_dest}"
+    done < <(find "$src" -type f -newer "$STATE_FILE")
+    log "  ${count} new file(s) synced → ${r2_dest}"
 }
 
 log "=== Gardener Sync Start ==="
@@ -90,5 +107,9 @@ if ! git diff --staged --quiet; then
 else
     log "No workspace changes to push"
 fi
+
+# Update state file — marks the high-water point for the next incremental sync.
+# Only reached if all sections above completed without error (set -e).
+touch "$STATE_FILE"
 
 log "=== Sync complete ==="
