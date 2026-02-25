@@ -7,7 +7,8 @@ set -euo pipefail
 log() { echo "[$(date -Iseconds)] $*"; }
 
 REMOTE="r2-gardener"
-BUCKET="gardener-data"
+BUCKET_DATA="gardener-data"    # private: sessions, sensor data, notes
+BUCKET_PHOTOS="gardener-photos" # public: photos only (custom domain)
 # Reuses the existing gardener-site repo clone (already has SSH deploy key configured)
 WORKSPACE_STAGING="/home/gardener-publisher/gardener-site"
 
@@ -16,26 +17,27 @@ WORKSPACE_STAGING="/home/gardener-publisher/gardener-site"
 # successful sync are processed. R2 is append-only: deletes on Pi never
 # propagate to R2.
 #
-# IMPORTANT: this file must be touched manually after the initial MacBook
-# bulk upload so the Pi only handles incremental new files going forward:
+# IMPORTANT: touch this file after the initial bulk sync completes so the
+# 15-min timer only handles incremental new files going forward:
 #   sudo touch /home/gardener-publisher/.sync-state
 STATE_FILE="/home/gardener-publisher/.sync-state"
 
-# sync_with_dates SRC R2_DEST_PREFIX [extra rclone args...]
+# sync_with_dates BUCKET SRC R2_DEST_PREFIX [extra rclone args...]
 #
 # Copies files from SRC that are newer than STATE_FILE to R2, organised by
-# file mtime: R2_DEST_PREFIX/YYYY/MM/DD/rel_path
+# file mtime: BUCKET/R2_DEST_PREFIX/YYYY/MM/DD/rel_path
 # Skips entirely if STATE_FILE does not exist (guards against slow first run
-# before the MacBook initial bulk upload has completed).
+# before the initial bulk sync has completed).
 sync_with_dates() {
-    local src="$1"
-    local r2_dest="$2"
-    shift 2
+    local bucket="$1"
+    local src="$2"
+    local r2_dest="$3"
+    shift 3
     local -a rclone_args=("$@")
 
     if [ ! -f "$STATE_FILE" ]; then
         log "  Skipping ${r2_dest}: no state file at ${STATE_FILE}."
-        log "  Touch it after the initial MacBook bulk sync to enable incremental mode."
+        log "  Touch it after the initial bulk sync to enable incremental mode."
         return
     fi
 
@@ -45,13 +47,19 @@ sync_with_dates() {
         mtime=$(stat -c '%Y' "$file")
         date_path=$(date -d "@${mtime}" +%Y/%m/%d)
         rel_path=$(realpath --relative-to="$src" "$file")
+        local dest_path
+        if [ -n "$r2_dest" ]; then
+            dest_path="${bucket}/${r2_dest}/${date_path}/${rel_path}"
+        else
+            dest_path="${bucket}/${date_path}/${rel_path}"
+        fi
         rclone copyto \
             "$file" \
-            "${REMOTE}:${BUCKET}/${r2_dest}/${date_path}/${rel_path}" \
+            "${REMOTE}:${dest_path}" \
             "${rclone_args[@]}"
         count=$((count + 1))
     done < <(find "$src" -type f -newer "$STATE_FILE" -not -path '*/.git/*')
-    log "  ${count} new file(s) synced → ${r2_dest}"
+    log "  ${count} new file(s) synced → ${bucket}/${r2_dest}"
 }
 
 log "=== Gardener Sync Start ==="
@@ -62,22 +70,24 @@ log "=== Gardener Sync Start ==="
 log "Syncing sensor data..."
 rclone copy \
     /home/mcpserver/data/ \
-    "${REMOTE}:${BUCKET}/raw/data/" \
+    "${REMOTE}:${BUCKET_DATA}/raw/data/" \
     --exclude="light_state.json" \
     --exclude="notes_archive/**" \
     --exclude=".git/**" \
     --log-level INFO
 
-# 2. Photos — organised by file mtime into raw/photos/YYYY/MM/DD/
+# 2. Photos — public bucket, organised by file mtime into YYYY/MM/DD/
 log "Syncing photos..."
 sync_with_dates \
+    "${BUCKET_PHOTOS}" \
     /home/mcpserver/photos/ \
-    "raw/photos" \
+    "" \
     --log-level INFO
 
-# 3. Claude session JSONL — organised by file mtime into raw/sessions/YYYY/MM/DD/
+# 3. Claude session JSONL — private bucket, organised by file mtime into raw/sessions/YYYY/MM/DD/
 log "Syncing sessions..."
 sync_with_dates \
+    "${BUCKET_DATA}" \
     /home/gardener/.claude/projects/-home-gardener-workspace/ \
     "raw/sessions" \
     --log-level INFO
@@ -86,7 +96,8 @@ sync_with_dates \
 log "Syncing notes archive..."
 rclone copy \
     /home/mcpserver/data/notes_archive/ \
-    "${REMOTE}:${BUCKET}/raw/notes/" \
+    "${REMOTE}:${BUCKET_DATA}/raw/notes/" \
+    --exclude=".git/**" \
     --log-level INFO
 
 # 5. Workspace → GitHub
