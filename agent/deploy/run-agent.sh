@@ -139,6 +139,22 @@ else
     healthcheck "/fail" "$(tail -c 102400 "$LOG_FILE")"  # Failure endpoint with logs
 fi
 
+# Fix ACL masks so gardener-publisher can read files for R2 sync.
+# Claude creates files then may chmod +x them; if the base mode had no group/other
+# read bits (e.g. 600 → chmod +x → 711), chmod sets the ACL mask to --x which
+# overrides the directory's default:other::r-x ACL and permanently blocks read.
+# Setting m::r-x after each run restores readability without affecting owner perms.
+for acl_dir in "$HOME/.claude/projects" "$HOME/workspace"; do
+    if [ -d "$acl_dir" ]; then
+        echo "[$(date -Iseconds)] Fixing ACL masks: ${acl_dir}" | tee -a "$LOG_FILE"
+        if setfacl -R -m m::r-x "$acl_dir/" 2>&1 | tee -a "$LOG_FILE"; then
+            echo "[$(date -Iseconds)] ✓ ACL masks fixed: ${acl_dir}" | tee -a "$LOG_FILE"
+        else
+            echo "[$(date -Iseconds)] WARNING: Failed to fix ACL masks in ${acl_dir}" | tee -a "$LOG_FILE"
+        fi
+    fi
+done
+
 # Backup Claude conversations to git repository
 BACKUP_DIR="$HOME/claude-backup"
 PROJECTS_DIR="$HOME/.claude/projects/-home-gardener-workspace"

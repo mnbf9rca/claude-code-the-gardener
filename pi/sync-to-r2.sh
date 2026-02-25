@@ -107,10 +107,19 @@ rclone copy \
 #    rsync into the local git clone (--delete keeps it current-state-only)
 #    then commit and push if anything changed
 log "Syncing workspace to GitHub..."
+rsync_rc=0
 rsync -a --delete \
     --exclude=".git/" \
     /home/gardener/workspace/ \
-    "${WORKSPACE_STAGING}/"
+    "${WORKSPACE_STAGING}/" || rsync_rc=$?
+# Exit 23 = partial transfer (some files unreadable — fix with: sudo chmod -R o+r /home/gardener/workspace/)
+# Treat as non-fatal so the state file still gets touched and git push still runs.
+if [ "$rsync_rc" -ne 0 ] && [ "$rsync_rc" -ne 23 ]; then
+    log "ERROR: rsync failed with exit code ${rsync_rc}"
+    exit "$rsync_rc"
+elif [ "$rsync_rc" -eq 23 ]; then
+    log "WARNING: rsync exit 23 — some workspace files were unreadable (permission denied)"
+fi
 
 cd "${WORKSPACE_STAGING}"
 git add -A
