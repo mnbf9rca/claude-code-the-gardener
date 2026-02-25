@@ -129,6 +129,7 @@ if [ ! -f "$SSH_KEY" ]; then
     exit 1
 fi
 echo "   ✓ SSH key exists at ${SSH_KEY}"
+echo "   Key fingerprint: $(ssh-keygen -lf "${SSH_KEY}" 2>/dev/null | awk '{print $2}') (compare to deploy key on GitHub)"
 
 # Pre-populate github.com known_hosts if not already present
 if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
@@ -138,13 +139,14 @@ if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
 fi
 
 # Test GitHub SSH access — the deploy key must be added to gardener-site repo
-# accept-new: uses known_hosts, rejects changed keys (MITM protection), but
-# doesn't refuse valid entries when invoked via sudo (unlike StrictHostKeyChecking=yes)
-if sudo -u "$SYNC_USER" \
-        ssh -T \
-        -o StrictHostKeyChecking=accept-new \
-        -o ConnectTimeout=10 \
-        git@github.com 2>&1 | grep -q "successfully authenticated"; then
+# Capture output so we can display it for debugging regardless of outcome
+SSH_OUTPUT=$(sudo -u "$SYNC_USER" \
+    ssh -T \
+    -o StrictHostKeyChecking=accept-new \
+    -o ConnectTimeout=10 \
+    git@github.com 2>&1)
+echo "   SSH response: ${SSH_OUTPUT}"
+if echo "${SSH_OUTPUT}" | grep -q "successfully authenticated"; then
     echo "   ✓ GitHub SSH authentication works"
 else
     echo ""
