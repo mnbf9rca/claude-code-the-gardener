@@ -77,7 +77,7 @@ fi
 echo "✓ $(git --version)"
 
 # rclone r2-gardener remote configured for sync user
-if ! sudo -u "$SYNC_USER" rclone listremotes 2>/dev/null | grep -q "r2-gardener:"; then
+if ! sudo -u "$SYNC_USER" rclone listremotes | grep -q "r2-gardener:"; then
     echo "✗ ERROR: rclone remote 'r2-gardener' not configured for $SYNC_USER."
     echo ""
     echo "  Configure rclone as $SYNC_USER:"
@@ -132,8 +132,8 @@ echo "   ✓ SSH key exists at ${SSH_KEY}"
 echo "   Key fingerprint: $(ssh-keygen -lf "${SSH_KEY}" 2>/dev/null | awk '{print $2}') (compare to deploy key on GitHub)"
 
 # Pre-populate github.com known_hosts if not already present
-if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
-    sudo -u "$SYNC_USER" ssh-keyscan -H github.com 2>/dev/null \
+if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com; then
+    sudo -u "$SYNC_USER" ssh-keyscan -H github.com \
         | sudo -u "$SYNC_USER" tee -a "${SSH_DIR}/known_hosts" > /dev/null || true
     echo "   ✓ github.com added to known_hosts"
 fi
@@ -179,7 +179,7 @@ if [ ! -d "${STAGING_DIR}/.git" ]; then
 fi
 
 # Verify the remote points to the right repo
-ACTUAL_REMOTE=$(sudo -u "$SYNC_USER" git -C "$STAGING_DIR" remote get-url origin 2>/dev/null || echo "")
+ACTUAL_REMOTE=$(sudo -u "$SYNC_USER" git -C "$STAGING_DIR" remote get-url origin || echo "")
 if [ "$ACTUAL_REMOTE" != "$GITHUB_REPO" ]; then
     echo "✗ ERROR: Remote origin is '${ACTUAL_REMOTE}', expected '${GITHUB_REPO}'"
     exit 1
