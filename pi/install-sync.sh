@@ -60,6 +60,22 @@ if ! command -v rclone &>/dev/null; then
 fi
 echo "✓ rclone $(rclone --version | head -1 | awk '{print $2}')"
 
+# rsync installed (used by sync script for workspace staging)
+if ! command -v rsync &>/dev/null; then
+    echo "✗ ERROR: rsync is not installed."
+    echo "  sudo apt install rsync -y"
+    exit 1
+fi
+echo "✓ rsync $(rsync --version | head -1)"
+
+# git installed (used by sync script to push workspace to GitHub)
+if ! command -v git &>/dev/null; then
+    echo "✗ ERROR: git is not installed."
+    echo "  sudo apt install git -y"
+    exit 1
+fi
+echo "✓ $(git --version)"
+
 # rclone r2-gardener remote configured for sync user
 if ! sudo -u "$SYNC_USER" rclone listremotes 2>/dev/null | grep -q "r2-gardener:"; then
     echo "✗ ERROR: rclone remote 'r2-gardener' not configured for $SYNC_USER."
@@ -123,9 +139,10 @@ if ! sudo -u "$SYNC_USER" ssh-keygen -F github.com &>/dev/null; then
 fi
 
 # Test GitHub SSH access — the deploy key must be added to gardener-site repo
+# Use StrictHostKeyChecking=yes so the known_hosts entry just populated is enforced
 if sudo -u "$SYNC_USER" \
         ssh -T \
-        -o StrictHostKeyChecking=no \
+        -o StrictHostKeyChecking=yes \
         -o ConnectTimeout=10 \
         git@github.com 2>&1 | grep -q "successfully authenticated"; then
     echo "   ✓ GitHub SSH authentication works"
