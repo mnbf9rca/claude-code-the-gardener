@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install AWS CLI (for S3-compatible R2 sync)
         run: |
@@ -66,7 +66,7 @@ jobs:
           ls -la site/src/data/state/
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
