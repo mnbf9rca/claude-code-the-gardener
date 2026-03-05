@@ -62,7 +62,7 @@ def test_filter_lit_filenames_no_events_returns_all():
 
 
 def test_filter_lit_filenames_photo_before_first_event_falls_back_to_all():
-    """Photo taken before the first light event → light was off → excluded."""
+    """Photo taken before the first light event → no lit photos found → falls back to all filenames."""
     filenames = ["plant_20260224_060000_001.jpg"]
     events = [{"timestamp": "2026-02-24T08:00:00Z", "event_type": "turn_on"}]
     result = filter_lit_filenames(filenames, events)
