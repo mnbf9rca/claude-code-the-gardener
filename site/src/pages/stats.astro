@@ -16,7 +16,7 @@ const totalSessions  = Object.values(stats).reduce((s, d) => s + (d.sessions ?? 
 const totalCost      = Object.values(stats).reduce((s, d) => s + (d.estimated_cost_usd ?? 0), 0);
 const totalInput     = Object.values(stats).reduce((s, d) => s + (d.input_tokens ?? 0), 0);
 const totalOutput    = Object.values(stats).reduce((s, d) => s + (d.output_tokens ?? 0), 0);
-const daysMonitored  = Object.keys(sensorDaily as Record<string, unknown>).length;
+const daysMonitored  = Object.keys(stats).length;
 const avgCostPerDay  = daysMonitored > 0 ? totalCost / daysMonitored : 0;
 
 const allToolCalls: Record<string, number> = {};
@@ -63,6 +63,7 @@ const summaryReadouts = [
     <div class="chart-frame">
       <canvas id="costChart"></canvas>
       <div class="chart-loading" id="costLoading">LOADING TELEMETRY&hellip;</div>
+      <div class="chart-error" id="costError" hidden>NO TELEMETRY AVAILABLE</div>
     </div>
   </section>
 
@@ -72,6 +73,7 @@ const summaryReadouts = [
     <div class="chart-frame">
       <canvas id="moistureChart"></canvas>
       <div class="chart-loading" id="moistureLoading">LOADING TELEMETRY&hellip;</div>
+      <div class="chart-error" id="moistureError" hidden>NO TELEMETRY AVAILABLE</div>
     </div>
   </section>
 
@@ -120,7 +122,7 @@ const summaryReadouts = [
 
 <!-- Chart.js via CDN — loaded inline so Vite doesn't attempt to bundle it -->
 <script is:inline type="module">
-  import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm';
+  import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.9/auto/+esm';
 
   const AMBER      = 'rgba(240,163,44,0.85)';
   const AMBER_DIM  = 'rgba(240,163,44,0.25)';
@@ -128,7 +130,6 @@ const summaryReadouts = [
   const SAGE_FILL  = 'rgba(107,170,94,0.08)';
   const GRID       = '#1C1408';
   const TICK       = '#6A5A3A';
-  const BG         = '#0D0B07';
 
   const baseFont = { family: "'Martian Mono', 'Courier New', monospace", size: 10 };
 
@@ -137,9 +138,15 @@ const summaryReadouts = [
 
   function hideLoader(id) {
     const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    if (el) el.hidden = true;
   }
 
+  function showError(id) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = false;
+  }
+
+  try {
   const [aiRes, hourlyRes] = await Promise.all([
     fetch('/state/ai_stats.json'),
     fetch('/state/sensor_stats_hourly.json'),
@@ -150,6 +157,10 @@ const summaryReadouts = [
     const costDates  = Object.keys(aiData).sort();
     const costValues = costDates.map(d => aiData[d].estimated_cost_usd ?? 0);
 
+    if (costDates.length === 0) {
+      hideLoader('costLoading');
+      showError('costError');
+    } else {
     hideLoader('costLoading');
     new Chart(document.getElementById('costChart'), {
       type: 'bar',
@@ -198,6 +209,10 @@ const summaryReadouts = [
         },
       },
     });
+    } // end else (costDates.length > 0)
+  } else {
+    hideLoader('costLoading');
+    showError('costError');
   }
 
   if (hourlyRes.ok) {
@@ -205,6 +220,10 @@ const summaryReadouts = [
     const hourKeys  = Object.keys(hourlyData).sort().slice(-168);
     const moistVals = hourKeys.map(h => hourlyData[h]?.moisture?.avg ?? null);
 
+    if (hourKeys.length === 0) {
+      hideLoader('moistureLoading');
+      showError('moistureError');
+    } else {
     hideLoader('moistureLoading');
     new Chart(document.getElementById('moistureChart'), {
       type: 'line',
@@ -251,6 +270,16 @@ const summaryReadouts = [
         },
       },
     });
+    } // end else (hourKeys.length > 0)
+  } else {
+    hideLoader('moistureLoading');
+    showError('moistureError');
+  }
+  } catch (_) {
+    hideLoader('costLoading');
+    showError('costError');
+    hideLoader('moistureLoading');
+    showError('moistureError');
   }
 </script>
 
@@ -355,6 +384,18 @@ const summaryReadouts = [
     letter-spacing: 0.15em;
     text-transform: uppercase;
     pointer-events: none;
+  }
+  .chart-error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.65rem;
+    color: #4A3E28;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
   /* Tool table */
