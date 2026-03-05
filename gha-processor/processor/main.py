@@ -4,7 +4,7 @@ Reads raw/ from R2, writes state/ to R2.
 Cursor in state/current_state.json ensures fault-tolerant incremental processing.
 """
 import os
-from datetime import datetime, timezone
+from datetime import date as _Date, datetime, timedelta, timezone
 
 from processor.conversation import build_conversation
 from processor.cursor import load_cursor, save_cursor
@@ -94,11 +94,21 @@ def main() -> None:
 
     # ── 3. Photos → plant_timeline.json + day_index.json ────────────────────
     log("Processing photos...")
-    # Pass light events so the photo selector can prefer lit photos
-    light_events_by_date = {
-        date: day.get("light", {}).get("events", [])
+    # Pass light events so the photo selector can prefer lit photos.
+    # Also include spillover: turn_on events from the previous day whose
+    # scheduled_off extends into the current day (cross-midnight lit windows).
+    light_events_by_date: dict[str, list[dict]] = {
+        date: list(day.get("light", {}).get("events", []))
         for date, day in merged_daily.items()
     }
+    for date in list(light_events_by_date.keys()):
+        prev = (_Date.fromisoformat(date) - timedelta(days=1)).isoformat()
+        for evt in merged_daily.get(prev, {}).get("light", {}).get("events", []):
+            if (
+                evt.get("event_type") == "turn_on"
+                and evt.get("scheduled_off", "")[:10] == date
+            ):
+                light_events_by_date[date].append(evt)
     timeline, new_photos_wm = process_photos(
         s3, PHOTOS_BUCKET, wm["photos_last_modified"], PUBLIC_URL,
         light_events_by_date=light_events_by_date,

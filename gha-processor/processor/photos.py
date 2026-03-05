@@ -32,24 +32,51 @@ def parse_photo_timestamp(filename: str) -> datetime | None:
     )
 
 
+def _parse_ts(ts: str) -> float:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+
+
 def filter_lit_filenames(
     filenames: list[str],
     light_events: list[dict],
 ) -> list[str]:
     """Return only filenames taken while the light was on.
 
-    light_events is a list of dicts with keys 'timestamp' (ISO 8601 UTC)
-    and 'event_type' ('turn_on' | 'turn_off'), as stored in merged_daily.
+    light_events is a list of dicts with 'timestamp', 'event_type', and
+    optionally 'scheduled_off' (present on turn_on events from new data).
 
-    Falls back to all filenames if light_events is empty (no data available).
+    Strategy:
+    - Primary: interval-based using [turn_on.timestamp, turn_on.scheduled_off].
+      This is the most reliable approach — scheduled_off is authoritative.
+    - Fallback: event-pair state tracking for older data that lacks scheduled_off.
+      Only turn_off_scheduled / turn_off_manual / recovery_turn_off end a lit
+      window; recovery_reschedule and other intermediate events are ignored.
+
+    Returns all filenames if no lit photos are found (no light data available).
     """
     if not light_events:
         return filenames
 
-    sorted_events = sorted(
-        light_events,
-        key=lambda e: datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp(),
-    )
+    # ── Primary: interval-based ───────────────────────────────────────────────
+    intervals = [
+        (_parse_ts(evt["timestamp"]), _parse_ts(evt["scheduled_off"]))
+        for evt in light_events
+        if evt.get("event_type") == "turn_on" and evt.get("scheduled_off")
+    ]
+    if intervals:
+        lit = []
+        for fname in filenames:
+            dt = parse_photo_timestamp(fname)
+            if dt is None:
+                continue
+            pts = dt.timestamp()
+            if any(on <= pts <= off for on, off in intervals):
+                lit.append(fname)
+        return lit if lit else filenames
+
+    # ── Fallback: event-pair state tracking (old data without scheduled_off) ──
+    _OFF_TYPES = {"turn_off_scheduled", "turn_off_manual", "recovery_turn_off"}
+    sorted_events = sorted(light_events, key=lambda e: _parse_ts(e["timestamp"]))
 
     lit = []
     for fname in filenames:
@@ -59,11 +86,13 @@ def filter_lit_filenames(
         photo_ts = dt.timestamp()
         light_on = False
         for evt in sorted_events:
-            evt_ts = datetime.fromisoformat(
-                evt["timestamp"].replace("Z", "+00:00")
-            ).timestamp()
-            if evt_ts <= photo_ts:
-                light_on = evt["event_type"] == "turn_on"
+            if _parse_ts(evt["timestamp"]) <= photo_ts:
+                etype = evt["event_type"]
+                if etype == "turn_on":
+                    light_on = True
+                elif etype in _OFF_TYPES:
+                    light_on = False
+                # recovery_reschedule and other intermediates: leave state unchanged
             else:
                 break
         if light_on:
@@ -112,15 +141,30 @@ def get_noon_photo(
     filenames: list[str],
     light_events: list[dict] | None = None,
 ) -> str | None:
-    """Return the representative photo for the day, preferring lit ones.
+    """Return the photo nearest the noon slot (14:00 UTC), preferring lit ones.
 
-    When light_events are provided, selects from photos taken while the
-    light was on. Falls back to time-based selection if none are lit.
+    Filters to lit candidates first (when light_events provided), then returns
+    the photo whose timestamp is closest to SLOT_MIDPOINTS_SECONDS[NOON_SLOT].
+    Falls back to all filenames if no lit photos exist.
     """
-    selected = select_photos_for_day(filenames, light_events)
-    if not selected:
+    if not filenames:
         return None
-    return selected[min(NOON_SLOT, len(selected) - 1)]
+
+    candidates = filter_lit_filenames(filenames, light_events or [])
+
+    parsed: list[tuple[str, int]] = []
+    for fname in candidates:
+        dt = parse_photo_timestamp(fname)
+        if dt is None:
+            continue
+        seconds = dt.hour * 3600 + dt.minute * 60 + dt.second
+        parsed.append((fname, seconds))
+
+    if not parsed:
+        return None
+
+    target = SLOT_MIDPOINTS_SECONDS[NOON_SLOT]
+    return min(parsed, key=lambda p: abs(p[1] - target))[0]
 
 
 def build_photo_url(r2_key: str, public_bucket_url: str) -> str:

@@ -67,11 +67,14 @@ def _light_stats(records: list[dict]) -> dict:
         for r in records
         if r.get("event_type") == "turn_on"
     )
-    events = [
-        {"timestamp": r.get("timestamp", ""), "event_type": r.get("event_type", "")}
-        for r in records
-        if r.get("timestamp") and r.get("event_type")
-    ]
+    events = []
+    for r in records:
+        if not r.get("timestamp") or not r.get("event_type"):
+            continue
+        evt: dict = {"timestamp": r["timestamp"], "event_type": r["event_type"]}
+        if r.get("event_type") == "turn_on" and r.get("scheduled_off"):
+            evt["scheduled_off"] = r["scheduled_off"]
+        events.append(evt)
     return {"minutes_on": minutes_on, "events": events}
 
 
@@ -114,9 +117,17 @@ def _merge_moisture(existing: dict, new_records: list[dict]) -> dict:
 def _merge_light(existing: dict, new_records: list[dict]) -> dict:
     """Merge new light records into existing daily light stats."""
     new_stats = _light_stats(new_records)
+    # Deduplicate events by (timestamp, event_type).
+    # When duplicates exist, prefer the event that has scheduled_off (richer data).
+    combined = existing.get("events", []) + new_stats["events"]
+    seen: dict[tuple, dict] = {}
+    for evt in combined:
+        key = (evt["timestamp"], evt["event_type"])
+        if key not in seen or ("scheduled_off" not in seen[key] and "scheduled_off" in evt):
+            seen[key] = evt
     return {
         "minutes_on": existing.get("minutes_on", 0) + new_stats["minutes_on"],
-        "events": existing.get("events", []) + new_stats["events"],
+        "events": list(seen.values()),
     }
 
 
