@@ -11,6 +11,6 @@ export default defineConfig({
   },
   image: {
     domains: [],
-    remotePatterns: [{ protocol: 'https', hostname: '*.r2.dev' }],
+    remotePatterns: [{ protocol: 'https', hostname: 'gardener-photos.cynexia.com' }],
   },
 });

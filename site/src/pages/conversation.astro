@@ -31,7 +31,6 @@ const byDate: Array<{ date: string; msgs: (Message & { seq: number })[] }> = [];
 let seq = 1;
 for (const msg of messages) {
   const dateKey = msg.timestamp.slice(0, 10);
-  const dateLabel = fmtDate(msg.timestamp);
   let group = byDate.find(g => g.date === dateKey);
   if (!group) {
     group = { date: dateKey, msgs: [] };
@@ -278,11 +277,6 @@ for (const msg of messages) {
   .msg-body-human :global(ul),
   .msg-body-human :global(ol) { margin: 0.2rem 0 0.4rem 1rem; padding: 0; }
   .msg-body-human :global(li) { margin-bottom: 0.15rem; }
-
-  @keyframes fade-up {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
 
   @media (max-width: 600px) {
     .msg-human { margin-left: 1rem; }
