@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import { marked } from 'marked';
 import dayIndex from '../../data/state/day_index.json';
 
 const index = dayIndex as Record<string, { date: string; status: string; photo_url: string | null; has_watering: boolean; }>;
@@ -184,7 +185,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
                     </span>
                     <span class="transmission-time">{fmtDateTime(msg.timestamp)} UTC</span>
                   </div>
-                  <div class="transmission-body">{msg.content}</div>
+                  <div class="transmission-body" set:html={marked.parse(msg.content)} />
                 </div>
               ))
             }
@@ -483,8 +484,23 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.9rem;
     color: #C8B888;
     line-height: 1.65;
-    white-space: pre-wrap;
   }
+  .transmission-body :global(p) { margin: 0 0 0.5rem; }
+  .transmission-body :global(h1),
+  .transmission-body :global(h2),
+  .transmission-body :global(h3) {
+    font-family: 'Martian Mono', monospace;
+    font-style: normal;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #F0A32C;
+    margin: 0.75rem 0 0.4rem;
+  }
+  .transmission-body :global(strong) { font-style: normal; color: #E8D4A0; font-weight: 600; }
+  .transmission-body :global(ul),
+  .transmission-body :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
+  .transmission-body :global(li) { margin-bottom: 0.2rem; }
 
   /* AI usage readout grid */
   .readout-grid {

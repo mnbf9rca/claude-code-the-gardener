@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { marked } from 'marked';
 import conversationRaw from '../data/state/conversation.json';
 
 type Message = {
@@ -76,7 +77,7 @@ for (const msg of messages) {
                 <span class="msg-from-agent">AGENT &rarr; HUMAN</span>
                 <span class="msg-time">{fmtTime(msg.timestamp)} UTC</span>
               </div>
-              <div class="msg-body-agent">{msg.content}</div>
+              <div class="msg-body-agent" set:html={marked.parse(msg.content)} />
             </div>
           ) : (
             /* Human annotation */
@@ -86,7 +87,7 @@ for (const msg of messages) {
                 <span class="msg-from-human">HUMAN &rarr; AGENT</span>
                 <span class="msg-time">{fmtTime(msg.timestamp)} UTC</span>
               </div>
-              <div class="msg-body-human">{msg.content}</div>
+              <div class="msg-body-human" set:html={marked.parse(msg.content)} />
             </div>
           )
         ))}
@@ -228,8 +229,23 @@ for (const msg of messages) {
     font-size: 0.9rem;
     color: #C8B888;
     line-height: 1.7;
-    white-space: pre-wrap;
   }
+  .msg-body-agent :global(p) { margin: 0 0 0.5rem; }
+  .msg-body-agent :global(h1),
+  .msg-body-agent :global(h2),
+  .msg-body-agent :global(h3) {
+    font-family: 'Martian Mono', monospace;
+    font-style: normal;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #F0A32C;
+    margin: 0.75rem 0 0.4rem;
+  }
+  .msg-body-agent :global(strong) { font-style: normal; color: #E8D4A0; font-weight: 600; }
+  .msg-body-agent :global(ul),
+  .msg-body-agent :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
+  .msg-body-agent :global(li) { margin-bottom: 0.2rem; }
 
   /* Human message — inset, annotative style */
   .msg-human {
@@ -256,8 +272,12 @@ for (const msg of messages) {
     font-size: 0.7rem;
     color: #5A8A52;
     line-height: 1.7;
-    white-space: pre-wrap;
   }
+  .msg-body-human :global(p) { margin: 0 0 0.4rem; }
+  .msg-body-human :global(strong) { color: #8AC882; font-weight: 500; }
+  .msg-body-human :global(ul),
+  .msg-body-human :global(ol) { margin: 0.2rem 0 0.4rem 1rem; padding: 0; }
+  .msg-body-human :global(li) { margin-bottom: 0.15rem; }
 
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(6px); }

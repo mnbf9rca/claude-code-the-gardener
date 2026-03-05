@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { marked } from 'marked';
 import currentState from '../data/state/current_state.json';
 import plantTimeline from '../data/state/plant_timeline.json';
 
@@ -28,6 +29,10 @@ const msgTime = currentState.last_agent_message?.timestamp
   ? new Date(currentState.last_agent_message.timestamp).toLocaleString('en-GB', {
       dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
     })
+  : null;
+
+const msgHtml = currentState.last_agent_message?.content
+  ? marked.parse(currentState.last_agent_message.content)
   : null;
 
 const statusDot: Record<string, string> = {
@@ -91,15 +96,13 @@ const statusLabel: Record<string, string> = {
         </div>
       </div>
 
-      {currentState.last_agent_message && (
+      {currentState.last_agent_message && msgHtml && (
         <div class="transmission">
           <div class="transmission-header">
             <span class="transmission-label">AGENT TRANSMISSION</span>
             {msgTime && <span class="transmission-time">{msgTime} UTC</span>}
           </div>
-          <blockquote class="transmission-body">
-            {currentState.last_agent_message.content}
-          </blockquote>
+          <div class="transmission-body" set:html={msgHtml} />
         </div>
       )}
 
@@ -188,9 +191,9 @@ const statusLabel: Record<string, string> = {
   .specimen-label,
   .specimen-time {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-size: 0.68rem;
     letter-spacing: 0.15em;
-    color: #4A3E28;
+    color: #8A7A52;
     text-transform: uppercase;
   }
   .status-row {
@@ -245,11 +248,11 @@ const statusLabel: Record<string, string> = {
 
   .readout-rule {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.15em;
-    color: #4A3E28;
-    border-bottom: 1px solid #2A2418;
+    color: #8A7A52;
+    border-bottom: 1px solid #3A3020;
     padding-bottom: 0.4rem;
     margin-bottom: 0.6rem;
   }
@@ -257,19 +260,19 @@ const statusLabel: Record<string, string> = {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #1C1408;
-    padding: 0.45rem 0;
+    border-bottom: 1px solid #221E10;
+    padding: 0.5rem 0;
   }
   .readout-key {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #6A5A3A;
+    color: #9A8860;
   }
   .readout-val {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: #F0A32C;
     letter-spacing: 0.05em;
   }
@@ -296,20 +299,41 @@ const statusLabel: Record<string, string> = {
   }
   .transmission-time {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #4A3E28;
+    font-size: 0.62rem;
+    color: #7A6A48;
     letter-spacing: 0.05em;
   }
   .transmission-body {
     padding: 0.75rem;
-    margin: 0;
     font-family: 'Playfair Display', serif;
     font-style: italic;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     color: #C8B888;
     line-height: 1.65;
-    white-space: pre-wrap;
   }
+  .transmission-body :global(h1),
+  .transmission-body :global(h2),
+  .transmission-body :global(h3) {
+    font-family: 'Martian Mono', monospace;
+    font-style: normal;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #F0A32C;
+    margin: 0.75rem 0 0.4rem;
+  }
+  .transmission-body :global(strong) {
+    font-style: normal;
+    color: #E8D4A0;
+    font-weight: 600;
+  }
+  .transmission-body :global(p) { margin: 0 0 0.5rem; }
+  .transmission-body :global(ul),
+  .transmission-body :global(ol) {
+    margin: 0.25rem 0 0.5rem 1rem;
+    padding: 0;
+  }
+  .transmission-body :global(li) { margin-bottom: 0.2rem; }
 
   .panel-links {
     display: flex;
@@ -318,14 +342,14 @@ const statusLabel: Record<string, string> = {
   }
   .panel-link {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.65rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #6A5A3A;
+    color: #9A8860;
     text-decoration: none;
     transition: color 0.15s;
     padding: 0.4rem 0;
-    border-bottom: 1px solid #1C1408;
+    border-bottom: 1px solid #221E10;
   }
   .panel-link:hover { color: #F0A32C; }
 
@@ -347,8 +371,8 @@ const statusLabel: Record<string, string> = {
     background: #0C0A06;
     border-top: 1px solid #2A2418;
     font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #4A3E28;
+    font-size: 0.62rem;
+    color: #7A6A48;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
@@ -362,16 +386,16 @@ const statusLabel: Record<string, string> = {
   }
   .placeholder-text {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.7rem;
-    color: #3E3420;
+    font-size: 0.72rem;
+    color: #6A5A3A;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     text-align: center;
   }
   .placeholder-sub {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #2A2018;
+    font-size: 0.62rem;
+    color: #4A3E28;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     margin-top: 0.4rem;
@@ -422,13 +446,13 @@ const statusLabel: Record<string, string> = {
   }
   .day-label {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.5rem;
-    color: #3E3420;
+    font-size: 0.62rem;
+    color: #7A6A48;
     letter-spacing: 0.04em;
     text-align: center;
     text-transform: uppercase;
   }
-  .day-cell:hover .day-label { color: #7A6A42; }
+  .day-cell:hover .day-label { color: #F0A32C; }
 
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(8px); }
