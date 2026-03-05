@@ -147,137 +147,141 @@ const summaryReadouts = [
   }
 
   try {
-  const [aiRes, hourlyRes] = await Promise.all([
-    fetch('/state/ai_stats.json'),
-    fetch('/state/sensor_stats_hourly.json'),
-  ]);
+    const aiRes = await fetch('/state/ai_stats.json');
 
-  if (aiRes.ok) {
-    const aiData = await aiRes.json();
-    const costDates  = Object.keys(aiData).sort();
-    const costValues = costDates.map(d => aiData[d].estimated_cost_usd ?? 0);
+    if (aiRes.ok) {
+      const aiData = await aiRes.json();
+      const costDates  = Object.keys(aiData).sort();
+      const costValues = costDates.map(d => aiData[d].estimated_cost_usd ?? 0);
 
-    if (costDates.length === 0) {
+      if (costDates.length === 0) {
+        hideLoader('costLoading');
+        showError('costError');
+      } else {
+        hideLoader('costLoading');
+        new Chart(document.getElementById('costChart'), {
+          type: 'bar',
+          data: {
+            labels: costDates.map(d => d.slice(5)),
+            datasets: [{
+              data: costValues,
+              backgroundColor: AMBER_DIM,
+              borderColor: AMBER,
+              borderWidth: 1,
+              borderRadius: 0,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#1C1408',
+                borderColor: '#2A2418',
+                borderWidth: 1,
+                titleColor: '#F0A32C',
+                bodyColor: '#E8D4A0',
+                callbacks: {
+                  label: ctx => ` $${ctx.parsed.y.toFixed(4)}`,
+                },
+              },
+            },
+            scales: {
+              x: {
+                grid: { color: GRID },
+                ticks: { color: TICK, maxTicksLimit: 14, font: baseFont },
+                border: { color: '#2A2418' },
+              },
+              y: {
+                grid: { color: GRID },
+                ticks: {
+                  color: TICK,
+                  font: baseFont,
+                  callback: v => `$${Number(v).toFixed(3)}`,
+                },
+                border: { color: '#2A2418' },
+                beginAtZero: true,
+              },
+            },
+          },
+        });
+      }
+    } else {
       hideLoader('costLoading');
       showError('costError');
-    } else {
-    hideLoader('costLoading');
-    new Chart(document.getElementById('costChart'), {
-      type: 'bar',
-      data: {
-        labels: costDates.map(d => d.slice(5)),
-        datasets: [{
-          data: costValues,
-          backgroundColor: AMBER_DIM,
-          borderColor: AMBER,
-          borderWidth: 1,
-          borderRadius: 0,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1C1408',
-            borderColor: '#2A2418',
-            borderWidth: 1,
-            titleColor: '#F0A32C',
-            bodyColor: '#E8D4A0',
-            callbacks: {
-              label: ctx => ` $${ctx.parsed.y.toFixed(4)}`,
-            },
-          },
-        },
-        scales: {
-          x: {
-            grid: { color: GRID },
-            ticks: { color: TICK, maxTicksLimit: 14, font: baseFont },
-            border: { color: '#2A2418' },
-          },
-          y: {
-            grid: { color: GRID },
-            ticks: {
-              color: TICK,
-              font: baseFont,
-              callback: v => `$${Number(v).toFixed(3)}`,
-            },
-            border: { color: '#2A2418' },
-            beginAtZero: true,
-          },
-        },
-      },
-    });
-    } // end else (costDates.length > 0)
-  } else {
+    }
+  } catch (err) {
+    console.error('[stats] cost chart load failed:', err);
     hideLoader('costLoading');
     showError('costError');
   }
 
-  if (hourlyRes.ok) {
-    const hourlyData = await hourlyRes.json();
-    const hourKeys  = Object.keys(hourlyData).sort().slice(-168);
-    const moistVals = hourKeys.map(h => hourlyData[h]?.moisture?.avg ?? null);
+  try {
+    const hourlyRes = await fetch('/state/sensor_stats_hourly.json');
 
-    if (hourKeys.length === 0) {
+    if (hourlyRes.ok) {
+      const hourlyData = await hourlyRes.json();
+      const hourKeys  = Object.keys(hourlyData).sort().slice(-168);
+      const moistVals = hourKeys.map(h => hourlyData[h]?.moisture?.avg ?? null);
+
+      if (hourKeys.length === 0) {
+        hideLoader('moistureLoading');
+        showError('moistureError');
+      } else {
+        hideLoader('moistureLoading');
+        new Chart(document.getElementById('moistureChart'), {
+          type: 'line',
+          data: {
+            labels: hourKeys.map(h => h.slice(5, 16).replace('T', ' ')),
+            datasets: [{
+              data: moistVals,
+              borderColor: SAGE,
+              backgroundColor: SAGE_FILL,
+              tension: 0.35,
+              pointRadius: 0,
+              pointHoverRadius: 3,
+              fill: true,
+              borderWidth: 1.5,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#1C1408',
+                borderColor: '#1C2A1C',
+                borderWidth: 1,
+                titleColor: '#6BAA5E',
+                bodyColor: '#E8D4A0',
+                callbacks: {
+                  label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}`,
+                },
+              },
+            },
+            scales: {
+              x: {
+                grid: { color: GRID },
+                ticks: { color: TICK, maxTicksLimit: 14, font: baseFont },
+                border: { color: '#2A2418' },
+              },
+              y: {
+                grid: { color: GRID },
+                ticks: { color: TICK, font: baseFont },
+                border: { color: '#2A2418' },
+              },
+            },
+          },
+        });
+      }
+    } else {
       hideLoader('moistureLoading');
       showError('moistureError');
-    } else {
-    hideLoader('moistureLoading');
-    new Chart(document.getElementById('moistureChart'), {
-      type: 'line',
-      data: {
-        labels: hourKeys.map(h => h.slice(5, 16).replace('T', ' ')),
-        datasets: [{
-          data: moistVals,
-          borderColor: SAGE,
-          backgroundColor: SAGE_FILL,
-          tension: 0.35,
-          pointRadius: 0,
-          pointHoverRadius: 3,
-          fill: true,
-          borderWidth: 1.5,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1C1408',
-            borderColor: '#1C2A1C',
-            borderWidth: 1,
-            titleColor: '#6BAA5E',
-            bodyColor: '#E8D4A0',
-            callbacks: {
-              label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}`,
-            },
-          },
-        },
-        scales: {
-          x: {
-            grid: { color: GRID },
-            ticks: { color: TICK, maxTicksLimit: 14, font: baseFont },
-            border: { color: '#2A2418' },
-          },
-          y: {
-            grid: { color: GRID },
-            ticks: { color: TICK, font: baseFont },
-            border: { color: '#2A2418' },
-          },
-        },
-      },
-    });
-    } // end else (hourKeys.length > 0)
-  } else {
-    hideLoader('moistureLoading');
-    showError('moistureError');
-  }
-  } catch (_) {
-    hideLoader('costLoading');
-    showError('costError');
+    }
+  } catch (err) {
+    console.error('[stats] moisture chart load failed:', err);
     hideLoader('moistureLoading');
     showError('moistureError');
   }
