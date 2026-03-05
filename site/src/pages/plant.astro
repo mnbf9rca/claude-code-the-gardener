@@ -1,15 +1,26 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import dayIndex from '../data/state/day_index.json';
+import plantTimeline from '../data/state/plant_timeline.json';
 
-const index = dayIndex as Record<string, {
+const timeline = plantTimeline as Record<string, {
   date: string;
   status: string;
-  photo_url: string | null;
+  noon_photo_url: string | null;
+  photos: string[];
   has_watering: boolean;
 }>;
 
-const days = Object.values(index).sort((a, b) => b.date.localeCompare(a.date));
+function pickBestPhoto(photos: string[] | null | undefined): string | null {
+  if (!photos || photos.length === 0) return null;
+  const score = (url: string) => {
+    const parts = url.split('/').pop()?.split('_') ?? [];
+    const h = parts.length >= 3 ? parseInt(parts[2].slice(0, 2), 10) : 12;
+    return (h < 7 || h >= 21) ? 1000 + Math.abs(h - 12) : Math.abs(h - 12);
+  };
+  return photos.reduce((best, p) => score(p) < score(best) ? p : best);
+}
+
+const days = Object.values(timeline).sort((a, b) => b.date.localeCompare(a.date));
 
 const statusBorderColor: Record<string, string> = {
   healthy:  '#6BAA5E',
@@ -49,12 +60,13 @@ const statusBorderColor: Record<string, string> = {
   <div class="contact-sheet">
     {days.map(day => {
       const bc = statusBorderColor[day.status] ?? statusBorderColor.unknown;
+      const photo = pickBestPhoto(day.photos) ?? day.noon_photo_url ?? null;
       return (
         <a href={`/day/${day.date}`} class="sheet-cell" style={`border-left-color:${bc}`}>
           <div class="cell-thumb">
-            {day.photo_url ? (
+            {photo ? (
               <img
-                src={day.photo_url}
+                src={photo}
                 alt={`Specimen ${day.date}`}
                 class="cell-img"
                 loading="lazy"
