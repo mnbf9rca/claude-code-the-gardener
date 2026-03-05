@@ -1,6 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'h3']),
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
 import conversationRaw from '../data/state/conversation.json';
 
 type Message = {
@@ -76,7 +84,7 @@ for (const msg of messages) {
                 <span class="msg-from-agent">AGENT &rarr; HUMAN</span>
                 <span class="msg-time">{fmtTime(msg.timestamp)} UTC</span>
               </div>
-              <div class="msg-body-agent" set:html={marked.parse(msg.content)} />
+              <div class="msg-body-agent" set:html={renderMd(msg.content)} />
             </div>
           ) : (
             /* Human annotation */
@@ -86,7 +94,7 @@ for (const msg of messages) {
                 <span class="msg-from-human">HUMAN &rarr; AGENT</span>
                 <span class="msg-time">{fmtTime(msg.timestamp)} UTC</span>
               </div>
-              <div class="msg-body-human" set:html={marked.parse(msg.content)} />
+              <div class="msg-body-human" set:html={renderMd(msg.content)} />
             </div>
           )
         ))}

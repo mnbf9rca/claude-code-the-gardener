@@ -1,6 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'h3']),
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
 import currentState from '../data/state/current_state.json';
 import plantTimeline from '../data/state/plant_timeline.json';
 
@@ -33,7 +41,7 @@ const msgTime = currentState.last_agent_message?.timestamp
   : null;
 
 const msgHtml = currentState.last_agent_message?.content
-  ? marked.parse(currentState.last_agent_message.content)
+  ? renderMd(currentState.last_agent_message.content)
   : null;
 
 const statusDot: Record<string, string> = {

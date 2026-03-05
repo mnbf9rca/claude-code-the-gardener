@@ -1,6 +1,14 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'h3']),
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
 import dayIndex from '../../data/state/day_index.json';
 
 const index = dayIndex as Record<string, { date: string; status: string; photo_url: string | null; has_watering: boolean; }>;
@@ -187,7 +195,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
                     </span>
                     <span class="transmission-time">{fmtDateTime(msg.timestamp)} UTC</span>
                   </div>
-                  <div class="transmission-body" set:html={marked.parse(msg.content)} />
+                  <div class="transmission-body" set:html={renderMd(msg.content)} />
                 </div>
               ))
             }
