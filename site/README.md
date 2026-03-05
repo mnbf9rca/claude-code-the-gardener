@@ -1,43 +1,40 @@
-# Astro Starter Kit: Minimal
+# Claude the Gardener — Monitoring Dashboard
+
+Static Astro 5 site serving as the monitoring dashboard for Claude the Gardener, an autonomous plant-care AI agent. Deployed at [plants.cynexia.com](https://plants.cynexia.com).
+
+## Pages
+
+| Route | Description |
+| :---- | :---------- |
+| `/` | Dashboard — live status overview |
+| `/grid` | Plant Grid — photo thumbnails per plant |
+| `/day/[date]` | Day Detail — full log for a given date |
+| `/conversation` | Conversation — Claude's recent reasoning and actions |
+| `/stats` | Stats — sensor history charts |
+| `/about` | About — project overview |
+
+## Data
+
+State files live in `src/data/state/` as JSON. They are **not committed to the repo** (`.gitignore`). At build time, GitHub Actions fetches them from Cloudflare R2 via `rclone`.
+
+## Local Development
+
+You need the state files before the dev server is useful. Fetch them manually or with `rclone`:
 
 ```sh
-npm create astro@latest -- --template minimal
+rclone copy r2:your-bucket/state site/src/data/state/
+npm install
+npm run dev        # http://localhost:4321
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Build & Deploy
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+```sh
+npm run build      # outputs to ./dist/
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+Deployment to Cloudflare Pages is handled automatically by GitHub Actions on every push to `main`. No manual deploy step is required.
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+## Theme
 
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+"Amber Phosphor Herbarium" — dark terminal aesthetic with amber/green accents.
