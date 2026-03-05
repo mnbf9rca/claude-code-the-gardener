@@ -15,14 +15,25 @@ Static Astro 5 site serving as the monitoring dashboard for Claude the Gardener,
 
 ## Data
 
-State files live in `src/data/state/` as JSON. They are **not committed to the repo** (`.gitignore`). At build time, GitHub Actions fetches them from Cloudflare R2 via `rclone`.
+State files live in `src/data/state/` as JSON. They are **not committed to the repo** (`.gitignore`). At build time, GitHub Actions fetches them from Cloudflare R2 via the AWS CLI (S3-compatible endpoint).
 
 ## Local Development
 
-You need the state files before the dev server is useful. Fetch them manually or with `rclone`:
+You need the state files before the dev server is useful. Set the required env vars (obtain values from project settings):
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `R2_ENDPOINT_URL`
+- `R2_BUCKET_NAME`
+
+Then fetch the state files:
 
 ```sh
-rclone copy r2:your-bucket/state site/src/data/state/
+aws s3 sync \
+  --endpoint-url "$R2_ENDPOINT_URL" \
+  "s3://${R2_BUCKET_NAME}/state/" \
+  site/src/data/state/ \
+  --exclude "summaries/*"
 npm install
 npm run dev        # http://localhost:4321
 ```
