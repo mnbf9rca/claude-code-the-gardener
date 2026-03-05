@@ -1,0 +1,545 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+import dayIndex from '../../data/state/day_index.json';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags, // img intentionally excluded; agent messages are text-only
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
+
+const index = dayIndex as Record<string, { date: string; status: string; photo_url: string | null; has_watering: boolean; }>;
+
+export async function getStaticPaths() {
+  const idx = dayIndex as Record<string, unknown>;
+  return Object.keys(idx).map(date => ({ params: { date } }));
+}
+
+const { date } = Astro.params;
+
+type DayData = {
+  date: string;
+  status: string;
+  photos?: string[];
+  water_events?: Array<{ timestamp: string; ml?: number }>;
+  light_events?: Array<{ timestamp: string; event_type: string; duration_minutes?: number | null }>;
+  moisture_readings?: Array<{ timestamp: string; value: number }>;
+  messages_to_human?: Array<{ timestamp: string; content: string; direction?: string }>;
+  messages_from_human?: Array<{ timestamp: string; content: string; direction?: string }>;
+  token_usage?: { sessions: number; input_tokens: number; output_tokens: number };
+  estimated_cost_usd?: number;
+};
+
+let dayData: DayData | null = null;
+try {
+  const mod = await import(`../../data/state/day/${date}.json`);
+  dayData = mod.default as DayData;
+} catch {
+  dayData = null;
+}
+
+const visiblePhotos = dayData?.photos ?? [];
+
+const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
+const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;
+
+const statusColor: Record<string, string> = {
+  healthy:  '#6BAA5E',
+  stressed: '#D4821E',
+  critical: '#E04848',
+  unknown:  '#4A3E28',
+};
+
+function fmtTime(ts: string) {
+  return new Date(ts).toLocaleTimeString('en-GB', {
+    timeZone: 'UTC', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function fmtDateTime(ts: string) {
+  return new Date(ts).toLocaleString('en-GB', {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
+  });
+}
+
+// Previous/next day navigation
+const allDates = Object.keys(dayIndex).sort();
+const idx = allDates.indexOf(date!);
+const prevDate = idx > 0 ? allDates[idx - 1] : null;
+const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
+---
+
+<Layout title={`${date}`}>
+
+  <!-- Back nav + date navigation -->
+  <div class="day-nav">
+    <a href="/plant" class="back-link">&larr; Field records</a>
+    <div class="date-nav">
+      {prevDate && <a href={`/day/${prevDate}`} class="date-nav-link">&larr; {prevDate.slice(5)}</a>}
+      {nextDate && <a href={`/day/${nextDate}`} class="date-nav-link">{nextDate.slice(5)} &rarr;</a>}
+    </div>
+  </div>
+
+  <!-- Day header -->
+  <div class="day-header">
+    <div class="day-header-top">
+      <h1 class="day-title">{date}</h1>
+      <span class="status-badge" style={`color:${statusColor[status] ?? statusColor.unknown};border-color:${statusColor[status] ?? statusColor.unknown}40`}>
+        <span class="status-dot" style={`background:${statusColor[status] ?? statusColor.unknown}`}></span>
+        {status.toUpperCase()}
+      </span>
+    </div>
+    {(waterTotal > 0) && (
+      <div class="water-summary">
+        <span class="water-label">WATERED</span>
+        <span class="water-val">{waterTotal}ml</span>
+      </div>
+    )}
+  </div>
+
+  {!dayData && (
+    <div class="no-data">
+      <div class="no-data-label">NO RECORD</div>
+      <div class="no-data-sub">Day detail file not available</div>
+    </div>
+  )}
+
+  {dayData && (
+    <div class="day-content">
+
+      <!-- Photo strip -->
+      {visiblePhotos.length > 0 && (
+        <section class="day-section">
+          <div class="section-rule">PHOTOGRAPHS &mdash; {visiblePhotos.length}</div>
+          <div class="photo-strip">
+            {visiblePhotos.map((url, i) => (
+              <div class="strip-frame">
+                <img
+                  src={url}
+                  alt={`Photograph ${i + 1}`}
+                  class="strip-img"
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                />
+                <div class="strip-caption">{String(i + 1).padStart(2, '0')}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <!-- Two-column: moisture + light events -->
+      <div class="two-col">
+
+        <!-- Moisture readings -->
+        {dayData.moisture_readings && dayData.moisture_readings.length > 0 && (
+          <section class="day-section">
+            <div class="section-rule">MOISTURE &mdash; {dayData.moisture_readings.length} READINGS</div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="th">TIME (UTC)</th>
+                  <th class="th th-right">VALUE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dayData.moisture_readings.map(r => (
+                  <tr class="tr">
+                    <td class="td">{fmtTime(r.timestamp)}</td>
+                    <td class="td td-right td-val">{r.value.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        <!-- Light events -->
+        {dayData.light_events && dayData.light_events.length > 0 && (
+          <section class="day-section">
+            <div class="section-rule">LIGHT &mdash; {dayData.light_events.length} EVENTS</div>
+            <div class="timeline">
+              {dayData.light_events.map(e => (
+                <div class="timeline-row">
+                  <span class="tl-time">{fmtTime(e.timestamp)}</span>
+                  <span class={`tl-dot ${e.event_type === 'turn_on' ? 'tl-dot-on' : 'tl-dot-off'}`}></span>
+                  <span class={`tl-event ${e.event_type === 'turn_on' ? 'tl-on' : 'tl-off'}`}>
+                    {e.event_type === 'turn_on' ? 'ON' : 'OFF'}
+                    {e.duration_minutes ? ` · ${e.duration_minutes}min` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+      </div>
+
+      <!-- Messages -->
+      {((dayData.messages_to_human?.length ?? 0) + (dayData.messages_from_human?.length ?? 0)) > 0 && (
+        <section class="day-section">
+          <div class="section-rule">MESSAGES</div>
+          <div class="messages">
+            {[
+              ...(dayData.messages_to_human ?? []).map(m => ({ ...m, direction: 'to_human' })),
+              ...(dayData.messages_from_human ?? []).map(m => ({ ...m, direction: 'from_human' })),
+            ]
+              .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+              .map(msg => (
+                <div class="transmission">
+                  <div class="transmission-header">
+                    <span class="transmission-label">
+                      {msg.direction === 'to_human' ? 'AGENT' : 'HUMAN'}
+                    </span>
+                    <span class="transmission-time">{fmtDateTime(msg.timestamp)} UTC</span>
+                  </div>
+                  <div class="transmission-body" set:html={renderMd(msg.content)} />
+                </div>
+              ))
+            }
+          </div>
+        </section>
+      )}
+
+      <!-- AI usage -->
+      {dayData.token_usage && (dayData.token_usage.sessions ?? 0) > 0 && (
+        <section class="day-section">
+          <div class="section-rule">AI USAGE</div>
+          <div class="readout-grid">
+            {[
+              { k: 'SESSIONS',      v: String(dayData.token_usage.sessions) },
+              { k: 'INPUT TOKENS',  v: (dayData.token_usage.input_tokens ?? 0).toLocaleString() },
+              { k: 'OUTPUT TOKENS', v: (dayData.token_usage.output_tokens ?? 0).toLocaleString() },
+              { k: 'EST. COST',     v: `$${(dayData.estimated_cost_usd ?? 0).toFixed(4)}` },
+            ].map(item => (
+              <div class="readout-cell">
+                <div class="readout-key">{item.k}</div>
+                <div class="readout-val">{item.v}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+    </div>
+  )}
+
+</Layout>
+
+<style>
+  .day-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    animation: fade-up 0.3s ease both;
+  }
+  .back-link {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #6A5A3A;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .back-link:hover { color: #F0A32C; }
+  .date-nav {
+    display: flex;
+    gap: 1.5rem;
+  }
+  .date-nav-link {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6A5A3A;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .date-nav-link:hover { color: #F0A32C; }
+
+  .day-header {
+    border-bottom: 1px solid #2A2418;
+    padding-bottom: 1.25rem;
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.3s ease both;
+    animation-delay: 0.05s;
+  }
+  .day-header-top {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .day-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 2.25rem;
+    color: #E8D4A0;
+    margin: 0;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    padding: 0.2rem 0.5rem;
+  }
+  .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .water-summary {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .water-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #4A7A8A;
+  }
+  .water-val {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.7rem;
+    color: #A0D0DC;
+  }
+
+  .no-data {
+    text-align: center;
+    padding: 4rem 2rem;
+    border: 1px solid #1C1408;
+  }
+  .no-data-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.7rem;
+    color: #3E3420;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .no-data-sub {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    color: #2A2018;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .day-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    animation: fade-up 0.3s ease both;
+    animation-delay: 0.1s;
+  }
+
+  .day-section { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .section-rule {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #4A3E28;
+    border-bottom: 1px solid #2A2418;
+    padding-bottom: 0.4rem;
+  }
+
+  /* Photo strip */
+  .photo-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: #2A2418 transparent;
+  }
+  .strip-frame {
+    flex-shrink: 0;
+    width: 200px;
+    border: 1px solid #2A2418;
+    overflow: hidden;
+    background: #0D0B07;
+  }
+  .strip-img {
+    display: block;
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    filter: sepia(0.08) contrast(1.03);
+  }
+  .strip-caption {
+    padding: 3px 6px;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.5rem;
+    color: #4A3E28;
+    letter-spacing: 0.1em;
+    background: #0C0A06;
+    border-top: 1px solid #1C1408;
+  }
+
+  /* Two-column layout */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+  @media (max-width: 700px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  /* Data table */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+  }
+  .th {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #4A3E28;
+    font-weight: 400;
+    padding: 0 0 0.4rem;
+    border-bottom: 1px solid #2A2418;
+    text-align: left;
+  }
+  .th-right { text-align: right; }
+  .tr { border-bottom: 1px solid #1C1408; }
+  .td {
+    padding: 0.35rem 0;
+    color: #7A6A42;
+  }
+  .td-right { text-align: right; }
+  .td-val { color: #F0A32C; }
+
+  /* Light timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #1C1408;
+  }
+  .tl-time {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    color: #6A5A3A;
+    width: 3.5rem;
+    flex-shrink: 0;
+  }
+  .tl-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .tl-dot-on { background: #F0A32C; }
+  .tl-dot-off { background: #3E3420; }
+  .tl-event {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+  .tl-on { color: #F0A32C; }
+  .tl-off { color: #4A3E28; }
+
+  /* Messages */
+  .messages { display: flex; flex-direction: column; gap: 1rem; }
+  .transmission {
+    border: 1px solid #2A2418;
+    border-left: 2px solid #F0A32C;
+    background: #100E06;
+  }
+  .transmission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid #2A2418;
+    background: #0C0A06;
+  }
+  .transmission-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #F0A32C;
+  }
+  .transmission-time {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    color: #4A3E28;
+  }
+  .transmission-body {
+    padding: 0.75rem;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 0.9rem;
+    color: #C8B888;
+    line-height: 1.65;
+  }
+  .transmission-body :global(p) { margin: 0 0 0.5rem; }
+  .transmission-body :global(h1),
+  .transmission-body :global(h2),
+  .transmission-body :global(h3) {
+    font-family: 'Martian Mono', monospace;
+    font-style: normal;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #F0A32C;
+    margin: 0.75rem 0 0.4rem;
+  }
+  .transmission-body :global(strong) { font-style: normal; color: #E8D4A0; font-weight: 600; }
+  .transmission-body :global(ul),
+  .transmission-body :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
+  .transmission-body :global(li) { margin-bottom: 0.2rem; }
+
+  /* AI usage readout grid */
+  .readout-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: #1C1408;
+    border: 1px solid #2A2418;
+  }
+  .readout-cell {
+    background: #0D0B07;
+    padding: 0.75rem;
+  }
+  .readout-key {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #4A3E28;
+    margin-bottom: 0.4rem;
+  }
+  .readout-val {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.85rem;
+    color: #F0A32C;
+    letter-spacing: 0.03em;
+  }
+
+  @media (max-width: 700px) {
+    .readout-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>

@@ -94,15 +94,25 @@ def main() -> None:
 
     # ── 3. Photos → plant_timeline.json + day_index.json ────────────────────
     log("Processing photos...")
+    # Pass light events so the photo selector can prefer lit photos
+    light_events_by_date = {
+        date: day.get("light", {}).get("events", [])
+        for date, day in merged_daily.items()
+    }
     timeline, new_photos_wm = process_photos(
-        s3, PHOTOS_BUCKET, wm["photos_last_modified"], PUBLIC_URL
+        s3, PHOTOS_BUCKET, wm["photos_last_modified"], PUBLIC_URL,
+        light_events_by_date=light_events_by_date,
     )
     wm["photos_last_modified"] = new_photos_wm
 
-    # Enrich timeline entries with plant status from daily sensor stats
+    # Enrich timeline entries with plant status and watering from daily sensor stats
     for date, entry in timeline.items():
         if date in merged_daily:
             entry["status"] = merged_daily[date]["plant_status"]["dominant"]
+            entry["has_watering"] = bool(
+                merged_daily[date].get("water", {}).get("total_ml", 0)
+            )
+        entry.setdefault("has_watering", False)
 
     # Sort by date for consistent output
     timeline_sorted = dict(sorted(timeline.items()))

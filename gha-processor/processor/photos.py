@@ -32,19 +32,64 @@ def parse_photo_timestamp(filename: str) -> datetime | None:
     )
 
 
-def select_photos_for_day(filenames: list[str]) -> list[str]:
-    """Select up to 6 photos evenly spaced across the day.
+def filter_lit_filenames(
+    filenames: list[str],
+    light_events: list[dict],
+) -> list[str]:
+    """Return only filenames taken while the light was on.
 
-    Algorithm: Divide 24h into 6 equal slots. For each slot, pick the photo
-    whose timestamp is closest to the slot's midpoint. Slots with no photos
-    are omitted. Input filenames must all be from the same calendar day.
+    light_events is a list of dicts with keys 'timestamp' (ISO 8601 UTC)
+    and 'event_type' ('turn_on' | 'turn_off'), as stored in merged_daily.
+
+    Falls back to all filenames if light_events is empty (no data available).
+    """
+    if not light_events:
+        return filenames
+
+    sorted_events = sorted(
+        light_events,
+        key=lambda e: datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp(),
+    )
+
+    lit = []
+    for fname in filenames:
+        dt = parse_photo_timestamp(fname)
+        if dt is None:
+            continue
+        photo_ts = dt.timestamp()
+        light_on = False
+        for evt in sorted_events:
+            evt_ts = datetime.fromisoformat(
+                evt["timestamp"].replace("Z", "+00:00")
+            ).timestamp()
+            if evt_ts <= photo_ts:
+                light_on = evt["event_type"] == "turn_on"
+            else:
+                break
+        if light_on:
+            lit.append(fname)
+
+    return lit if lit else filenames  # fall back if no lit photos exist
+
+
+def select_photos_for_day(
+    filenames: list[str],
+    light_events: list[dict] | None = None,
+) -> list[str]:
+    """Select up to 6 representative photos for a day, preferring lit ones.
+
+    Filters to light-on photos first (when light_events provided), then
+    divides the remaining photos into 6 equal time slots and picks the
+    photo nearest each slot midpoint.
     """
     if not filenames:
         return []
 
+    candidates = filter_lit_filenames(filenames, light_events or [])
+
     # Parse timestamps for valid filenames
     parsed: list[tuple[str, int]] = []  # (filename, seconds_from_midnight)
-    for fname in filenames:
+    for fname in candidates:
         dt = parse_photo_timestamp(fname)
         if dt is None:
             continue
@@ -63,13 +108,18 @@ def select_photos_for_day(filenames: list[str]) -> list[str]:
     return selected
 
 
-def get_noon_photo(filenames: list[str]) -> str | None:
-    """Return the photo nearest to solar noon (slot 3 midpoint = 14:00)."""
-    selected = select_photos_for_day(filenames)
+def get_noon_photo(
+    filenames: list[str],
+    light_events: list[dict] | None = None,
+) -> str | None:
+    """Return the representative photo for the day, preferring lit ones.
+
+    When light_events are provided, selects from photos taken while the
+    light was on. Falls back to time-based selection if none are lit.
+    """
+    selected = select_photos_for_day(filenames, light_events)
     if not selected:
         return None
-    # The slot-3 photo (index 3 in the 6-slot list) is the noon anchor.
-    # If fewer than 4 photos are selected, return the last one.
     return selected[min(NOON_SLOT, len(selected) - 1)]
 
 
@@ -80,7 +130,11 @@ def build_photo_url(r2_key: str, public_bucket_url: str) -> str:
 
 
 def process_photos(
-    s3, photos_bucket: str, watermark: str, public_bucket_url: str
+    s3,
+    photos_bucket: str,
+    watermark: str,
+    public_bucket_url: str,
+    light_events_by_date: dict[str, list[dict]] | None = None,
 ) -> tuple[dict, str]:
     """Build plant_timeline.json and day_index.json entries from the photos bucket.
 
@@ -115,12 +169,14 @@ def process_photos(
 
     # Build timeline entries for all days (full rebuild per day — idempotent)
     timeline: dict[str, dict] = {}
+    light_events_by_date = light_events_by_date or {}
     for day, keys in by_day.items():
         filenames = [k.rsplit("/", 1)[-1] for k in keys]
-        selected_fnames = select_photos_for_day(filenames)
+        day_light_events = light_events_by_date.get(day, [])
+        selected_fnames = select_photos_for_day(filenames, day_light_events)
         fname_to_key = {k.rsplit("/", 1)[-1]: k for k in keys}
         selected_keys = [fname_to_key[f] for f in selected_fnames]
-        noon_fname = get_noon_photo(filenames)
+        noon_fname = get_noon_photo(filenames, day_light_events)
         noon_key = fname_to_key.get(noon_fname) if noon_fname else None
         timeline[day] = {
             "date": day,

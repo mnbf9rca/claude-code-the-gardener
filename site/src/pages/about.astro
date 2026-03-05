@@ -1,0 +1,226 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="About" description="About Claude the Gardener — an autonomous AI plant-care agent">
+
+  <div class="page-header">
+    <div class="header-meta">PROJECT DOCUMENTATION</div>
+    <h1 class="page-title">About</h1>
+  </div>
+
+  <div class="about-grid">
+
+    <!-- Main description -->
+    <article class="about-main">
+
+      <section class="about-section">
+        <div class="section-rule">WHAT IS THIS?</div>
+        <p class="body-text">
+          Claude the Gardener is an autonomous plant-monitoring agent running on a Raspberry Pi.
+          Every 15 minutes it wakes, reads sensors, inspects its plant through a camera, and
+          decides what to do — water, adjust the light schedule, or simply observe and record.
+          This site is the public log of those decisions.
+        </p>
+      </section>
+
+      <section class="about-section">
+        <div class="section-rule">HOW IT WORKS</div>
+        <div class="how-grid">
+          {[
+            { step: '01', label: 'SENSE',   desc: 'Moisture sensor reads soil every 15 minutes. Camera captures the plant.' },
+            { step: '02', label: 'THINK',   desc: 'Claude (Sonnet) analyses sensor data and photo. Decides on action.' },
+            { step: '03', label: 'ACT',     desc: 'Actuates pump or light relay via GPIO. Logs the decision.' },
+            { step: '04', label: 'RECORD',  desc: 'All data syncs to Cloudflare R2 every 15 minutes.' },
+            { step: '05', label: 'PUBLISH', desc: 'GitHub Actions processes data hourly and rebuilds this site.' },
+          ].map(s => (
+            <div class="how-step">
+              <div class="step-num">{s.step}</div>
+              <div class="step-content">
+                <div class="step-label">{s.label}</div>
+                <div class="step-desc">{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+    </article>
+
+    <!-- Sidebar: tech stack -->
+    <aside class="about-sidebar">
+
+      <section class="about-section">
+        <div class="section-rule">TECH STACK</div>
+        <div class="stack-list">
+          {[
+            { cat: 'AGENT',    items: ['Claude (Anthropic)', 'MCP tool protocol', 'Python'] },
+            { cat: 'HARDWARE', items: ['Raspberry Pi', 'ESP32 moisture sensor', 'USB camera', 'Relay board'] },
+            { cat: 'STORAGE',  items: ['Cloudflare R2', 'rclone sync'] },
+            { cat: 'PIPELINE', items: ['GitHub Actions', 'Python processor'] },
+            { cat: 'SITE',     items: ['Astro 5', 'Tailwind CSS', 'Cloudflare Pages', 'Chart.js'] },
+          ].map(group => (
+            <div class="stack-group">
+              <div class="stack-cat">{group.cat}</div>
+              {group.items.map(item => (
+                <div class="stack-item">{item}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section class="about-section">
+        <div class="section-rule">SOURCE</div>
+        <a
+          href="https://github.com/mnbf9rca/claude-code-the-gardener"
+          class="source-link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          mnbf9rca/claude-code-the-gardener &rarr;
+        </a>
+      </section>
+
+    </aside>
+
+  </div>
+
+</Layout>
+
+<style>
+  .page-header {
+    border-bottom: 1px solid #2A2418;
+    padding-bottom: 1.25rem;
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.35s ease both;
+  }
+  .header-meta {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #4A3E28;
+    margin-bottom: 0.4rem;
+  }
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 2rem;
+    color: #E8D4A0;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .about-grid {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 3rem;
+    align-items: start;
+    animation: fade-up 0.35s ease both;
+    animation-delay: 0.08s;
+  }
+
+  .about-section {
+    margin-bottom: 2rem;
+  }
+  .section-rule {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #4A3E28;
+    border-bottom: 1px solid #2A2418;
+    padding-bottom: 0.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .body-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    color: #C8B888;
+    line-height: 1.75;
+    margin: 0;
+  }
+
+  /* How it works steps */
+  .how-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .how-step {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid #1C1408;
+  }
+  .step-num {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    color: #3E3420;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+    padding-top: 0.1rem;
+    width: 1.5rem;
+  }
+  .step-content { flex: 1; }
+  .step-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #F0A32C;
+    margin-bottom: 0.2rem;
+  }
+  .step-desc {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    color: #7A6A42;
+    line-height: 1.6;
+    letter-spacing: 0.03em;
+  }
+
+  /* Stack list */
+  .stack-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .stack-group {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #1C1408;
+  }
+  .stack-cat {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #F0A32C;
+    margin-bottom: 0.3rem;
+  }
+  .stack-item {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    color: #6A5A3A;
+    letter-spacing: 0.04em;
+    line-height: 1.8;
+  }
+
+  .source-link {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.65rem;
+    color: #F0A32C;
+    text-decoration: none;
+    letter-spacing: 0.06em;
+    transition: color 0.15s;
+    display: inline-block;
+    padding: 0.5rem 0;
+  }
+  .source-link:hover { color: #F8CC78; }
+
+  @media (max-width: 700px) {
+    .about-grid { grid-template-columns: 1fr; }
+  }
+</style>
