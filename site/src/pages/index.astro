@@ -23,6 +23,11 @@ const timeline = plantTimeline as Record<string, {
 
 const dates = Object.keys(timeline).sort().reverse();
 const latestDate = dates[0];
+
+function fmtShortDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
 const latestEntry = timeline[latestDate];
 
 const status = (currentState.plant_status ?? 'unknown') as string;
@@ -176,7 +181,7 @@ const statusLabel: Record<string, string> = {
                   style={`background:${statusDot[ds] ?? statusDot.unknown}`}
                 ></span>
               </div>
-              <div class="day-label">{date.slice(5)}</div>
+              <div class="day-label">{fmtShortDate(date)}</div>
             </a>
           );
         })}

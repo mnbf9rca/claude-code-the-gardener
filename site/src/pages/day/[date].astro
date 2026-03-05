@@ -111,9 +111,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     <div class="day-content">
 
       <!-- Photo strip -->
-      {visiblePhotos.length > 0 && (
-        <section class="day-section">
-          <div class="section-rule">PHOTOGRAPHS &mdash; {visiblePhotos.length}</div>
+      <section class="day-section">
+        <div class="section-rule">PHOTOGRAPHS{visiblePhotos.length > 0 ? ` \u2014 ${visiblePhotos.length}` : ''}</div>
+        {visiblePhotos.length > 0 ? (
           <div class="photo-strip">
             {visiblePhotos.map((url, i) => (
               <div class="strip-frame">
@@ -127,8 +127,13 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
               </div>
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div class="no-photos">
+            <div class="no-photos-label">NO PHOTOGRAPHS</div>
+            <div class="no-photos-sub">No lit photos available for this day</div>
+          </div>
+        )}
+      </section>
 
       <!-- Two-column: moisture + light events -->
       <div class="two-col">
@@ -317,6 +322,27 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-family: 'Martian Mono', monospace;
     font-size: 0.7rem;
     color: #A0D0DC;
+  }
+
+  .no-photos {
+    padding: 2rem;
+    border: 1px solid #1C1408;
+    text-align: center;
+  }
+  .no-photos-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #3E3420;
+  }
+  .no-photos-sub {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #2A2018;
+    margin-top: 0.35rem;
   }
 
   .no-data {
