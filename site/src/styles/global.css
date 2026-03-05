@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-mono: 'Martian Mono', 'Courier New', monospace;
+
+  --color-bg: #0C0A06;
+  --color-surface: #131008;
+  --color-surface-2: #1C180C;
+  --color-border: #2A2418;
+  --color-border-bright: #3D3520;
+
+  --color-text: #E8D4A0;
+  --color-muted: #7A6A42;
+  --color-dim: #3E3420;
+
+  --color-amber: #F0A32C;
+  --color-amber-dim: #7A5215;
+  --color-sage: #6BAA5E;
+  --color-sage-dim: #2A5022;
+  --color-stressed: #D4821E;
+  --color-critical: #E04848;
+}
+
+/* Base */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background-color: #0C0A06;
+  color: #E8D4A0;
+  font-family: 'Martian Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dot-matrix background texture on body */
+body {
+  min-height: 100vh;
+  background-color: #0C0A06;
+  background-image:
+    radial-gradient(ellipse 60% 40% at 50% 0%, #1a1408 0%, transparent 70%),
+    radial-gradient(circle at 1px 1px, #1c1608 1px, transparent 0);
+  background-size: 100% 100%, 28px 28px;
+  position: relative;
+}
+
+/* Very subtle noise overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+/* Page load animation */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-beacon {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(240,163,44,0.4); }
+  50%       { opacity: 0.6; box-shadow: 0 0 0 5px rgba(240,163,44,0); }
+}
+
+@keyframes pulse-healthy {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(107,170,94,0.4); }
+  50%       { box-shadow: 0 0 0 5px rgba(107,170,94,0); }
+}
+
+.animate-load {
+  animation: fade-up 0.5s ease both;
+}
+
+.beacon {
+  animation: pulse-beacon 2.5s ease-in-out infinite;
+}
+
+.beacon-healthy {
+  animation: pulse-healthy 2.5s ease-in-out infinite;
+}
+
+/* Headings use the serif face */
+h1, h2, h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #E8D4A0;
+}
+
+h1 { font-size: 2rem; line-height: 1.1; }
+h2 { font-size: 1.25rem; line-height: 1.2; }
+
+/* Status colour utilities */
+.status-healthy  { color: #6BAA5E; border-color: #2A5022; background-color: #0D1C0A; }
+.status-stressed { color: #D4821E; border-color: #5A3000; background-color: #1A0C00; }
+.status-critical { color: #E04848; border-color: #600000; background-color: #1A0000; }
+.status-unknown  { color: #7A6A42; border-color: #2A2418; background-color: #131008; }
+
+/* Amber link style */
+a {
+  color: #F0A32C;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+a:hover { color: #F8CC78; }
+
+/* Card / surface */
+.card {
+  background: #131008;
+  border: 1px solid #2A2418;
+  border-radius: 2px;
+  transition: border-color 0.2s ease;
+}
+.card:hover { border-color: #3D3520; }
+
+/* Sidebar nav link styles */
+.nav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-family: 'Martian Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7A6A42;
+  border-left: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+}
+
+.nav-link:hover,
+.nav-link[aria-current="page"] {
+  color: #F0A32C;
+  border-left-color: #F0A32C;
+  background: rgba(240,163,44,0.04);
+}
+
+/* Ruling lines for data sections */
+.section-rule {
+  font-family: 'Martian Mono', monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #4A3E28;
+  border-bottom: 1px solid #2A2418;
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+/* Monospace data value display */
+.data-val {
+  font-family: 'Martian Mono', monospace;
+  color: #F0A32C;
+}

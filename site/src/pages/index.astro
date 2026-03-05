@@ -1,0 +1,446 @@
+---
+import Layout from '../layouts/Layout.astro';
+import currentState from '../data/state/current_state.json';
+import plantTimeline from '../data/state/plant_timeline.json';
+
+const timeline = plantTimeline as Record<string, {
+  date: string;
+  status: string;
+  noon_photo_url: string | null;
+  photos: string[];
+  has_watering: boolean;
+}>;
+
+const dates = Object.keys(timeline).sort().reverse();
+const latestDate = dates[0];
+const latestEntry = timeline[latestDate];
+
+const status = (currentState.plant_status ?? 'unknown') as string;
+const latestPhoto = currentState.latest_photo_url ?? latestEntry?.noon_photo_url ?? null;
+
+const lastRun = currentState.last_run
+  ? new Date(currentState.last_run).toLocaleString('en-GB', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
+    })
+  : null;
+
+const msgTime = currentState.last_agent_message?.timestamp
+  ? new Date(currentState.last_agent_message.timestamp).toLocaleString('en-GB', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
+    })
+  : null;
+
+const statusDot: Record<string, string> = {
+  healthy:  '#6BAA5E',
+  stressed: '#D4821E',
+  critical: '#E04848',
+  unknown:  '#4A3E28',
+};
+const statusLabel: Record<string, string> = {
+  healthy:  'HEALTHY',
+  stressed: 'STRESSED',
+  critical: 'CRITICAL',
+  unknown:  'UNKNOWN',
+};
+---
+
+<Layout title="Dashboard">
+
+  <!-- SPECIMEN HEADER -->
+  <div class="specimen-header">
+    <div class="specimen-meta">
+      <span class="specimen-label">STATUS MONITOR</span>
+      {lastRun && <span class="specimen-time">LAST SYNC: {lastRun} UTC</span>}
+    </div>
+    <div class="status-row">
+      <span class="status-beacon" style={`background:${statusDot[status] ?? statusDot.unknown}`}></span>
+      <h1 class="status-title">{statusLabel[status] ?? 'UNKNOWN'}</h1>
+      {latestDate && (
+        <a href={`/day/${latestDate}`} class="detail-link">
+          View today's record &rarr;
+        </a>
+      )}
+    </div>
+  </div>
+
+  <!-- INSTRUMENT PANEL + PHOTO -->
+  <div class="panel-grid">
+
+    <!-- Left: Readouts + Transmission -->
+    <div class="instrument-panel">
+
+      <div class="readout-block">
+        <div class="readout-rule">FIELD READINGS</div>
+        <div class="readout-row">
+          <span class="readout-key">SPECIMEN STATUS</span>
+          <span class="readout-val" style={`color:${statusDot[status] ?? statusDot.unknown}`}>
+            {statusLabel[status] ?? 'UNKNOWN'}
+          </span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">LATEST DATE</span>
+          <span class="readout-val">{latestDate ?? '—'}</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">WATERED TODAY</span>
+          <span class="readout-val">{latestEntry?.has_watering ? 'YES' : 'NO'}</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">DAYS ON RECORD</span>
+          <span class="readout-val">{dates.length}</span>
+        </div>
+      </div>
+
+      {currentState.last_agent_message && (
+        <div class="transmission">
+          <div class="transmission-header">
+            <span class="transmission-label">AGENT TRANSMISSION</span>
+            {msgTime && <span class="transmission-time">{msgTime} UTC</span>}
+          </div>
+          <blockquote class="transmission-body">
+            {currentState.last_agent_message.content}
+          </blockquote>
+        </div>
+      )}
+
+      <div class="panel-links">
+        <a href="/plant" class="panel-link">All field records &rarr;</a>
+        <a href="/conversation" class="panel-link">Agent conversation &rarr;</a>
+        <a href="/stats" class="panel-link">Usage statistics &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Right: Latest photo -->
+    <div class="photo-panel">
+      {latestPhoto ? (
+        <div class="photo-frame">
+          <img
+            src={latestPhoto}
+            alt={`Plant specimen ${latestDate}`}
+            class="specimen-photo"
+            loading="eager"
+          />
+          <div class="photo-caption">
+            <span>SPECIMEN PHOTO</span>
+            <span>{latestDate}</span>
+          </div>
+        </div>
+      ) : (
+        <div class="photo-placeholder">
+          <div class="placeholder-inner">
+            <div class="placeholder-text">NO PHOTO</div>
+            <div class="placeholder-sub">Awaiting capture</div>
+          </div>
+        </div>
+      )}
+    </div>
+
+  </div>
+
+  <!-- RECENT FIELD RECORDS -->
+  {dates.length > 0 && (
+    <div class="recent-section">
+      <div class="readout-rule">RECENT FIELD RECORDS &mdash; {Math.min(dates.length, 14)} DAYS</div>
+      <div class="recent-grid">
+        {dates.slice(0, 14).map(date => {
+          const entry = timeline[date];
+          const ds = (entry?.status ?? 'unknown') as string;
+          return (
+            <a href={`/day/${date}`} class="day-cell">
+              <div class="day-thumb">
+                {entry?.noon_photo_url ? (
+                  <img
+                    src={entry.noon_photo_url}
+                    alt={date}
+                    class="thumb-img"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div class="thumb-empty"></div>
+                )}
+                <span
+                  class="thumb-dot"
+                  style={`background:${statusDot[ds] ?? statusDot.unknown}`}
+                ></span>
+              </div>
+              <div class="day-label">{date.slice(5)}</div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  )}
+
+</Layout>
+
+<style>
+  .specimen-header {
+    border-bottom: 1px solid #2A2418;
+    padding-bottom: 1.25rem;
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.4s ease both;
+  }
+  .specimen-meta {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  .specimen-label,
+  .specimen-time {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: #4A3E28;
+    text-transform: uppercase;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .status-beacon {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: pulse-status 2.5s ease-in-out infinite;
+  }
+  .status-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 2.5rem;
+    color: #E8D4A0;
+    margin: 0;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .detail-link {
+    margin-left: auto;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.65rem;
+    color: #F0A32C;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .detail-link:hover { color: #F8CC78; }
+
+  .panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 3rem;
+    margin-bottom: 3rem;
+    align-items: start;
+    animation: fade-up 0.4s ease both;
+    animation-delay: 0.08s;
+  }
+  .instrument-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .readout-rule {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #4A3E28;
+    border-bottom: 1px solid #2A2418;
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+  .readout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #1C1408;
+    padding: 0.45rem 0;
+  }
+  .readout-key {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #6A5A3A;
+  }
+  .readout-val {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.7rem;
+    color: #F0A32C;
+    letter-spacing: 0.05em;
+  }
+
+  .transmission {
+    border: 1px solid #2A2418;
+    border-left: 2px solid #F0A32C;
+    background: #100E06;
+  }
+  .transmission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #2A2418;
+    background: #0C0A06;
+  }
+  .transmission-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #F0A32C;
+  }
+  .transmission-time {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    color: #4A3E28;
+    letter-spacing: 0.05em;
+  }
+  .transmission-body {
+    padding: 0.75rem;
+    margin: 0;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 0.95rem;
+    color: #C8B888;
+    line-height: 1.65;
+    white-space: pre-wrap;
+  }
+
+  .panel-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .panel-link {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6A5A3A;
+    text-decoration: none;
+    transition: color 0.15s;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #1C1408;
+  }
+  .panel-link:hover { color: #F0A32C; }
+
+  .photo-frame {
+    border: 1px solid #2A2418;
+    overflow: hidden;
+  }
+  .specimen-photo {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    filter: sepia(0.08) contrast(1.04);
+  }
+  .photo-caption {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0.6rem;
+    background: #0C0A06;
+    border-top: 1px solid #2A2418;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    color: #4A3E28;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .photo-placeholder {
+    border: 1px solid #2A2418;
+    aspect-ratio: 4 / 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0D0B07;
+  }
+  .placeholder-text {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.7rem;
+    color: #3E3420;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .placeholder-sub {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    color: #2A2018;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 0.4rem;
+    text-align: center;
+  }
+
+  .recent-section {
+    border-top: 1px solid #2A2418;
+    padding-top: 1.5rem;
+    animation: fade-up 0.4s ease both;
+    animation-delay: 0.16s;
+  }
+  .recent-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .day-cell {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .day-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    background: #0D0B07;
+    border: 1px solid #1C1408;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .day-cell:hover .day-thumb { border-color: #3D3520; }
+  .thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: sepia(0.15);
+  }
+  .thumb-empty { width: 100%; height: 100%; }
+  .thumb-dot {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+  .day-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.5rem;
+    color: #3E3420;
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .day-cell:hover .day-label { color: #7A6A42; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-status {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+  }
+
+  @media (max-width: 900px) {
+    .panel-grid { grid-template-columns: 1fr; }
+    .recent-grid { grid-template-columns: repeat(7, 1fr); }
+  }
+</style>

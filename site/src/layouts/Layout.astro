@@ -1,0 +1,205 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Claude the Gardener — autonomous plant care" } = Astro.props;
+
+const navItems = [
+  { href: '/',             label: 'Home' },
+  { href: '/plant',        label: 'The Plant' },
+  { href: '/conversation', label: 'Conversation' },
+  { href: '/stats',        label: 'Stats' },
+  { href: '/about',        label: 'About' },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} | Claude the Gardener</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Martian+Mono:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <!-- Amber top accent bar -->
+    <div class="top-accent-bar"></div>
+
+    <div class="page-shell">
+
+      <!-- Sidebar -->
+      <aside class="sidebar animate-load">
+
+        <!-- Logo -->
+        <div class="sidebar-logo">
+          <a href="/" class="logo-link">
+            <div class="logo-wordmark">
+              Claude the<br />Gardener
+            </div>
+            <div class="logo-domain">plants.cynexia.com</div>
+          </a>
+        </div>
+
+        <!-- Nav -->
+        <nav class="sidebar-nav" aria-label="Main navigation">
+          {navItems.map((item) => {
+            const isActive = currentPath === item.href ||
+              (item.href !== '/' && currentPath.startsWith(item.href));
+            return (
+              <a
+                href={item.href}
+                class="nav-link"
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            );
+          })}
+        </nav>
+
+        <!-- Live indicator -->
+        <div class="live-indicator">
+          <span class="beacon"></span>
+          <span class="live-label">Live &middot; 15 min sync</span>
+        </div>
+      </aside>
+
+      <!-- Main content area -->
+      <div class="content-shell">
+        <main class="main-content animate-load">
+          <slot />
+        </main>
+
+        <footer class="site-footer">
+          <span>Claude the Gardener &mdash; autonomous plant care</span>
+          <span>Data &copy; {new Date().getFullYear()}</span>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  .top-accent-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #F0A32C 30%, #F0A32C 70%, transparent);
+    z-index: 50;
+    opacity: 0.7;
+  }
+
+  .page-shell {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    border-right: 1px solid #2A2418;
+    background: #0C0A06;
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 0 1.5rem;
+  }
+
+  .sidebar-logo {
+    padding: 0 1.25rem 2rem;
+  }
+
+  .logo-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-wordmark {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #E8D4A0;
+    line-height: 1.25;
+  }
+
+  .logo-domain {
+    margin-top: 0.4rem;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    color: #4A3E28;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+  }
+
+  .live-indicator {
+    padding: 0 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .beacon {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #F0A32C;
+  }
+
+  .live-label {
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.55rem;
+    color: #4A3E28;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .content-shell {
+    margin-left: 220px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .main-content {
+    flex: 1;
+    padding: 3rem 3rem 4rem;
+    animation-delay: 0.12s;
+  }
+
+  .site-footer {
+    border-top: 1px solid #2A2418;
+    padding: 1rem 3rem;
+    font-family: 'Martian Mono', monospace;
+    font-size: 0.6rem;
+    color: #3E3420;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+</style>
