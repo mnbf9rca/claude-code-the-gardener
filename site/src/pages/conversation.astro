@@ -2,14 +2,14 @@
 import Layout from '../layouts/Layout.astro';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
+import conversationRaw from '../data/state/conversation.json';
 
 function renderMd(content: string): string {
   return sanitizeHtml(marked.parse(content) as string, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'h3']),
+    allowedTags: sanitizeHtml.defaults.allowedTags, // img intentionally excluded; agent messages are text-only
     allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
   });
 }
-import conversationRaw from '../data/state/conversation.json';
 
 type Message = {
   message_id?: string;

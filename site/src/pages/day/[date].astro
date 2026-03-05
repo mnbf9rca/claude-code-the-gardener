@@ -2,14 +2,14 @@
 import Layout from '../../layouts/Layout.astro';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
+import dayIndex from '../../data/state/day_index.json';
 
 function renderMd(content: string): string {
   return sanitizeHtml(marked.parse(content) as string, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'h3']),
+    allowedTags: sanitizeHtml.defaults.allowedTags, // img intentionally excluded; agent messages are text-only
     allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
   });
 }
-import dayIndex from '../../data/state/day_index.json';
 
 const index = dayIndex as Record<string, { date: string; status: string; photo_url: string | null; has_watering: boolean; }>;
 
