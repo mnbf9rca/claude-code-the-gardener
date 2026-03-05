@@ -26,7 +26,9 @@ You need the state files before the dev server is useful. Set the required env v
 - `R2_ENDPOINT_URL`
 - `R2_BUCKET_NAME`
 
-Then fetch the state files:
+> **Note:** In the GitHub Actions project these are stored as `R2_ACCESS_KEY_ID` (→ `AWS_ACCESS_KEY_ID`) and `R2_SECRET_ACCESS_KEY` (→ `AWS_SECRET_ACCESS_KEY`). `R2_ENDPOINT_URL` and `R2_BUCKET_NAME` use the same names in both places.
+
+Sync state data from R2:
 
 ```sh
 aws s3 sync \
@@ -34,6 +36,11 @@ aws s3 sync \
   "s3://${R2_BUCKET_NAME}/state/" \
   site/src/data/state/ \
   --exclude "summaries/*"
+```
+
+Then start the dev server:
+
+```sh
 npm install
 npm run dev        # http://localhost:4321
 ```
