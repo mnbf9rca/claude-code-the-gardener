@@ -109,3 +109,21 @@ def test_filter_lit_filenames_all_dark_falls_back():
     result = filter_lit_filenames(filenames, events)
     # Both photos are before the light turns on → fall back to all
     assert result == filenames
+
+
+def test_filter_lit_filenames_mixed_timestamp_formats():
+    """Timestamps with Z and +00:00 suffixes must sort by parsed datetime, not string.
+
+    String ordering: "...+00:00" < "...Z", so if events are sorted lexicographically,
+    the turn_off at 12:00+00:00 would appear BEFORE the turn_on at 08:00Z — meaning
+    the light appears never on, and a photo at 10:00 would be incorrectly excluded.
+    Datetime ordering correctly places turn_on (08:00) before turn_off (12:00).
+    """
+    filenames = ["plant_20260224_100000_001.jpg"]  # 10:00 UTC, between turn_on and turn_off
+    events = [
+        {"timestamp": "2026-02-24T08:00:00Z", "event_type": "turn_on"},
+        {"timestamp": "2026-02-24T12:00:00+00:00", "event_type": "turn_off"},
+    ]
+    result = filter_lit_filenames(filenames, events)
+    # Photo at 10:00 is between turn_on (08:00) and turn_off (12:00) → lit → included
+    assert result == filenames
