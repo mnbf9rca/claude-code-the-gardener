@@ -45,6 +45,11 @@ const visiblePhotos = dayData?.photos ?? [];
 const moistureReadings = dayData?.moisture_readings ?? [];
 const waterEvents = dayData?.water_events ?? [];
 
+const dayToolCalls = Object.entries(dayData?.token_usage?.tool_calls ?? {})
+  .sort(([, a], [, b]) => b - a)
+  .slice(0, 10);
+const dayTotalCalls = dayToolCalls.reduce((s, [, c]) => s + c, 0);
+
 const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
 const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;
 
@@ -219,6 +224,26 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
               </div>
             ))}
           </div>
+          {dayToolCalls.length > 0 && (
+            <table class="data-table" style="margin-top:0.75rem">
+              <thead>
+                <tr>
+                  <th class="th">TOOL</th>
+                  <th class="th th-right">CALLS</th>
+                  <th class="th th-right">SHARE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dayToolCalls.map(([tool, count]) => (
+                  <tr class="tr">
+                    <td class="td" style="color:#C8B888">{tool.replace('mcp__plant-tools__', '')}</td>
+                    <td class="td td-right td-val">{count}</td>
+                    <td class="td td-right" style="color:#4A3E28">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       )}
 
