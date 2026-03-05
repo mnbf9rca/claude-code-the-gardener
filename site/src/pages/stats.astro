@@ -256,67 +256,107 @@ const summaryReadouts = [
   }
 
   try {
-    const hourlyRes = await fetch('/state/sensor_stats_hourly.json');
+    const [hourlyRes, dailyRes] = await Promise.all([
+      fetch('/state/sensor_stats_hourly.json'),
+      fetch('/state/sensor_stats_daily.json'),
+    ]);
+    const hourlyData = hourlyRes.ok ? await hourlyRes.json() : {};
+    const dailyData  = dailyRes.ok  ? await dailyRes.json()  : {};
 
-    if (hourlyRes.ok) {
-      const hourlyData = await hourlyRes.json();
-      const hourKeys  = Object.keys(hourlyData).sort().slice(-168);
-      const moistVals = hourKeys.map(h => hourlyData[h]?.moisture?.avg ?? null);
+    await import('https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/+esm');
 
-      if (hourKeys.length === 0) {
-        hideLoader('moistureLoading');
-        showError('moistureError');
-      } else {
-        hideLoader('moistureLoading');
-        new Chart(document.getElementById('moistureChart'), {
-          type: 'line',
-          data: {
-            labels: hourKeys.map(h => h.slice(5, 16).replace('T', ' ')),
-            datasets: [{
-              data: moistVals,
+    const hourKeys  = Object.keys(hourlyData).sort().slice(-168);
+    const moistAvgs = hourKeys.map(h => hourlyData[h]?.moisture?.avg ?? null);
+
+    if (hourKeys.length === 0) {
+      hideLoader('moistureLoading');
+      showError('moistureError');
+    } else {
+      const moisturePoints = hourKeys.map((k, i) => ({ x: k, y: moistAvgs[i] }));
+
+      const validVals = moistAvgs.filter(v => v != null);
+      const yMin   = Math.min(...validVals);
+      const yMax   = Math.max(...validVals);
+      const fixedY = yMin - (yMax - yMin) * 0.05;
+
+      const windowStart = hourKeys[0]?.slice(0, 10);
+      const windowEnd   = hourKeys.at(-1)?.slice(0, 10);
+
+      const waterPoints = [];
+      for (const [day, dayStats] of Object.entries(dailyData)) {
+        if (!windowStart || !windowEnd || day < windowStart || day > windowEnd) continue;
+        for (const evt of dayStats?.water?.events ?? []) {
+          waterPoints.push({ x: evt.timestamp, y: fixedY });
+        }
+      }
+
+      hideLoader('moistureLoading');
+      new Chart(document.getElementById('moistureChart'), {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              data: moisturePoints,
               borderColor: SAGE,
               backgroundColor: SAGE_FILL,
+              showLine: true,
               tension: 0.35,
               pointRadius: 0,
               pointHoverRadius: 3,
               fill: true,
               borderWidth: 1.5,
-            }],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                backgroundColor: '#1C1408',
-                borderColor: '#1C2A1C',
-                borderWidth: 1,
-                titleColor: '#6BAA5E',
-                bodyColor: '#E8D4A0',
-                callbacks: {
-                  label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}`,
-                },
+              order: 2,
+            },
+            {
+              data: waterPoints,
+              type: 'scatter',
+              pointStyle: 'triangle',
+              pointRadius: 6,
+              pointHoverRadius: 7,
+              backgroundColor: 'rgba(160,208,220,0.9)',
+              borderColor: 'transparent',
+              showLine: false,
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              filter: item => item.datasetIndex === 0,
+              backgroundColor: '#1C1408',
+              borderColor: '#2A2418',
+              borderWidth: 1,
+              titleColor: SAGE,
+              bodyColor: '#E8D4A0',
+              callbacks: {
+                label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}`,
               },
             },
-            scales: {
-              x: {
-                grid: { color: GRID },
-                ticks: { color: TICK, maxTicksLimit: 14, font: baseFont },
-                border: { color: '#2A2418' },
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'day',
+                displayFormats: { day: 'dd MMM' },
               },
-              y: {
-                grid: { color: GRID },
-                ticks: { color: TICK, font: baseFont },
-                border: { color: '#2A2418' },
-              },
+              adapters: { date: {} },
+              grid: { color: GRID },
+              ticks: { color: TICK, font: baseFont },
+              border: { color: '#2A2418' },
+            },
+            y: {
+              grid: { color: GRID },
+              ticks: { color: TICK, font: baseFont },
+              border: { color: '#2A2418' },
             },
           },
-        });
-      }
-    } else {
-      hideLoader('moistureLoading');
-      showError('moistureError');
+        },
+      });
     }
   } catch (err) {
     console.error('[stats] moisture chart load failed:', err);
