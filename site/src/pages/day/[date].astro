@@ -253,7 +253,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
 
 {dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
   <script is:inline type="module" define:vars={{ moistureReadings, waterEvents }}>
-    import { Chart } from 'https://esm.sh/chart.js@4.4.9/auto';
+    import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
     import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
     const SAGE      = 'rgba(107,170,94,0.9)';
@@ -268,7 +268,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
 
     const yMin = Math.min(...values);
     const yMax = Math.max(...values);
-    const fixedY = yMin - (yMax - yMin) * 0.05;
+    const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+    const fixedY = yMin - spread * 0.15;
 
     const waterPoints = waterEvents.map(e => ({ x: e.timestamp, y: fixedY }));
 

@@ -1,7 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import aiStats from '../data/state/ai_stats.json';
-import sensorDaily from '../data/state/sensor_stats_daily.json';
 
 type DayAI = {
   sessions: number;
@@ -121,6 +120,11 @@ const summaryReadouts = [
   const drTo    = document.getElementById('drTo');
   const drReset = document.getElementById('drReset');
 
+  function fmtD(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
   try {
     const [aiRes, hourlyRes, dailyRes] = await Promise.all([
       fetch('/state/ai_stats.json'),
@@ -149,14 +153,14 @@ const summaryReadouts = [
       const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
       const values   = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
       if (costChart) {
-        costChart.data.labels = filtered.map(d => d.slice(5));
+        costChart.data.labels = filtered.map(d => fmtD(d));
         costChart.data.datasets[0].data = values;
         costChart.update();
       } else {
         hideLoader('costLoading');
         costChart = new Chart(document.getElementById('costChart'), {
           type: 'bar',
-          data: { labels: filtered.map(d => d.slice(5)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
+          data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
           options: {
             responsive: true, maintainAspectRatio: false,
             plugins: {
@@ -182,18 +186,31 @@ const summaryReadouts = [
         if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
         return;
       }
-      const moisturePoints = filteredKeys.map(k => ({ x: k, y: hourlyData[k]?.moisture?.avg ?? null }));
-      const validVals = moisturePoints.map(p => p.y).filter(v => v != null);
+      document.getElementById('moistureError').hidden = true;
+      const moistureVals = filteredKeys.map(k => hourlyData[k]?.moisture?.avg ?? null);
+      const validVals = moistureVals.filter(v => v != null);
       const yMin   = validVals.length ? Math.min(...validVals) : 0;
       const yMax   = validVals.length ? Math.max(...validVals) : 0;
-      const fixedY = yMin - (yMax - yMin) * 0.05;
+      const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+      const fixedY = yMin - spread * 0.15;
 
+      // Build category labels (one per hour key)
+      const moistureLabels = filteredKeys.map(k => {
+        const d = new Date(k);
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+      });
+
+      // Map water events to nearest filteredKey index
       const windowStart = filteredKeys[0]?.slice(0, 10);
       const windowEnd   = filteredKeys.at(-1)?.slice(0, 10);
-      const waterPoints = [];
+      const waterVals = new Array(filteredKeys.length).fill(null);
       for (const [day, dayStats] of Object.entries(dailyData)) {
         if (!windowStart || !windowEnd || day < windowStart || day > windowEnd) continue;
-        for (const evt of dayStats?.water?.events ?? []) waterPoints.push({ x: evt.timestamp, y: fixedY });
+        for (const evt of dayStats?.water?.events ?? []) {
+          const ts = evt.timestamp?.slice(0, 16); // YYYY-MM-DDTHH:MM
+          const idx = filteredKeys.findIndex(k => k.slice(0, 16) >= ts);
+          if (idx >= 0) waterVals[idx] = fixedY;
+        }
       }
 
       if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
@@ -201,9 +218,10 @@ const summaryReadouts = [
       moistureChart = new Chart(document.getElementById('moistureChart'), {
         type: 'line',
         data: {
+          labels: moistureLabels,
           datasets: [
-            { data: moisturePoints, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
-            { data: waterPoints, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
+            { data: moistureVals, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
+            { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
           ],
         },
         options: {
@@ -213,7 +231,7 @@ const summaryReadouts = [
             tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
           },
           scales: {
-            x: { type: 'time', time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, adapters: { date: {} }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+            x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#2A2418' } },
             y: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
           },
         },
@@ -243,7 +261,7 @@ const summaryReadouts = [
       const tbody = document.createElement('tbody');
       for (const [i, [tool, count]] of tools.entries()) {
         const barWrap = mkEl('div', { className: 'tool-bar-wrap' },
-          mkEl('span', { className: 'tool-name' }, tool),
+          mkEl('span', { className: 'tool-name' }, tool.replace('mcp__plant-tools__', '')),
           mkEl('span', { className: 'tool-bar', style: `width:${Math.round((count / maxCalls) * 120)}px` })
         );
         tbody.appendChild(mkEl('tr', { className: 'tr' },
@@ -257,8 +275,8 @@ const summaryReadouts = [
         mkEl('tr', {},
           mkEl('th', { className: 'th' }, 'RANK'),
           mkEl('th', { className: 'th' }, 'TOOL'),
-          mkEl('th', { className: 'th th-right' }, 'CALLS'),
-          mkEl('th', { className: 'th th-right' }, 'SHARE')
+          mkEl('th', { className: 'th th-right', style: 'min-width:4.5rem' }, 'CALLS'),
+          mkEl('th', { className: 'th th-right', style: 'min-width:4rem' }, 'SHARE')
         )
       );
       container.replaceChildren(mkEl('div', { className: 'tool-table-wrap' }, mkEl('table', { className: 'tool-table' }, thead, tbody)));
@@ -459,14 +477,14 @@ const summaryReadouts = [
     letter-spacing: 0.1em;
     border-bottom: 1px solid #2A2418;
   }
-  .th-right { text-align: right; }
+  .th-right { text-align: right; padding-left: 0.75rem; }
   .tr { border-bottom: 1px solid #1C1408; }
   .tr:hover { background: #100E06; }
   .td { padding: 0.35rem 0; color: #7A6A42; vertical-align: middle; }
   .td-rank { color: #3E3420; width: 2.5rem; }
-  .td-right { text-align: right; }
-  .td-val { color: #F0A32C; }
-  .td-dim { color: #4A3E28; }
+  .td-right { text-align: right; padding-left: 0.75rem; }
+  .td-val { color: #F0A32C; min-width: 4rem; }
+  .td-dim { color: #4A3E28; min-width: 3.5rem; }
 
   .tool-bar-wrap {
     display: flex;
