@@ -10,15 +10,6 @@ const timeline = plantTimeline as Record<string, {
   has_watering: boolean;
 }>;
 
-function pickBestPhoto(photos: string[] | null | undefined): string | null {
-  if (!photos || photos.length === 0) return null;
-  const score = (url: string) => {
-    const parts = url.split('/').pop()?.split('_') ?? [];
-    const h = parts.length >= 3 ? parseInt(parts[2].slice(0, 2), 10) : 12;
-    return (h < 7 || h >= 21) ? 1000 + Math.abs(h - 12) : Math.abs(h - 12);
-  };
-  return photos.reduce((best, p) => score(p) < score(best) ? p : best);
-}
 
 const days = Object.values(timeline).sort((a, b) => b.date.localeCompare(a.date));
 
@@ -60,7 +51,7 @@ const statusBorderColor: Record<string, string> = {
   <div class="contact-sheet">
     {days.map(day => {
       const bc = statusBorderColor[day.status] ?? statusBorderColor.unknown;
-      const photo = pickBestPhoto(day.photos) ?? day.noon_photo_url ?? null;
+      const photo = day.noon_photo_url ?? null;
       return (
         <a href={`/day/${day.date}`} class="sheet-cell" style={`border-left-color:${bc}`}>
           <div class="cell-thumb">

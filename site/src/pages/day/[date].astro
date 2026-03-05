@@ -33,33 +33,7 @@ try {
   dayData = null;
 }
 
-// Filter photos to those taken while the light was on.
-// Falls back to all photos if no light event data available.
-function litPhotos(
-  photos: string[] | undefined,
-  lightEvents: DayData['light_events']
-): string[] {
-  if (!photos || photos.length === 0) return [];
-  if (!lightEvents || lightEvents.length === 0) return photos;
-  const sorted = [...lightEvents].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  return photos.filter(url => {
-    const fname = url.split('/').pop() ?? '';
-    const parts = fname.split('_');
-    if (parts.length < 3) return true;
-    const d = parts[1], t = parts[2];
-    const photoMs = new Date(
-      `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}T${t.slice(0,2)}:${t.slice(2,4)}:${t.slice(4,6)}Z`
-    ).getTime();
-    let on = false;
-    for (const evt of sorted) {
-      if (new Date(evt.timestamp).getTime() <= photoMs) on = evt.event_type === 'turn_on';
-      else break;
-    }
-    return on;
-  });
-}
-
-const visiblePhotos = litPhotos(dayData?.photos, dayData?.light_events);
+const visiblePhotos = dayData?.photos ?? [];
 
 const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
 const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;

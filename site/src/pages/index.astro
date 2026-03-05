@@ -12,27 +12,13 @@ const timeline = plantTimeline as Record<string, {
   has_watering: boolean;
 }>;
 
-// Pick the best-lit photo from an array: prefer 07:00–21:00 UTC (light-on window),
-// closest to noon. Falls back gracefully if no daytime photos exist.
-function pickBestPhoto(photos: string[] | null | undefined): string | null {
-  if (!photos || photos.length === 0) return null;
-  const hour = (url: string) => {
-    const parts = url.split('/').pop()?.split('_') ?? [];
-    return parts.length >= 3 ? parseInt(parts[2].slice(0, 2), 10) : 12;
-  };
-  const score = (url: string) => {
-    const h = hour(url);
-    return (h < 7 || h >= 21) ? 1000 + Math.abs(h - 12) : Math.abs(h - 12);
-  };
-  return photos.reduce((best, p) => score(p) < score(best) ? p : best);
-}
 
 const dates = Object.keys(timeline).sort().reverse();
 const latestDate = dates[0];
 const latestEntry = timeline[latestDate];
 
 const status = (currentState.plant_status ?? 'unknown') as string;
-const latestPhoto = pickBestPhoto(latestEntry?.photos) ?? currentState.latest_photo_url ?? null;
+const latestPhoto = latestEntry?.noon_photo_url ?? currentState.latest_photo_url ?? null;
 
 const lastRun = currentState.last_run
   ? new Date(currentState.last_run).toLocaleString('en-GB', {
@@ -163,7 +149,7 @@ const statusLabel: Record<string, string> = {
         {dates.slice(0, 14).map(date => {
           const entry = timeline[date];
           const ds = (entry?.status ?? 'unknown') as string;
-          const thumb = pickBestPhoto(entry?.photos) ?? entry?.noon_photo_url ?? null;
+          const thumb = entry?.noon_photo_url ?? null;
           return (
             <a href={`/day/${date}`} class="day-cell">
               <div class="day-thumb">

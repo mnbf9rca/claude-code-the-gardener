@@ -1,5 +1,6 @@
 from processor.photos import (
     build_photo_url,
+    filter_lit_filenames,
     parse_photo_timestamp,
     select_photos_for_day,
 )
@@ -50,3 +51,61 @@ def test_select_photos_for_day_empty_input():
 def test_build_photo_url():
     url = build_photo_url("2026/02/24/plant_20260224_120000_001.jpg", "https://gardener-photos.cynexia.com")
     assert url == "https://gardener-photos.cynexia.com/2026/02/24/plant_20260224_120000_001.jpg"
+
+
+# ── filter_lit_filenames ──────────────────────────────────────────────────────
+
+def test_filter_lit_filenames_no_events_returns_all():
+    """No light event data → fall back to all filenames."""
+    filenames = ["plant_20260224_100000_001.jpg", "plant_20260224_200000_001.jpg"]
+    assert filter_lit_filenames(filenames, []) == filenames
+
+
+def test_filter_lit_filenames_photo_before_first_event_excluded():
+    """Photo taken before the first light event → light was off → excluded."""
+    filenames = ["plant_20260224_060000_001.jpg"]
+    events = [{"timestamp": "2026-02-24T08:00:00Z", "event_type": "turn_on"}]
+    result = filter_lit_filenames(filenames, events)
+    # Light was never turned on before 08:00; photo at 06:00 is in darkness.
+    # No lit photos → falls back to all filenames.
+    assert result == filenames
+
+
+def test_filter_lit_filenames_exact_boundary():
+    """Photo at the exact turn_on timestamp is included (evt_ts <= photo_ts)."""
+    filenames = ["plant_20260224_080000_001.jpg"]
+    events = [{"timestamp": "2026-02-24T08:00:00Z", "event_type": "turn_on"}]
+    result = filter_lit_filenames(filenames, events)
+    assert result == filenames
+
+
+def test_filter_lit_filenames_interleaved_events():
+    """Only photos taken while the light is on are returned."""
+    filenames = [
+        "plant_20260224_070000_001.jpg",  # before first event → off
+        "plant_20260224_090000_001.jpg",  # after turn_on at 08:00 → on
+        "plant_20260224_130000_001.jpg",  # after turn_off at 12:00 → off
+        "plant_20260224_150000_001.jpg",  # after turn_on at 14:00 → on
+    ]
+    events = [
+        {"timestamp": "2026-02-24T08:00:00Z", "event_type": "turn_on"},
+        {"timestamp": "2026-02-24T12:00:00Z", "event_type": "turn_off"},
+        {"timestamp": "2026-02-24T14:00:00Z", "event_type": "turn_on"},
+    ]
+    result = filter_lit_filenames(filenames, events)
+    assert "plant_20260224_090000_001.jpg" in result
+    assert "plant_20260224_150000_001.jpg" in result
+    assert "plant_20260224_070000_001.jpg" not in result
+    assert "plant_20260224_130000_001.jpg" not in result
+
+
+def test_filter_lit_filenames_all_dark_falls_back():
+    """If no photos are lit, return all filenames rather than empty list."""
+    filenames = ["plant_20260224_030000_001.jpg", "plant_20260224_040000_001.jpg"]
+    events = [
+        {"timestamp": "2026-02-24T08:00:00Z", "event_type": "turn_on"},
+        {"timestamp": "2026-02-24T20:00:00Z", "event_type": "turn_off"},
+    ]
+    result = filter_lit_filenames(filenames, events)
+    # Both photos are before the light turns on → fall back to all
+    assert result == filenames
