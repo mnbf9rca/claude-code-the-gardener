@@ -46,7 +46,10 @@ def filter_lit_filenames(
     if not light_events:
         return filenames
 
-    sorted_events = sorted(light_events, key=lambda e: e["timestamp"])
+    sorted_events = sorted(
+        light_events,
+        key=lambda e: datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp(),
+    )
 
     lit = []
     for fname in filenames:

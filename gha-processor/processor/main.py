@@ -112,6 +112,7 @@ def main() -> None:
             entry["has_watering"] = bool(
                 merged_daily[date].get("water", {}).get("total_ml", 0)
             )
+        entry.setdefault("has_watering", False)
 
     # Sort by date for consistent output
     timeline_sorted = dict(sorted(timeline.items()))
