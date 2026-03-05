@@ -52,10 +52,12 @@ def filter_lit_filenames(
       Only turn_off_scheduled / turn_off_manual / recovery_turn_off end a lit
       window; recovery_reschedule and other intermediate events are ignored.
 
-    Returns all filenames if no lit photos are found (no light data available).
+    Returns an empty list if no light data is available or no photos are lit.
+    Callers must show a 'no photos' placeholder rather than falling back to
+    unfiltered (potentially dark) photos.
     """
     if not light_events:
-        return filenames
+        return []
 
     # ── Primary: interval-based ───────────────────────────────────────────────
     intervals = [
@@ -72,7 +74,7 @@ def filter_lit_filenames(
             pts = dt.timestamp()
             if any(on <= pts <= off for on, off in intervals):
                 lit.append(fname)
-        return lit if lit else filenames
+        return lit
 
     # ── Fallback: event-pair state tracking (old data without scheduled_off) ──
     _OFF_TYPES = {"turn_off_scheduled", "turn_off_manual", "recovery_turn_off"}
@@ -98,18 +100,18 @@ def filter_lit_filenames(
         if light_on:
             lit.append(fname)
 
-    return lit if lit else filenames  # fall back if no lit photos exist
+    return lit
 
 
 def select_photos_for_day(
     filenames: list[str],
     light_events: list[dict] | None = None,
 ) -> list[str]:
-    """Select up to 6 representative photos for a day, preferring lit ones.
+    """Return lit photos for a day, spread across time if there are many.
 
-    Filters to light-on photos first (when light_events provided), then
-    divides the remaining photos into 6 equal time slots and picks the
-    photo nearest each slot midpoint.
+    Filters to light-on photos only. If ≤6 lit photos, returns all of them.
+    If >6, divides into 6 equal time slots and picks the nearest to each
+    slot midpoint. Returns [] if no lit photos are found.
     """
     if not filenames:
         return []
@@ -128,6 +130,10 @@ def select_photos_for_day(
     if not parsed:
         return []
 
+    # With ≤6 candidates slot selection can only lose photos — return all.
+    if len(parsed) <= len(SLOT_MIDPOINTS_SECONDS):
+        return [fname for fname, _ in parsed]
+
     selected = []
     for midpoint in SLOT_MIDPOINTS_SECONDS:
         nearest = min(parsed, key=lambda p: abs(p[1] - midpoint), default=None)
@@ -141,12 +147,7 @@ def get_noon_photo(
     filenames: list[str],
     light_events: list[dict] | None = None,
 ) -> str | None:
-    """Return the photo nearest the noon slot (14:00 UTC), preferring lit ones.
-
-    Filters to lit candidates first (when light_events provided), then returns
-    the photo whose timestamp is closest to SLOT_MIDPOINTS_SECONDS[NOON_SLOT].
-    Falls back to all filenames if no lit photos exist.
-    """
+    """Return the lit photo nearest 14:00 UTC, or None if no lit photos exist."""
     if not filenames:
         return None
 
