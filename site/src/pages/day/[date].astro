@@ -253,8 +253,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
 
 {dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
   <script is:inline type="module" define:vars={{ moistureReadings, waterEvents }}>
-    import { Chart } from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.9/auto/+esm';
-    import 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/+esm';
+    import { Chart } from 'https://esm.sh/chart.js@4.4.9/auto';
+    import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
     const SAGE      = 'rgba(107,170,94,0.9)';
     const SAGE_FILL = 'rgba(107,170,94,0.06)';

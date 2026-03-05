@@ -19,16 +19,6 @@ const totalOutput    = Object.values(stats).reduce((s, d) => s + (d.output_token
 const daysMonitored  = Object.keys(stats).length;
 const avgCostPerDay  = daysMonitored > 0 ? totalCost / daysMonitored : 0;
 
-const allToolCalls: Record<string, number> = {};
-for (const day of Object.values(stats)) {
-  for (const [tool, count] of Object.entries(day.tool_calls ?? {})) {
-    allToolCalls[tool] = (allToolCalls[tool] ?? 0) + count;
-  }
-}
-const topTools = Object.entries(allToolCalls)
-  .sort(([, a], [, b]) => b - a)
-  .slice(0, 20);
-
 const summaryReadouts = [
   { key: 'DAYS MONITORED',  val: String(daysMonitored) },
   { key: 'TOTAL SESSIONS',  val: totalSessions.toLocaleString() },
@@ -76,7 +66,7 @@ const summaryReadouts = [
 
   <!-- Hourly moisture chart -->
   <section class="chart-section">
-    <div class="section-rule">MOISTURE &mdash; LAST 7 DAYS (HOURLY)</div>
+    <div class="section-rule">MOISTURE (HOURLY)</div>
     <div class="chart-frame">
       <canvas id="moistureChart"></canvas>
       <div class="chart-loading" id="moistureLoading">LOADING TELEMETRY&hellip;</div>
@@ -84,52 +74,18 @@ const summaryReadouts = [
     </div>
   </section>
 
-  <!-- Tool call breakdown -->
-  {topTools.length > 0 && (
-    <section class="chart-section">
-      <div class="section-rule">TOOL CALL FREQUENCY &mdash; TOP {topTools.length}</div>
-      <div class="tool-table-wrap">
-        <table class="tool-table">
-          <thead>
-            <tr>
-              <th class="th">RANK</th>
-              <th class="th">TOOL</th>
-              <th class="th th-right">CALLS</th>
-              <th class="th th-right">SHARE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(() => {
-              const maxCalls = topTools[0]?.[1] ?? 1;
-              const totalCalls = topTools.reduce((s, [, c]) => s + c, 0);
-              return topTools.map(([tool, count], i) => (
-                <tr class="tr">
-                  <td class="td td-rank">{String(i + 1).padStart(2, '0')}</td>
-                  <td class="td">
-                    <div class="tool-bar-wrap">
-                      <span class="tool-name">{tool}</span>
-                      <span
-                        class="tool-bar"
-                        style={`width:${Math.round((count / maxCalls) * 120)}px`}
-                      ></span>
-                    </div>
-                  </td>
-                  <td class="td td-right td-val">{count.toLocaleString()}</td>
-                  <td class="td td-right td-dim">{((count / totalCalls) * 100).toFixed(1)}%</td>
-                </tr>
-              ));
-            })()}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )}
+  <!-- Tool call breakdown (client-rendered, reacts to date filter) -->
+  <section id="toolSection" class="chart-section" hidden>
+    <div class="section-rule" id="toolSectionRule">TOOL CALL FREQUENCY</div>
+    <div id="toolTableContainer"></div>
+  </section>
 
 </Layout>
 
-<!-- Chart.js via CDN — loaded inline so Vite doesn't attempt to bundle it -->
+<!-- Charts via esm.sh — loaded inline so Vite doesn't attempt to bundle it -->
 <script is:inline type="module">
-  import Chart from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.9/auto/+esm';
+  import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
+  import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
   const AMBER      = 'rgba(240,163,44,0.85)';
   const AMBER_DIM  = 'rgba(240,163,44,0.25)';
@@ -143,225 +99,186 @@ const summaryReadouts = [
   Chart.defaults.color = TICK;
   Chart.defaults.font  = baseFont;
 
-  function hideLoader(id) {
-    const el = document.getElementById(id);
-    if (el) el.hidden = true;
-  }
+  function hideLoader(id) { const el = document.getElementById(id); if (el) el.hidden = true; }
+  function showError(id)  { const el = document.getElementById(id); if (el) el.hidden = false; }
 
-  function showError(id) {
-    const el = document.getElementById(id);
-    if (el) el.hidden = false;
-  }
-
-  try {
-    const aiRes = await fetch('/state/ai_stats.json');
-
-    if (aiRes.ok) {
-      const aiData = await aiRes.json();
-      const allCostDates = Object.keys(aiData).sort();
-
-      if (allCostDates.length === 0) {
-        hideLoader('costLoading');
-        showError('costError');
-      } else {
-        const drFrom  = document.getElementById('drFrom');
-        const drTo    = document.getElementById('drTo');
-        const drReset = document.getElementById('drReset');
-
-        drFrom.min = allCostDates[0];
-        drFrom.max = allCostDates.at(-1);
-        drTo.min   = allCostDates[0];
-        drTo.max   = allCostDates.at(-1);
-
-        let costChart = null;
-
-        function buildCostChart(from, to) {
-          const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
-          const values   = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
-
-          if (costChart) {
-            costChart.data.labels = filtered.map(d => d.slice(5));
-            costChart.data.datasets[0].data = values;
-            costChart.update();
-          } else {
-            hideLoader('costLoading');
-            costChart = new Chart(document.getElementById('costChart'), {
-              type: 'bar',
-              data: {
-                labels: filtered.map(d => d.slice(5)),
-                datasets: [{
-                  data: values,
-                  backgroundColor: AMBER_DIM,
-                  borderColor: AMBER,
-                  borderWidth: 1,
-                  borderRadius: 0,
-                }],
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false },
-                  tooltip: {
-                    backgroundColor: '#1C1408',
-                    borderColor: '#2A2418',
-                    borderWidth: 1,
-                    titleColor: '#F0A32C',
-                    bodyColor: '#E8D4A0',
-                    callbacks: {
-                      label: ctx => ` $${ctx.parsed.y.toFixed(4)}`,
-                    },
-                  },
-                },
-                scales: {
-                  x: {
-                    grid: { color: GRID },
-                    ticks: { color: TICK, maxTicksLimit: 14, font: baseFont },
-                    border: { color: '#2A2418' },
-                  },
-                  y: {
-                    grid: { color: GRID },
-                    ticks: {
-                      color: TICK,
-                      font: baseFont,
-                      callback: v => `$${Number(v).toFixed(3)}`,
-                    },
-                    border: { color: '#2A2418' },
-                    beginAtZero: true,
-                  },
-                },
-              },
-            });
-          }
-        }
-
-        drFrom.addEventListener('change', () => buildCostChart(drFrom.value, drTo.value));
-        drTo.addEventListener('change',   () => buildCostChart(drFrom.value, drTo.value));
-        drReset.addEventListener('click', () => {
-          drFrom.value = '';
-          drTo.value = '';
-          buildCostChart('', '');
-        });
-
-        buildCostChart('', '');
-      }
-    } else {
-      hideLoader('costLoading');
-      showError('costError');
+  /** Safe DOM element builder — no innerHTML on data */
+  function mkEl(tag, attrs, ...children) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs ?? {})) {
+      if (k === 'className') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
+      else el.setAttribute(k, v);
     }
-  } catch (err) {
-    console.error('[stats] cost chart load failed:', err);
-    hideLoader('costLoading');
-    showError('costError');
+    for (const child of children) {
+      if (typeof child === 'string') el.appendChild(document.createTextNode(child));
+      else if (child) el.appendChild(child);
+    }
+    return el;
   }
 
+  const drFrom  = document.getElementById('drFrom');
+  const drTo    = document.getElementById('drTo');
+  const drReset = document.getElementById('drReset');
+
   try {
-    const [hourlyRes, dailyRes] = await Promise.all([
+    const [aiRes, hourlyRes, dailyRes] = await Promise.all([
+      fetch('/state/ai_stats.json'),
       fetch('/state/sensor_stats_hourly.json'),
       fetch('/state/sensor_stats_daily.json'),
     ]);
+
+    const aiData     = aiRes.ok     ? await aiRes.json()     : {};
     const hourlyData = hourlyRes.ok ? await hourlyRes.json() : {};
     const dailyData  = dailyRes.ok  ? await dailyRes.json()  : {};
 
-    await import('https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/+esm');
+    const allCostDates = Object.keys(aiData).sort();
+    const allHourKeys  = Object.keys(hourlyData).sort();
 
-    const hourKeys  = Object.keys(hourlyData).sort().slice(-168);
-    const moistAvgs = hourKeys.map(h => hourlyData[h]?.moisture?.avg ?? null);
-
-    if (hourKeys.length === 0) {
-      hideLoader('moistureLoading');
-      showError('moistureError');
+    if (allCostDates.length > 0) {
+      drFrom.min = allCostDates[0];  drFrom.max = allCostDates.at(-1);
+      drTo.min   = allCostDates[0];  drTo.max   = allCostDates.at(-1);
     } else {
-      const moisturePoints = hourKeys.map((k, i) => ({ x: k, y: moistAvgs[i] }));
+      hideLoader('costLoading'); showError('costError');
+    }
 
-      const validVals = moistAvgs.filter(v => v != null);
-      const yMin   = Math.min(...validVals);
-      const yMax   = Math.max(...validVals);
+    // ── Cost chart ────────────────────────────────────────────────────────────
+    let costChart = null;
+
+    function buildCostChart(from, to) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      const values   = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
+      if (costChart) {
+        costChart.data.labels = filtered.map(d => d.slice(5));
+        costChart.data.datasets[0].data = values;
+        costChart.update();
+      } else {
+        hideLoader('costLoading');
+        costChart = new Chart(document.getElementById('costChart'), {
+          type: 'bar',
+          data: { labels: filtered.map(d => d.slice(5)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
+            },
+            scales: {
+              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#2A2418' } },
+              y: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
+            },
+          },
+        });
+      }
+    }
+
+    // ── Moisture chart ────────────────────────────────────────────────────────
+    let moistureChart = null;
+
+    function buildMoistureChart(from, to) {
+      const filteredKeys = allHourKeys.filter(k => { const d = k.slice(0, 10); return (!from || d >= from) && (!to || d <= to); });
+      if (filteredKeys.length === 0) {
+        hideLoader('moistureLoading'); showError('moistureError');
+        if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
+        return;
+      }
+      const moisturePoints = filteredKeys.map(k => ({ x: k, y: hourlyData[k]?.moisture?.avg ?? null }));
+      const validVals = moisturePoints.map(p => p.y).filter(v => v != null);
+      const yMin   = validVals.length ? Math.min(...validVals) : 0;
+      const yMax   = validVals.length ? Math.max(...validVals) : 0;
       const fixedY = yMin - (yMax - yMin) * 0.05;
 
-      const windowStart = hourKeys[0]?.slice(0, 10);
-      const windowEnd   = hourKeys.at(-1)?.slice(0, 10);
-
+      const windowStart = filteredKeys[0]?.slice(0, 10);
+      const windowEnd   = filteredKeys.at(-1)?.slice(0, 10);
       const waterPoints = [];
       for (const [day, dayStats] of Object.entries(dailyData)) {
         if (!windowStart || !windowEnd || day < windowStart || day > windowEnd) continue;
-        for (const evt of dayStats?.water?.events ?? []) {
-          waterPoints.push({ x: evt.timestamp, y: fixedY });
-        }
+        for (const evt of dayStats?.water?.events ?? []) waterPoints.push({ x: evt.timestamp, y: fixedY });
       }
 
+      if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
       hideLoader('moistureLoading');
-      new Chart(document.getElementById('moistureChart'), {
+      moistureChart = new Chart(document.getElementById('moistureChart'), {
         type: 'line',
         data: {
           datasets: [
-            {
-              data: moisturePoints,
-              borderColor: SAGE,
-              backgroundColor: SAGE_FILL,
-              showLine: true,
-              tension: 0.35,
-              pointRadius: 0,
-              pointHoverRadius: 3,
-              fill: true,
-              borderWidth: 1.5,
-              order: 2,
-            },
-            {
-              data: waterPoints,
-              type: 'scatter',
-              pointStyle: 'triangle',
-              pointRadius: 6,
-              pointHoverRadius: 7,
-              backgroundColor: 'rgba(160,208,220,0.9)',
-              borderColor: 'transparent',
-              showLine: false,
-              order: 1,
-            },
+            { data: moisturePoints, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
+            { data: waterPoints, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
           ],
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: {
-              filter: item => item.datasetIndex === 0,
-              backgroundColor: '#1C1408',
-              borderColor: '#2A2418',
-              borderWidth: 1,
-              titleColor: SAGE,
-              bodyColor: '#E8D4A0',
-              callbacks: {
-                label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}`,
-              },
-            },
+            tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
           },
           scales: {
-            x: {
-              type: 'time',
-              time: {
-                unit: 'day',
-                displayFormats: { day: 'dd MMM' },
-              },
-              adapters: { date: {} },
-              grid: { color: GRID },
-              ticks: { color: TICK, font: baseFont },
-              border: { color: '#2A2418' },
-            },
-            y: {
-              grid: { color: GRID },
-              ticks: { color: TICK, font: baseFont },
-              border: { color: '#2A2418' },
-            },
+            x: { type: 'time', time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, adapters: { date: {} }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+            y: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
           },
         },
       });
     }
+
+    // ── Tool table (DOM-built, no innerHTML on data) ───────────────────────
+    function buildToolTable(from, to) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      const toolCounts = {};
+      for (const d of filtered)
+        for (const [tool, count] of Object.entries(aiData[d].tool_calls ?? {}))
+          toolCounts[tool] = (toolCounts[tool] ?? 0) + count;
+
+      const tools      = Object.entries(toolCounts).sort(([, a], [, b]) => b - a).slice(0, 20);
+      const totalCalls = tools.reduce((s, [, c]) => s + c, 0);
+      const maxCalls   = tools[0]?.[1] ?? 1;
+
+      const section   = document.getElementById('toolSection');
+      const rule      = document.getElementById('toolSectionRule');
+      const container = document.getElementById('toolTableContainer');
+      if (tools.length === 0) { section.hidden = true; return; }
+
+      rule.textContent = `TOOL CALL FREQUENCY \u2014 TOP ${tools.length}`;
+      section.hidden = false;
+
+      const tbody = document.createElement('tbody');
+      for (const [i, [tool, count]] of tools.entries()) {
+        const barWrap = mkEl('div', { className: 'tool-bar-wrap' },
+          mkEl('span', { className: 'tool-name' }, tool),
+          mkEl('span', { className: 'tool-bar', style: `width:${Math.round((count / maxCalls) * 120)}px` })
+        );
+        tbody.appendChild(mkEl('tr', { className: 'tr' },
+          mkEl('td', { className: 'td td-rank' }, String(i + 1).padStart(2, '0')),
+          mkEl('td', { className: 'td' }, barWrap),
+          mkEl('td', { className: 'td td-right td-val' }, count.toLocaleString()),
+          mkEl('td', { className: 'td td-right td-dim' }, `${((count / totalCalls) * 100).toFixed(1)}%`)
+        ));
+      }
+      const thead = mkEl('thead', {},
+        mkEl('tr', {},
+          mkEl('th', { className: 'th' }, 'RANK'),
+          mkEl('th', { className: 'th' }, 'TOOL'),
+          mkEl('th', { className: 'th th-right' }, 'CALLS'),
+          mkEl('th', { className: 'th th-right' }, 'SHARE')
+        )
+      );
+      container.replaceChildren(mkEl('div', { className: 'tool-table-wrap' }, mkEl('table', { className: 'tool-table' }, thead, tbody)));
+    }
+
+    // ── Unified update ────────────────────────────────────────────────────────
+    function update() {
+      buildCostChart(drFrom.value, drTo.value);
+      buildMoistureChart(drFrom.value, drTo.value);
+      buildToolTable(drFrom.value, drTo.value);
+    }
+    drFrom.addEventListener('change', update);
+    drTo.addEventListener('change',   update);
+    drReset.addEventListener('click', () => { drFrom.value = ''; drTo.value = ''; update(); });
+    update();
+
   } catch (err) {
-    console.error('[stats] moisture chart load failed:', err);
-    hideLoader('moistureLoading');
-    showError('moistureError');
+    console.error('[stats] load failed:', err);
+    hideLoader('costLoading');     showError('costError');
+    hideLoader('moistureLoading'); showError('moistureError');
   }
 </script>
 
