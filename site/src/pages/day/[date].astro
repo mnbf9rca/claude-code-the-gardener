@@ -185,7 +185,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
       <!-- Messages -->
       {((dayData.messages_to_human?.length ?? 0) + (dayData.messages_from_human?.length ?? 0)) > 0 && (
         <section class="day-section">
-          <div class="section-rule">MESMOISTURE_BLUES</div>
+          <div class="section-rule">MESSAGES</div>
           <div class="messages">
             {[
               ...(dayData.messages_to_human ?? []).map(m => ({ ...m, direction: 'to_human' })),
@@ -211,7 +211,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
       <!-- AI usage -->
       {dayData.token_usage && (dayData.token_usage.sessions ?? 0) > 0 && (
         <section class="day-section">
-          <div class="section-rule">AI UMOISTURE_BLUE</div>
+          <div class="section-rule">AI USAGE</div>
           <div class="readout-grid">
             {[
               { k: 'SESSIONS',      v: String(dayData.token_usage.sessions) },
