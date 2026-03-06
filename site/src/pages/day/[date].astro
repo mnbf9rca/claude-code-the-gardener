@@ -55,10 +55,10 @@ const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
 const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;
 
 const statusColor: Record<string, string> = {
-  healthy:  '#4ECC85',
-  stressed: '#FFB74D',
-  critical: '#EF5350',
-  unknown:  '#273A2D',
+  healthy:  '#1C7840',
+  stressed: '#C87800',
+  critical: '#C42020',
+  unknown:  '#96B09A',
 };
 
 function fmtTime(ts: string) {
@@ -257,15 +257,15 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
     import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
-    const SAGE      = 'rgba(100,181,246,0.9)';
-    const SAGE_FILL = 'rgba(100,181,246,0.07)';
-    const WATER     = 'rgba(100,181,246,0.9)';
-    const GRID      = '#162218';
-    const TICK      = '#5A7A5A';
+    const SAGE      = 'rgba(30,120,190,0.85)';
+    const SAGE_FILL = 'rgba(30,120,190,0.08)';
+    const WATER     = 'rgba(30,120,190,0.85)';
+    const GRID      = '#DDE8D5';
+    const TICK      = '#6A9070';
     const baseFont  = { family: "'Azeret Mono','Courier New',monospace", size: 9 };
 
-    const AMBER_BAND    = 'rgba(255,183,74,0.65)';
-    const AMBER_BAND_BG = 'rgba(255,183,74,0.10)';
+    const AMBER_BAND    = 'rgba(200,120,0,0.55)';
+    const AMBER_BAND_BG = 'rgba(200,120,0,0.08)';
     const BAND_H = 6;
 
     const lightBandPlugin = {
@@ -389,11 +389,11 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #628A72;
+    color: #4A6855;
     text-decoration: none;
     transition: color 0.15s;
   }
-  .back-link:hover { color: #4ECC85; }
+  .back-link:hover { color: #1C7840; }
   .date-nav {
     display: flex;
     gap: 1.5rem;
@@ -403,14 +403,14 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #628A72;
+    color: #4A6855;
     text-decoration: none;
     transition: color 0.15s;
   }
-  .date-nav-link:hover { color: #4ECC85; }
+  .date-nav-link:hover { color: #1C7840; }
 
   .day-header {
-    border-bottom: 1px solid #1E2A1E;
+    border-bottom: 1px solid #C8D5C0;
     padding-bottom: 1.25rem;
     margin-bottom: 2.5rem;
     animation: fade-up 0.3s ease both;
@@ -427,7 +427,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2.25rem;
-    color: #E4EDEA;
+    color: #162018;
     margin: 0;
     line-height: 1;
     letter-spacing: -0.01em;
@@ -459,17 +459,17 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #4A7AAA;
+    color: #1E6AAA;
   }
   .water-val {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.8rem;
-    color: #80C0E8;
+    color: #1E6AAA;
   }
 
   .no-photos {
     padding: 2rem;
-    border: 1px solid #141C14;
+    border: 1px solid #EBF0E7;
     text-align: center;
   }
   .no-photos-label {
@@ -477,26 +477,26 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #273A2D;
+    color: #96B09A;
   }
   .no-photos-sub {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #1E2A1E;
+    color: #C8D5C0;
     margin-top: 0.35rem;
   }
 
   .no-data {
     text-align: center;
     padding: 4rem 2rem;
-    border: 1px solid #141C14;
+    border: 1px solid #EBF0E7;
   }
   .no-data-label {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #273A2D;
+    color: #96B09A;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     margin-bottom: 0.5rem;
@@ -504,7 +504,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   .no-data-sub {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.7rem;
-    color: #1E2A1E;
+    color: #C8D5C0;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
@@ -524,8 +524,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #628A72;
-    border-bottom: 1px solid #1E2A1E;
+    color: #4A6855;
+    border-bottom: 1px solid #C8D5C0;
     padding-bottom: 0.4rem;
   }
 
@@ -536,14 +536,14 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     overflow-x: auto;
     padding-bottom: 6px;
     scrollbar-width: thin;
-    scrollbar-color: #1E2A1E transparent;
+    scrollbar-color: #C8D5C0 transparent;
   }
   .strip-frame {
     flex-shrink: 0;
     width: 200px;
-    border: 1px solid #1E2A1E;
+    border: 1px solid #C8D5C0;
     overflow: hidden;
-    background: #0E1510;
+    background: #F8FBF7;
   }
   .strip-img {
     display: block;
@@ -556,10 +556,10 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     padding: 3px 6px;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.62rem;
-    color: #628A72;
+    color: #96B09A;
     letter-spacing: 0.08em;
-    background: #090C09;
-    border-top: 1px solid #141C14;
+    background: #FFFFFF;
+    border-top: 1px solid #C8D5C0;
   }
 
   /* Two-column layout */
@@ -582,25 +582,25 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   .th {
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #628A72;
+    color: #4A6855;
     font-weight: 400;
     padding: 0 0 0.4rem;
-    border-bottom: 1px solid #1E2A1E;
+    border-bottom: 1px solid #C8D5C0;
     text-align: left;
   }
   .th-right { text-align: right; }
-  .tr { border-bottom: 1px solid #141C14; }
+  .tr { border-bottom: 1px solid #EBF0E7; }
   .td {
     padding: 0.35rem 0;
-    color: #628A72;
+    color: #4A6855;
   }
   .td-right { text-align: right; }
-  .td-val { color: #4ECC85; }
+  .td-val { color: #1C7840; }
 
   /* Moisture chart */
   .day-chart-frame {
-    background: #0E1510;
-    border: 1px solid #1E2A1E;
+    background: #F8FBF7;
+    border: 1px solid #C8D5C0;
     padding: 0.75rem;
     height: 180px;
     position: relative;
@@ -617,12 +617,12 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     align-items: center;
     gap: 0.6rem;
     padding: 0.4rem 0;
-    border-bottom: 1px solid #141C14;
+    border-bottom: 1px solid #EBF0E7;
   }
   .tl-time {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
-    color: #628A72;
+    color: #96B09A;
     width: 3.5rem;
     flex-shrink: 0;
   }
@@ -632,49 +632,49 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .tl-dot-on { background: #FFB74D; }
-  .tl-dot-off { background: #273A2D; }
+  .tl-dot-on { background: #C87800; }
+  .tl-dot-off { background: #C8D5C0; }
   .tl-event {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
     letter-spacing: 0.06em;
   }
-  .tl-on { color: #FFB74D; }
-  .tl-off { color: #273A2D; }
+  .tl-on { color: #C87800; }
+  .tl-off { color: #96B09A; }
 
   /* Messages */
   .messages { display: flex; flex-direction: column; gap: 1rem; }
   .transmission {
-    border: 1px solid #1E2A1E;
-    border-left: 2px solid #4ECC85;
-    background: #0C140E;
+    border: 1px solid #C8D5C0;
+    border-left: 2px solid #1C7840;
+    background: #F8FBF7;
   }
   .transmission-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0.4rem 0.875rem;
-    border-bottom: 1px solid #1E2A1E;
-    background: #090C09;
+    border-bottom: 1px solid #C8D5C0;
+    background: #FFFFFF;
   }
   .transmission-label {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #4ECC85;
+    color: #1C7840;
   }
   .transmission-time {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.7rem;
-    color: #628A72;
+    color: #96B09A;
   }
   .transmission-body {
     padding: 0.875rem;
     font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 1rem;
-    color: #B8D0C0;
+    color: #2E4A38;
     line-height: 1.7;
   }
   .transmission-body :global(p) { margin: 0 0 0.5rem; }
@@ -686,10 +686,10 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #4ECC85;
+    color: #1C7840;
     margin: 0.75rem 0 0.4rem;
   }
-  .transmission-body :global(strong) { font-style: normal; color: #E4EDEA; font-weight: 600; }
+  .transmission-body :global(strong) { font-style: normal; color: #162018; font-weight: 600; }
   .transmission-body :global(ul),
   .transmission-body :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
   .transmission-body :global(li) { margin-bottom: 0.2rem; }
@@ -699,11 +699,11 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1px;
-    background: #141C14;
-    border: 1px solid #1E2A1E;
+    background: #EBF0E7;
+    border: 1px solid #C8D5C0;
   }
   .readout-cell {
-    background: #0E1510;
+    background: #F8FBF7;
     padding: 0.875rem;
   }
   .readout-key {
@@ -711,13 +711,13 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #628A72;
+    color: #96B09A;
     margin-bottom: 0.4rem;
   }
   .readout-val {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.9rem;
-    color: #4ECC85;
+    color: #1C7840;
     letter-spacing: 0.02em;
   }
 

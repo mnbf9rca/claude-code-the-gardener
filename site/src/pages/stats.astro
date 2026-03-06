@@ -103,12 +103,12 @@ const summaryReadouts = [
   import ZoomPlugin from 'https://esm.sh/chartjs-plugin-zoom@2.0.1?deps=chart.js@4.4.9';
   Chart.register(ZoomPlugin);
 
-  const AMBER      = 'rgba(78,204,133,0.85)';
-  const AMBER_DIM  = 'rgba(78,204,133,0.22)';
-  const SAGE       = 'rgba(100,181,246,0.9)';
-  const SAGE_FILL  = 'rgba(100,181,246,0.08)';
-  const GRID       = '#162218';
-  const TICK       = '#5A7A5A';
+  const AMBER      = 'rgba(28,120,64,0.75)';
+  const AMBER_DIM  = 'rgba(28,120,64,0.18)';
+  const SAGE       = 'rgba(30,120,190,0.85)';
+  const SAGE_FILL  = 'rgba(30,120,190,0.08)';
+  const GRID       = '#DDE8D5';
+  const TICK       = '#6A9070';
 
   const baseFont = { family: "'Azeret Mono', 'Courier New', monospace", size: 10 };
 
@@ -183,7 +183,7 @@ const summaryReadouts = [
 
   // onZoomComplete lives inside the zoom object for chartjs-plugin-zoom v2.0.x
   const ZOOM_DRAG = {
-    drag: { enabled: true, backgroundColor: 'rgba(78,204,133,0.06)', borderColor: 'rgba(78,204,133,0.4)', borderWidth: 1 },
+    drag: { enabled: true, backgroundColor: 'rgba(28,120,64,0.06)', borderColor: 'rgba(28,120,64,0.4)', borderWidth: 1 },
     mode: 'x',
     onZoomComplete({ chart }) {
       applyDragRange(chart);
@@ -193,8 +193,8 @@ const summaryReadouts = [
     zoom: ZOOM_DRAG,
   };
 
-  const AMBER_BAND    = 'rgba(255,183,74,0.65)';
-  const AMBER_BAND_BG = 'rgba(255,183,74,0.10)';
+  const AMBER_BAND    = 'rgba(200,120,0,0.55)';
+  const AMBER_BAND_BG = 'rgba(200,120,0,0.08)';
   const BAND_H = 6;
 
   try {
@@ -284,7 +284,7 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             zoom: ZOOM_PLUGIN_OPTS,
-            tooltip: { backgroundColor: '#0E1510', borderColor: '#1E2A1E', borderWidth: 1, titleColor: '#4ECC85', bodyColor: '#E4EDEA', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
+            tooltip: { backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: '#1C7840', bodyColor: '#162018', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
           },
         };
         if (isHourly) {
@@ -293,8 +293,8 @@ const summaryReadouts = [
             type: 'bar',
             data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0, parsing: false }] },
             options: { ...commonOpts, scales: {
-              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#1E2A1E' } },
-              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#1E2A1E' }, beginAtZero: true },
+              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#C8D5C0' } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#C8D5C0' }, beginAtZero: true },
             }},
           });
         } else {
@@ -303,8 +303,8 @@ const summaryReadouts = [
             type: 'bar',
             data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
             options: { ...commonOpts, scales: {
-              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#1E2A1E' } },
-              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#1E2A1E' }, beginAtZero: true },
+              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#C8D5C0' } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#C8D5C0' }, beginAtZero: true },
             }},
           });
         }
@@ -405,11 +405,11 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#0E1510', borderColor: '#1E2A1E', borderWidth: 1, titleColor: SAGE, bodyColor: '#E4EDEA', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: SAGE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#1E2A1E' } },
-              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#1E2A1E' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#C8D5C0' } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#C8D5C0' } },
             },
           },
         });
@@ -443,11 +443,11 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#0E1510', borderColor: '#1E2A1E', borderWidth: 1, titleColor: SAGE, bodyColor: '#E4EDEA', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: SAGE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#1E2A1E' } },
-              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#1E2A1E' } },
+              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#C8D5C0' } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#C8D5C0' } },
             },
           },
         });
@@ -498,12 +498,12 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { backgroundColor: '#0E1510', borderColor: '#1E2A1E', borderWidth: 1, titleColor: '#FFB74D', bodyColor: '#E4EDEA',
+              tooltip: { backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: '#C87800', bodyColor: '#162018',
                 callbacks: { label: ctx => ctx.parsed.y === 1 ? ' LIGHT ON' : ' LIGHT OFF' } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#1E2A1E' } },
-              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: '#1E2A1E' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#C8D5C0' } },
+              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: '#C8D5C0' } },
             },
           },
         });
@@ -539,11 +539,11 @@ const summaryReadouts = [
               plugins: {
                 legend: { display: false },
                 zoom: ZOOM_PLUGIN_OPTS,
-                tooltip: { backgroundColor: '#0E1510', borderColor: '#1E2A1E', borderWidth: 1, titleColor: '#FFB74D', bodyColor: '#E4EDEA', callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
+                tooltip: { backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: '#C87800', bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
               },
               scales: {
-                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#1E2A1E' } },
-                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#1E2A1E' }, beginAtZero: true },
+                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#C8D5C0' } },
+                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#C8D5C0' }, beginAtZero: true },
               },
             },
           });
@@ -588,10 +588,10 @@ const summaryReadouts = [
 
       // Alternating palette: even slices are brighter, odd are dimmer — gives clear contrast between neighbours
       const palette = slices.map((s, i) => {
-        if (s.label === 'Other') return '#141C14';
+        if (s.label === 'Other') return '#EBF0E7';
         const bright = i % 2 === 0;
-        const l   = Math.max(18, (bright ? 44 : 28) - i * 0.8);
-        const sat = Math.max(30, (bright ? 70 : 48) - i * 0.8);
+        const l   = Math.min(82, Math.max(30, (bright ? 48 : 62) + i * 0.8));
+        const sat = Math.max(28, (bright ? 65 : 42) - i * 0.6);
         const hue = 145 + (i % 6) * 8; // slight hue shift 145–185° botanical green feel
         return `hsl(${hue},${sat}%,${l}%)`;
       });
@@ -607,10 +607,10 @@ const summaryReadouts = [
           // Centre label
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.font = `700 14px 'Azeret Mono', monospace`;
-          ctx.fillStyle = '#4ECC85';
+          ctx.fillStyle = '#1C7840';
           ctx.fillText(totalCalls.toLocaleString(), cx, cy - 8);
           ctx.font = `400 8px 'Azeret Mono', monospace`;
-          ctx.fillStyle = '#628A72';
+          ctx.fillStyle = '#96B09A';
           ctx.fillText('CALLS', cx, cy + 8);
 
           // Arc labels for slices large enough to label (>= 3.5% share)
@@ -628,7 +628,7 @@ const summaryReadouts = [
             const label = data.labels[j];
             const maxCh = 12;
             ctx.font = `400 8px 'Azeret Mono', monospace`;
-            ctx.fillStyle = '#B8D0C0';
+            ctx.fillStyle = '#4A6855';
             ctx.textAlign = lx >= cx ? 'left' : 'right';
             ctx.textBaseline = 'middle';
             ctx.fillText(label.length > maxCh ? label.slice(0, maxCh) + '…' : label, lx, ly);
@@ -643,7 +643,7 @@ const summaryReadouts = [
         plugins: [donutCentrePlugin],
         data: {
           labels: slices.map(s => s.label),
-          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: '#090C09', borderWidth: 2, hoverOffset: 4 }],
+          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: '#FFFFFF', borderWidth: 2, hoverOffset: 4 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
@@ -652,8 +652,8 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#0E1510', borderColor: '#1E2A1E', borderWidth: 1,
-              titleColor: '#4ECC85', bodyColor: '#E4EDEA',
+              backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1,
+              titleColor: '#1C7840', bodyColor: '#162018',
               callbacks: { label: ctx => ` ${ctx.parsed.toLocaleString()} (${((ctx.parsed / totalCalls) * 100).toFixed(1)}%)` },
             },
           },
@@ -724,7 +724,7 @@ const summaryReadouts = [
 
 <style>
   .page-header {
-    border-bottom: 1px solid #1E2A1E;
+    border-bottom: 1px solid #C8D5C0;
     padding-bottom: 1.25rem;
     margin-bottom: 2rem;
     animation: fade-up 0.35s ease both;
@@ -734,21 +734,21 @@ const summaryReadouts = [
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #273A2D;
+    color: #96B09A;
     margin-bottom: 0.4rem;
   }
   .page-title {
     font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2rem;
-    color: #E4EDEA;
+    color: #162018;
     margin: 0 0 0.4rem;
     line-height: 1;
   }
   .header-count {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #628A72;
+    color: #4A6855;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -758,14 +758,14 @@ const summaryReadouts = [
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 1px;
-    background: #141C14;
-    border: 1px solid #1E2A1E;
+    background: #C8D5C0;
+    border: 1px solid #C8D5C0;
     margin-bottom: 2.5rem;
     animation: fade-up 0.35s ease both;
     animation-delay: 0.06s;
   }
   .readout-cell {
-    background: #0E1510;
+    background: #FFFFFF;
     padding: 1rem 0.875rem;
   }
   .readout-key {
@@ -773,13 +773,13 @@ const summaryReadouts = [
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #628A72;
+    color: #96B09A;
     margin-bottom: 0.5rem;
   }
   .readout-val {
     font-family: 'Azeret Mono', monospace;
     font-size: 1.15rem;
-    color: #4ECC85;
+    color: #1C7840;
     letter-spacing: 0.02em;
     line-height: 1;
   }
@@ -796,29 +796,29 @@ const summaryReadouts = [
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #628A72;
+    color: #96B09A;
   }
   .dr-input {
-    background: #0E1510;
-    border: 1px solid #1E2A1E;
-    color: #B8D0C0;
+    background: #FFFFFF;
+    border: 1px solid #C8D5C0;
+    color: #162018;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
     padding: 0.25rem 0.4rem;
     outline: none;
     cursor: pointer;
-    color-scheme: dark;
+    color-scheme: light;
   }
-  .dr-input:focus { border-color: #4ECC85; }
+  .dr-input:focus { border-color: #1C7840; }
   .dr-sep {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
-    color: #273A2D;
+    color: #C8D5C0;
   }
   .dr-reset {
     background: transparent;
-    border: 1px solid #1E2A1E;
-    color: #628A72;
+    border: 1px solid #C8D5C0;
+    color: #96B09A;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.7rem;
     text-transform: uppercase;
@@ -827,7 +827,7 @@ const summaryReadouts = [
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
   }
-  .dr-reset:hover { color: #4ECC85; border-color: #4ECC85; }
+  .dr-reset:hover { color: #1C7840; border-color: #1C7840; }
 
   /* Chart sections */
   .chart-section {
@@ -840,14 +840,14 @@ const summaryReadouts = [
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #628A72;
-    border-bottom: 1px solid #1E2A1E;
+    color: #4A6855;
+    border-bottom: 1px solid #C8D5C0;
     padding-bottom: 0.4rem;
     margin-bottom: 0.75rem;
   }
   .chart-frame {
-    background: #0E1510;
-    border: 1px solid #1E2A1E;
+    background: #FFFFFF;
+    border: 1px solid #C8D5C0;
     padding: 1rem;
     height: 240px;
     position: relative;
@@ -864,7 +864,7 @@ const summaryReadouts = [
     justify-content: center;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
-    color: #273A2D;
+    color: #C8D5C0;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     pointer-events: none;
@@ -877,7 +877,7 @@ const summaryReadouts = [
     justify-content: center;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #273A2D;
+    color: #96B09A;
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
@@ -910,20 +910,20 @@ const summaryReadouts = [
   .th {
     text-align: left;
     padding: 0 0 0.4rem;
-    color: #628A72;
+    color: #96B09A;
     font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    border-bottom: 1px solid #1E2A1E;
+    border-bottom: 1px solid #C8D5C0;
   }
   .th-right { text-align: right; padding-left: 0.75rem; }
-  .tr { border-bottom: 1px solid #141C14; }
-  .tr:hover { background: #0C140E; }
-  .td { padding: 0.35rem 0; color: #628A72; vertical-align: middle; }
-  .td-rank { color: #273A2D; width: 2.5rem; }
+  .tr { border-bottom: 1px solid #EBF0E7; }
+  .tr:hover { background: #F8FBF7; }
+  .td { padding: 0.35rem 0; color: #4A6855; vertical-align: middle; }
+  .td-rank { color: #96B09A; width: 2.5rem; }
   .td-right { text-align: right; padding-left: 0.75rem; }
-  .td-val { color: #4ECC85; min-width: 4rem; }
-  .td-dim { color: #273A2D; min-width: 3.5rem; }
+  .td-val { color: #1C7840; min-width: 4rem; }
+  .td-dim { color: #96B09A; min-width: 3.5rem; }
 
   .tool-bar-wrap {
     display: flex;
@@ -936,12 +936,12 @@ const summaryReadouts = [
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #B8D0C0;
+    color: #2E4A38;
   }
   .tool-bar {
     display: inline-block;
     height: 4px;
-    background: #1E2A1E;
+    background: #EBF0E7;
     flex-shrink: 0;
     position: relative;
   }
@@ -949,8 +949,8 @@ const summaryReadouts = [
     content: '';
     position: absolute;
     inset: 0;
-    background: #4ECC85;
-    opacity: 0.4;
+    background: #1C7840;
+    opacity: 0.45;
   }
 
   @media (max-width: 900px) {

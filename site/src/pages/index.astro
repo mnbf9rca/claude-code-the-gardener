@@ -50,10 +50,10 @@ const msgHtml = currentState.last_agent_message?.content
   : null;
 
 const statusDot: Record<string, string> = {
-  healthy:  '#4ECC85',
-  stressed: '#FFB74D',
-  critical: '#EF5350',
-  unknown:  '#273A2D',
+  healthy:  '#1C7840',
+  stressed: '#C87800',
+  critical: '#C42020',
+  unknown:  '#96B09A',
 };
 const statusLabel: Record<string, string> = {
   healthy:  'HEALTHY',
@@ -193,7 +193,7 @@ const statusLabel: Record<string, string> = {
 
 <style>
   .specimen-header {
-    border-bottom: 1px solid #1E2A1E;
+    border-bottom: 1px solid #C8D5C0;
     padding-bottom: 1.25rem;
     margin-bottom: 2.5rem;
     animation: fade-up 0.4s ease both;
@@ -208,7 +208,7 @@ const statusLabel: Record<string, string> = {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
     letter-spacing: 0.12em;
-    color: #628A72;
+    color: #96B09A;
     text-transform: uppercase;
   }
   .status-row {
@@ -229,7 +229,7 @@ const statusLabel: Record<string, string> = {
     font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2.5rem;
-    color: #E4EDEA;
+    color: #162018;
     margin: 0;
     letter-spacing: -0.01em;
     line-height: 1;
@@ -238,13 +238,13 @@ const statusLabel: Record<string, string> = {
     margin-left: auto;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #4ECC85;
+    color: #1C7840;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     text-decoration: none;
     transition: color 0.15s;
   }
-  .detail-link:hover { color: #72DFA0; }
+  .detail-link:hover { color: #155E32; }
 
   .panel-grid {
     display: grid;
@@ -266,8 +266,8 @@ const statusLabel: Record<string, string> = {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #628A72;
-    border-bottom: 1px solid #1E2A1E;
+    color: #4A6855;
+    border-bottom: 1px solid #C8D5C0;
     padding-bottom: 0.4rem;
     margin-bottom: 0.6rem;
   }
@@ -275,7 +275,7 @@ const statusLabel: Record<string, string> = {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #141C14;
+    border-bottom: 1px solid #EBF0E7;
     padding: 0.55rem 0;
   }
   .readout-key {
@@ -283,39 +283,39 @@ const statusLabel: Record<string, string> = {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #628A72;
+    color: #4A6855;
   }
   .readout-val {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.85rem;
-    color: #4ECC85;
+    color: #1C7840;
     letter-spacing: 0.03em;
   }
 
   .transmission {
-    border: 1px solid #1E2A1E;
-    border-left: 2px solid #4ECC85;
-    background: #0C140E;
+    border: 1px solid #C8D5C0;
+    border-left: 2px solid #1C7840;
+    background: #F8FBF7;
   }
   .transmission-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #1E2A1E;
-    background: #090C09;
+    border-bottom: 1px solid #C8D5C0;
+    background: #FFFFFF;
   }
   .transmission-label {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #4ECC85;
+    color: #1C7840;
   }
   .transmission-time {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.7rem;
-    color: #628A72;
+    color: #96B09A;
     letter-spacing: 0.03em;
   }
   .transmission-body {
@@ -323,7 +323,7 @@ const statusLabel: Record<string, string> = {
     font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 1rem;
-    color: #B8D0C0;
+    color: #2E4A38;
     line-height: 1.7;
   }
   .transmission-body :global(h1),
@@ -334,12 +334,12 @@ const statusLabel: Record<string, string> = {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #4ECC85;
+    color: #1C7840;
     margin: 0.75rem 0 0.4rem;
   }
   .transmission-body :global(strong) {
     font-style: normal;
-    color: #E4EDEA;
+    color: #162018;
     font-weight: 600;
   }
   .transmission-body :global(p) { margin: 0 0 0.5rem; }
@@ -360,16 +360,16 @@ const statusLabel: Record<string, string> = {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #628A72;
+    color: #4A6855;
     text-decoration: none;
     transition: color 0.15s;
     padding: 0.45rem 0;
-    border-bottom: 1px solid #141C14;
+    border-bottom: 1px solid #EBF0E7;
   }
-  .panel-link:hover { color: #4ECC85; }
+  .panel-link:hover { color: #1C7840; }
 
   .photo-frame {
-    border: 1px solid #1E2A1E;
+    border: 1px solid #C8D5C0;
     overflow: hidden;
   }
   .specimen-photo {
@@ -377,32 +377,32 @@ const statusLabel: Record<string, string> = {
     width: 100%;
     aspect-ratio: 4 / 5;
     object-fit: cover;
-    filter: contrast(1.04) saturate(0.95);
+    filter: contrast(1.04) saturate(0.98);
   }
   .photo-caption {
     display: flex;
     justify-content: space-between;
     padding: 0.4rem 0.6rem;
-    background: #090C09;
-    border-top: 1px solid #1E2A1E;
+    background: #FFFFFF;
+    border-top: 1px solid #C8D5C0;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.68rem;
-    color: #628A72;
+    color: #96B09A;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
   .photo-placeholder {
-    border: 1px solid #1E2A1E;
+    border: 1px solid #C8D5C0;
     aspect-ratio: 4 / 5;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #0E1510;
+    background: #EBF0E7;
   }
   .placeholder-text {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #628A72;
+    color: #96B09A;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     text-align: center;
@@ -410,7 +410,7 @@ const statusLabel: Record<string, string> = {
   .placeholder-sub {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.68rem;
-    color: #273A2D;
+    color: #C8D5C0;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-top: 0.4rem;
@@ -418,7 +418,7 @@ const statusLabel: Record<string, string> = {
   }
 
   .recent-section {
-    border-top: 1px solid #1E2A1E;
+    border-top: 1px solid #C8D5C0;
     padding-top: 1.5rem;
     animation: fade-up 0.4s ease both;
     animation-delay: 0.16s;
@@ -437,12 +437,12 @@ const statusLabel: Record<string, string> = {
   .day-thumb {
     position: relative;
     aspect-ratio: 1;
-    background: #0E1510;
-    border: 1px solid #141C14;
+    background: #EBF0E7;
+    border: 1px solid #C8D5C0;
     overflow: hidden;
     transition: border-color 0.15s;
   }
-  .day-cell:hover .day-thumb { border-color: #2A3E30; }
+  .day-cell:hover .day-thumb { border-color: #98B890; }
   .thumb-img {
     width: 100%;
     height: 100%;
@@ -461,12 +461,12 @@ const statusLabel: Record<string, string> = {
   .day-label {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.65rem;
-    color: #628A72;
+    color: #96B09A;
     letter-spacing: 0.03em;
     text-align: center;
     text-transform: uppercase;
   }
-  .day-cell:hover .day-label { color: #4ECC85; }
+  .day-cell:hover .day-label { color: #1C7840; }
 
   @keyframes pulse-status {
     0%, 100% { opacity: 1; }
