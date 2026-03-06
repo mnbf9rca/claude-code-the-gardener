@@ -264,8 +264,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     const TICK      = '#6A9070';
     const baseFont  = { family: "'Azeret Mono','Courier New',monospace", size: 9 };
 
-    const AMBER_BAND    = 'rgba(200,120,0,0.55)';
-    const AMBER_BAND_BG = 'rgba(200,120,0,0.08)';
+    const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
+    const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
     const BAND_H = 6;
 
     const lightBandPlugin = {
@@ -275,9 +275,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
         const { ctx, chartArea, scales } = chart;
         const { left, right, top } = chartArea;
         ctx.save();
-        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillStyle = LIGHT_BAND_BG;
         ctx.fillRect(left, top, right - left, BAND_H);
-        ctx.fillStyle = AMBER_BAND;
+        ctx.fillStyle = LIGHT_BAND;
         for (let i = 0; i < lightEvents.length; i++) {
           const evt = lightEvents[i];
           if (evt.event_type !== 'turn_on') continue;
