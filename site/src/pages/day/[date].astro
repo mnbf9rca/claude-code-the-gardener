@@ -185,7 +185,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
       <!-- Messages -->
       {((dayData.messages_to_human?.length ?? 0) + (dayData.messages_from_human?.length ?? 0)) > 0 && (
         <section class="day-section">
-          <div class="section-rule">MESSAGES</div>
+          <div class="section-rule">MESMOISTURE_BLUES</div>
           <div class="messages">
             {[
               ...(dayData.messages_to_human ?? []).map(m => ({ ...m, direction: 'to_human' })),
@@ -211,7 +211,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
       <!-- AI usage -->
       {dayData.token_usage && (dayData.token_usage.sessions ?? 0) > 0 && (
         <section class="day-section">
-          <div class="section-rule">AI USAGE</div>
+          <div class="section-rule">AI UMOISTURE_BLUE</div>
           <div class="readout-grid">
             {[
               { k: 'SESSIONS',      v: String(dayData.token_usage.sessions) },
@@ -257,9 +257,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
     import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
-    const SAGE      = 'rgba(30,120,190,0.85)';
-    const SAGE_FILL = 'rgba(30,120,190,0.08)';
-    const WATER     = 'rgba(30,120,190,0.85)';
+    const MOISTURE_BLUE      = 'rgba(30,120,190,0.85)';
+    const MOISTURE_BLUE_FILL = 'rgba(30,120,190,0.08)';
+    const WATER     = 'rgba(14,165,210,0.9)';
     const GRID      = '#DDE8D5';
     const TICK      = '#6A9070';
     const baseFont  = { family: "'Azeret Mono','Courier New',monospace", size: 9 };
@@ -311,8 +311,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
         datasets: [
           {
             data: moisturePoints,
-            borderColor: SAGE,
-            backgroundColor: SAGE_FILL,
+            borderColor: MOISTURE_BLUE,
+            backgroundColor: MOISTURE_BLUE_FILL,
             showLine: true,
             tension: 0.3,
             pointRadius: 0,
@@ -343,7 +343,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
             backgroundColor: '#0E1510',
             borderColor: '#1E2A1E',
             borderWidth: 1,
-            titleColor: SAGE,
+            titleColor: MOISTURE_BLUE,
             bodyColor: '#E4EDEA',
             filter: item => item.datasetIndex === 0,
             callbacks: {

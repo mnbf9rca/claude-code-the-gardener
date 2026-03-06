@@ -103,10 +103,10 @@ const summaryReadouts = [
   import ZoomPlugin from 'https://esm.sh/chartjs-plugin-zoom@2.0.1?deps=chart.js@4.4.9';
   Chart.register(ZoomPlugin);
 
-  const AMBER      = 'rgba(28,120,64,0.75)';
-  const AMBER_DIM  = 'rgba(28,120,64,0.18)';
-  const SAGE       = 'rgba(30,120,190,0.85)';
-  const SAGE_FILL  = 'rgba(30,120,190,0.08)';
+  const ACCENT_GREEN      = 'rgba(28,120,64,0.75)';
+  const ACCENT_GREEN_FILL  = 'rgba(28,120,64,0.18)';
+  const MOISTURE_BLUE       = 'rgba(30,120,190,0.85)';
+  const MOISTURE_BLUE_FILL  = 'rgba(30,120,190,0.08)';
   const GRID       = '#DDE8D5';
   const TICK       = '#6A9070';
 
@@ -193,8 +193,8 @@ const summaryReadouts = [
     zoom: ZOOM_DRAG,
   };
 
-  const AMBER_BAND    = 'rgba(200,120,0,0.55)';
-  const AMBER_BAND_BG = 'rgba(200,120,0,0.08)';
+  const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
+  const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
   const BAND_H = 6;
 
   try {
@@ -291,7 +291,7 @@ const summaryReadouts = [
           // Time scale: bars aligned with moisture/light charts
           costChart = new Chart(document.getElementById('costChart'), {
             type: 'bar',
-            data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0, parsing: false }] },
+            data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0, parsing: false }] },
             options: { ...commonOpts, scales: {
               x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#C8D5C0' } },
               y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#C8D5C0' }, beginAtZero: true },
@@ -301,7 +301,7 @@ const summaryReadouts = [
           // Category scale: daily labels
           costChart = new Chart(document.getElementById('costChart'), {
             type: 'bar',
-            data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
+            data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }] },
             options: { ...commonOpts, scales: {
               x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#C8D5C0' } },
               y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#C8D5C0' }, beginAtZero: true },
@@ -322,9 +322,9 @@ const summaryReadouts = [
         const { left, right, top } = chartArea;
         const xScale = scales.x;
         ctx.save();
-        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillStyle = LIGHT_BAND_BG;
         ctx.fillRect(left, top, right - left, BAND_H);
-        ctx.fillStyle = AMBER_BAND;
+        ctx.fillStyle = LIGHT_BAND;
         if (xScale.type === 'time') {
           // Hourly view: state-tracking to merge redundant events into solid on-blocks
           const lightEvents = chart._lightEvents;
@@ -396,7 +396,7 @@ const summaryReadouts = [
           plugins: [lightBandPlugin],
           data: {
             datasets: [
-              { data: readings, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
+              { data: readings, borderColor: MOISTURE_BLUE, backgroundColor: MOISTURE_BLUE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
               { data: waterPts, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1, parsing: false },
             ],
           },
@@ -405,7 +405,7 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: SAGE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
               x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#C8D5C0' } },
@@ -434,7 +434,7 @@ const summaryReadouts = [
           data: {
             labels: filtered.map(d => fmtD(d)),
             datasets: [
-              { data: moistureVals, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
+              { data: moistureVals, borderColor: MOISTURE_BLUE, backgroundColor: MOISTURE_BLUE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
               { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
             ],
           },
@@ -443,7 +443,7 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: SAGE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
               x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#C8D5C0' } },
@@ -491,7 +491,7 @@ const summaryReadouts = [
         lightChart = new Chart(document.getElementById('lightChart'), {
           type: 'line',
           data: {
-            datasets: [{ data: stepData, borderColor: AMBER, backgroundColor: AMBER_DIM, fill: true, stepped: 'before', pointRadius: 0, borderWidth: 1.5, parsing: false }],
+            datasets: [{ data: stepData, borderColor: ACCENT_GREEN, backgroundColor: ACCENT_GREEN_FILL, fill: true, stepped: 'before', pointRadius: 0, borderWidth: 1.5, parsing: false }],
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -532,7 +532,7 @@ const summaryReadouts = [
             type: 'bar',
             data: {
               labels: filtered.map(d => fmtD(d)),
-              datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }],
+              datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }],
             },
             options: {
               responsive: true, maintainAspectRatio: false,
