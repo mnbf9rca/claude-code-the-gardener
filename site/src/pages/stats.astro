@@ -191,7 +191,6 @@ const summaryReadouts = [
 
     function buildCostChart(from, to) {
       const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
-      currentFiltered = filtered;
       const values = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
       if (costChart) {
         costChart.data.labels = filtered.map(d => fmtD(d));
@@ -477,10 +476,14 @@ const summaryReadouts = [
 
     // ── Unified update ────────────────────────────────────────────────────────
     function update() {
-      buildCostChart(drFrom.value, drTo.value);
-      buildMoistureChart(drFrom.value, drTo.value);
-      buildLightChart(drFrom.value, drTo.value);
-      buildToolTable(drFrom.value, drTo.value);
+      const from = drFrom.value, to = drTo.value;
+      // Set currentFiltered here so all charts (including light) see a consistent
+      // date slice for drag-zoom index mapping, regardless of call order.
+      currentFiltered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      buildCostChart(from, to);
+      buildMoistureChart(from, to);
+      buildLightChart(from, to);
+      buildToolTable(from, to);
     }
     drFrom.addEventListener('change', update);
     drTo.addEventListener('change',   update);
