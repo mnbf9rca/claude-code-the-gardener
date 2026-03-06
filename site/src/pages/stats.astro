@@ -144,24 +144,53 @@ const summaryReadouts = [
 
   // Tracks dates currently visible in charts — read by drag-zoom callbacks
   let currentFiltered = [];
+  // Set to the update() function once it is defined inside the try block.
+  // applyDragRange is defined here (outer scope) but update lives inside try,
+  // so we use an indirection to avoid a ReferenceError.
+  let _updateFn = null;
+  // Prevents re-entrant onZoomComplete when resetZoom() itself fires the callback.
+  let _resetting = false;
 
   function applyDragRange(chart) {
-    const minIdx = Math.max(0, Math.round(chart.scales.x.min));
-    const maxIdx = Math.min(currentFiltered.length - 1, Math.round(chart.scales.x.max));
-    if (minIdx >= maxIdx) { chart.resetZoom(); return; }
-    drFrom.value = currentFiltered[minIdx] ?? '';
-    drTo.value   = currentFiltered[maxIdx] ?? '';
-    chart.resetZoom();
-    update();
+    if (_resetting) return;
+    // All chart interactions are deferred via setTimeout because calling any Chart.js
+    // method (resetZoom, update) synchronously inside onZoomComplete re-enters
+    // Chart.js's Proxy observation and causes a call stack overflow.
+    if (chart.scales.x.type === 'time') {
+      const fromDate = new Date(chart.scales.x.min).toISOString().slice(0, 10);
+      const toDate   = new Date(chart.scales.x.max).toISOString().slice(0, 10);
+      if (fromDate >= toDate) {
+        _resetting = true;
+        setTimeout(() => { chart.resetZoom(); _resetting = false; }, 0);
+        return;
+      }
+      drFrom.value = fromDate;
+      drTo.value   = toDate;
+    } else {
+      const minIdx = Math.max(0, Math.round(chart.scales.x.min));
+      const maxIdx = Math.min(currentFiltered.length - 1, Math.round(chart.scales.x.max));
+      if (minIdx >= maxIdx) {
+        _resetting = true;
+        setTimeout(() => { chart.resetZoom(); _resetting = false; }, 0);
+        return;
+      }
+      drFrom.value = currentFiltered[minIdx] ?? '';
+      drTo.value   = currentFiltered[maxIdx] ?? '';
+    }
+    _resetting = true;
+    setTimeout(() => { chart.resetZoom(); _resetting = false; _updateFn?.(); }, 0);
   }
 
+  // onZoomComplete lives inside the zoom object for chartjs-plugin-zoom v2.0.x
   const ZOOM_DRAG = {
     drag: { enabled: true, backgroundColor: 'rgba(240,163,44,0.06)', borderColor: 'rgba(240,163,44,0.4)', borderWidth: 1 },
     mode: 'x',
+    onZoomComplete({ chart }) {
+      applyDragRange(chart);
+    },
   };
   const ZOOM_PLUGIN_OPTS = {
     zoom: ZOOM_DRAG,
-    onZoomComplete({ chart }) { applyDragRange(chart); },
   };
 
   const AMBER_BAND    = 'rgba(240,163,44,0.65)';
@@ -231,27 +260,69 @@ const summaryReadouts = [
       id: 'lightBand',
       afterDraw(chart) {
         const filtered = chart._lightFiltered;
-        if (!filtered) return;
-        const { ctx, chartArea } = chart;
+        if (!filtered || !filtered.length) return;
+        const { ctx, chartArea, scales } = chart;
         const { left, right, top } = chartArea;
-        const slotW = (right - left) / filtered.length;
+        const xScale = scales.x;
         ctx.save();
         ctx.fillStyle = AMBER_BAND_BG;
         ctx.fillRect(left, top, right - left, BAND_H);
         ctx.fillStyle = AMBER_BAND;
-        filtered.forEach((d, i) => {
-          if ((dailyData[d]?.light?.minutes_on ?? 0) > 0) {
-            ctx.fillRect(left + i * slotW, top, slotW, BAND_H);
+        if (xScale.type === 'time') {
+          // Hourly view: use precise turn_on/turn_off pairs from per-day files
+          const lightEvents = chart._lightEvents;
+          if (lightEvents && lightEvents.length > 0) {
+            const sorted = [...lightEvents].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+            let onTime = null;
+            for (const ev of sorted) {
+              if (ev.event_type === 'turn_on') {
+                onTime = new Date(ev.timestamp).getTime();
+              } else if (ev.event_type === 'turn_off' || ev.event_type === 'scheduled_off') {
+                if (onTime !== null) {
+                  const x1 = Math.max(left, xScale.getPixelForValue(onTime));
+                  const x2 = Math.min(right, xScale.getPixelForValue(new Date(ev.timestamp).getTime()));
+                  if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
+                  onTime = null;
+                }
+              }
+            }
+            // Still on at end of visible range
+            if (onTime !== null) {
+              const x1 = Math.max(left, xScale.getPixelForValue(onTime));
+              if (x1 < right) ctx.fillRect(x1, top, right - x1, BAND_H);
+            }
+          } else {
+            // Fallback: daily buckets if no event data
+            filtered.forEach(d => {
+              if ((dailyData[d]?.light?.minutes_on ?? 0) <= 0) return;
+              const x1 = Math.max(left, xScale.getPixelForValue(new Date(d + 'T00:00:00Z').getTime()));
+              const x2 = Math.min(right, xScale.getPixelForValue(new Date(d + 'T23:59:59Z').getTime()));
+              if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
+            });
           }
-        });
+        } else {
+          // Category scale: use actual pixel positions so band tracks zoom
+          const halfSlot = filtered.length > 1
+            ? Math.abs(xScale.getPixelForValue(1) - xScale.getPixelForValue(0)) / 2
+            : (right - left) / 2;
+          filtered.forEach((d, i) => {
+            if ((dailyData[d]?.light?.minutes_on ?? 0) <= 0) return;
+            const px = xScale.getPixelForValue(i);
+            const x1 = Math.max(left, px - halfSlot);
+            const x2 = Math.min(right, px + halfSlot);
+            if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
+          });
+        }
         ctx.restore();
       },
     };
 
-    // ── Moisture chart (daily avg, same x-axis as cost chart) ─────────────────
+    // ── Moisture chart ────────────────────────────────────────────────────────
+    // ≤7 days: hourly readings on a time scale (fetches per-day JSON files)
+    // >7 days: daily averages on a category scale
     let moistureChart = null;
 
-    function buildMoistureChart(from, to) {
+    async function buildMoistureChart(from, to) {
       const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
       if (filtered.length === 0) {
         hideLoader('moistureLoading'); showError('moistureError');
@@ -259,43 +330,90 @@ const summaryReadouts = [
         return;
       }
       document.getElementById('moistureError').hidden = true;
-
-      const moistureVals = filtered.map(d => dailyData[d]?.moisture?.avg ?? null);
-      const validVals = moistureVals.filter(v => v != null);
-      const yMin   = validVals.length ? Math.min(...validVals) : 0;
-      const yMax   = validVals.length ? Math.max(...validVals) : 0;
-      const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
-      const fixedY = yMin - spread * 0.15;
-
-      // One marker per day that had a watering event
-      const waterVals = filtered.map(d => (dailyData[d]?.water?.events?.length > 0 ? fixedY : null));
-
       if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
-      hideLoader('moistureLoading');
-      moistureChart = new Chart(document.getElementById('moistureChart'), {
-        type: 'line',
-        plugins: [lightBandPlugin],
-        data: {
-          labels: filtered.map(d => fmtD(d)),
-          datasets: [
-            { data: moistureVals, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
-            { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
-          ],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            zoom: ZOOM_PLUGIN_OPTS,
-            tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+
+      if (filtered.length <= 7) {
+        // ── Hourly view ──────────────────────────────────────────────────────
+        const dayFiles = await Promise.all(
+          filtered.map(d => fetch(`/state/day/${d}.json`).then(r => r.ok ? r.json() : null).catch(() => null))
+        );
+        hideLoader('moistureLoading');
+
+        const readings = dayFiles
+          .flatMap(f => (f?.moisture_readings ?? []).map(r => ({ x: new Date(r.timestamp).getTime(), y: r.value })))
+          .sort((a, b) => a.x - b.x);
+        if (readings.length === 0) { showError('moistureError'); return; }
+
+        const yVals  = readings.map(r => r.y);
+        const yMin   = Math.min(...yVals), yMax = Math.max(...yVals);
+        const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+        const fixedY = yMin - spread * 0.15;
+
+        // Watering events from per-day files, positioned at actual timestamps
+        const waterPts = dayFiles
+          .flatMap(f => (f?.water_events ?? []).map(e => ({ x: new Date(e.timestamp).getTime(), y: fixedY })));
+
+        moistureChart = new Chart(document.getElementById('moistureChart'), {
+          type: 'line',
+          plugins: [lightBandPlugin],
+          data: {
+            datasets: [
+              { data: readings, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
+              { data: waterPts, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1, parsing: false },
+            ],
           },
-          scales: {
-            x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#2A2418' } },
-            y: { title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              zoom: ZOOM_PLUGIN_OPTS,
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+            },
+            scales: {
+              x: { type: 'time', time: { tooltipFormat: 'dd MMM HH:mm', displayFormats: { hour: 'HH:mm', day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
+              y: { title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+            },
           },
-        },
-      });
-      moistureChart._lightFiltered = filtered;
+        });
+        moistureChart._lightFiltered = filtered;
+        moistureChart._lightEvents = dayFiles.flatMap(f => f?.light_events ?? []);
+
+      } else {
+        // ── Daily avg view ───────────────────────────────────────────────────
+        hideLoader('moistureLoading');
+        const moistureVals = filtered.map(d => dailyData[d]?.moisture?.avg ?? null);
+        const validVals = moistureVals.filter(v => v != null);
+        const yMin   = validVals.length ? Math.min(...validVals) : 0;
+        const yMax   = validVals.length ? Math.max(...validVals) : 0;
+        const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+        const fixedY = yMin - spread * 0.15;
+        const waterVals = filtered.map(d => (dailyData[d]?.water?.events?.length > 0 ? fixedY : null));
+
+        moistureChart = new Chart(document.getElementById('moistureChart'), {
+          type: 'line',
+          plugins: [lightBandPlugin],
+          data: {
+            labels: filtered.map(d => fmtD(d)),
+            datasets: [
+              { data: moistureVals, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
+              { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              zoom: ZOOM_PLUGIN_OPTS,
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+            },
+            scales: {
+              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#2A2418' } },
+              y: { title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+            },
+          },
+        });
+        moistureChart._lightFiltered = filtered;
+      }
     }
 
     // ── Light chart ──────────────────────────────────────────────────────────
@@ -475,16 +593,17 @@ const summaryReadouts = [
     }
 
     // ── Unified update ────────────────────────────────────────────────────────
-    function update() {
+    async function update() {
       const from = drFrom.value, to = drTo.value;
       // Set currentFiltered here so all charts (including light) see a consistent
       // date slice for drag-zoom index mapping, regardless of call order.
       currentFiltered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
       buildCostChart(from, to);
-      buildMoistureChart(from, to);
+      await buildMoistureChart(from, to);
       buildLightChart(from, to);
       buildToolTable(from, to);
     }
+    _updateFn = update;  // wire up applyDragRange's deferred reference
     drFrom.addEventListener('change', update);
     drTo.addEventListener('change',   update);
     drReset.addEventListener('click', () => { drFrom.value = ''; drTo.value = ''; update(); });
