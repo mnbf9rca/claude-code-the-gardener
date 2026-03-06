@@ -588,7 +588,7 @@ const summaryReadouts = [
 
       // Alternating palette: even slices are brighter, odd are dimmer — gives clear contrast between neighbours
       const palette = slices.map((s, i) => {
-        if (s.label === 'Other') return '#EBF0E7';
+        if (s.label === 'Other') return '#B8CDB8';
         const bright = i % 2 === 0;
         const l   = Math.min(82, Math.max(30, (bright ? 48 : 62) + i * 0.8));
         const sat = Math.max(28, (bright ? 65 : 42) - i * 0.6);
