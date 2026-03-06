@@ -20,7 +20,7 @@ type Message = {
 };
 
 const messages = (conversationRaw as Message[]).sort(
-  (a, b) => a.timestamp.localeCompare(b.timestamp)
+  (a, b) => b.timestamp.localeCompare(a.timestamp)
 );
 
 function fmtDate(ts: string) {

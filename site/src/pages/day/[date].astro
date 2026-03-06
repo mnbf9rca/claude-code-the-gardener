@@ -29,7 +29,7 @@ type DayData = {
   moisture_readings?: Array<{ timestamp: string; value: number }>;
   messages_to_human?: Array<{ timestamp: string; content: string; direction?: string }>;
   messages_from_human?: Array<{ timestamp: string; content: string; direction?: string }>;
-  token_usage?: { sessions: number; input_tokens: number; output_tokens: number };
+  token_usage?: { sessions: number; input_tokens: number; output_tokens: number; tool_calls?: Record<string, number> };
   estimated_cost_usd?: number;
 };
 
@@ -42,6 +42,14 @@ try {
 }
 
 const visiblePhotos = dayData?.photos ?? [];
+const moistureReadings = dayData?.moisture_readings ?? [];
+const waterEvents = dayData?.water_events ?? [];
+const lightEvents = dayData?.light_events ?? [];
+
+const dayToolCalls = Object.entries(dayData?.token_usage?.tool_calls ?? {})
+  .sort(([, a], [, b]) => b - a)
+  .slice(0, 10);
+const dayTotalCalls = dayToolCalls.reduce((s, [, c]) => s + c, 0);
 
 const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
 const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;
@@ -65,6 +73,11 @@ function fmtDateTime(ts: string) {
   });
 }
 
+function fmtShortDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 // Previous/next day navigation
 const allDates = Object.keys(dayIndex).sort();
 const idx = allDates.indexOf(date!);
@@ -78,8 +91,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   <div class="day-nav">
     <a href="/plant" class="back-link">&larr; Field records</a>
     <div class="date-nav">
-      {prevDate && <a href={`/day/${prevDate}`} class="date-nav-link">&larr; {prevDate.slice(5)}</a>}
-      {nextDate && <a href={`/day/${nextDate}`} class="date-nav-link">{nextDate.slice(5)} &rarr;</a>}
+      {prevDate && <a href={`/day/${prevDate}`} class="date-nav-link">&larr; {fmtShortDate(prevDate)}</a>}
+      {nextDate && <a href={`/day/${nextDate}`} class="date-nav-link">{fmtShortDate(nextDate)} &rarr;</a>}
     </div>
   </div>
 
@@ -139,25 +152,12 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
       <div class="two-col">
 
         <!-- Moisture readings -->
-        {dayData.moisture_readings && dayData.moisture_readings.length > 0 && (
+        {dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
           <section class="day-section">
             <div class="section-rule">MOISTURE &mdash; {dayData.moisture_readings.length} READINGS</div>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="th">TIME (UTC)</th>
-                  <th class="th th-right">VALUE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dayData.moisture_readings.map(r => (
-                  <tr class="tr">
-                    <td class="td">{fmtTime(r.timestamp)}</td>
-                    <td class="td td-right td-val">{r.value.toFixed(1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div class="day-chart-frame">
+              <canvas id="moistureChart"></canvas>
+            </div>
           </section>
         )}
 
@@ -225,11 +225,154 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
               </div>
             ))}
           </div>
+          {dayToolCalls.length > 0 && (
+            <table class="data-table" style="margin-top:0.75rem">
+              <thead>
+                <tr>
+                  <th class="th">TOOL</th>
+                  <th class="th th-right">CALLS</th>
+                  <th class="th th-right">SHARE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dayToolCalls.map(([tool, count]) => (
+                  <tr class="tr">
+                    <td class="td" style="color:#C8B888">{tool.replace('mcp__plant-tools__', '')}</td>
+                    <td class="td td-right td-val">{count}</td>
+                    <td class="td td-right" style="color:#4A3E28">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       )}
 
     </div>
   )}
+
+
+{dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
+  <script is:inline type="module" define:vars={{ moistureReadings, waterEvents, lightEvents }}>
+    import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
+    import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
+
+    const SAGE      = 'rgba(107,170,94,0.9)';
+    const SAGE_FILL = 'rgba(107,170,94,0.06)';
+    const WATER     = 'rgba(160,208,220,0.9)';
+    const GRID      = '#1C1408';
+    const TICK      = '#6A5A3A';
+    const baseFont  = { family: "'Martian Mono','Courier New',monospace", size: 9 };
+
+    const AMBER_BAND    = 'rgba(240,163,44,0.65)';
+    const AMBER_BAND_BG = 'rgba(240,163,44,0.10)';
+    const BAND_H = 6;
+
+    const lightBandPlugin = {
+      id: 'lightBand',
+      afterDraw(chart) {
+        if (!lightEvents.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const { left, right, top } = chartArea;
+        ctx.save();
+        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillRect(left, top, right - left, BAND_H);
+        ctx.fillStyle = AMBER_BAND;
+        for (let i = 0; i < lightEvents.length; i++) {
+          const evt = lightEvents[i];
+          if (evt.event_type !== 'turn_on') continue;
+          const xOn = scales.x.getPixelForValue(new Date(evt.timestamp).getTime());
+          // Prefer scheduled_off on the turn_on event; fall back to the next turn_off event
+          const offTs = evt.scheduled_off
+            ?? lightEvents.slice(i + 1).find(e => e.event_type === 'turn_off')?.timestamp;
+          const xOff = offTs ? scales.x.getPixelForValue(new Date(offTs).getTime()) : right;
+          const xStart = Math.max(left, Math.min(xOn, right));
+          const xEnd   = Math.max(left, Math.min(xOff, right));
+          if (xEnd > xStart) ctx.fillRect(xStart, top, xEnd - xStart, BAND_H);
+        }
+        ctx.restore();
+      },
+    };
+
+    const values = moistureReadings.map(r => r.value);
+    const moisturePoints = moistureReadings.map(r => ({ x: r.timestamp, y: r.value }));
+
+    const yMin = Math.min(...values);
+    const yMax = Math.max(...values);
+    const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+    const fixedY = yMin - spread * 0.15;
+
+    const waterPoints = waterEvents.map(e => ({ x: e.timestamp, y: fixedY }));
+
+    new Chart(document.getElementById('moistureChart'), {
+      type: 'line',
+      plugins: [lightBandPlugin],
+      data: {
+        datasets: [
+          {
+            data: moisturePoints,
+            borderColor: SAGE,
+            backgroundColor: SAGE_FILL,
+            showLine: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            fill: true,
+            borderWidth: 1.5,
+            order: 2,
+          },
+          {
+            data: waterPoints,
+            type: 'scatter',
+            pointStyle: 'triangle',
+            pointRadius: 6,
+            pointHoverRadius: 7,
+            backgroundColor: WATER,
+            borderColor: 'transparent',
+            showLine: false,
+            order: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1C1408',
+            borderColor: '#2A2418',
+            borderWidth: 1,
+            titleColor: SAGE,
+            bodyColor: '#E8D4A0',
+            filter: item => item.datasetIndex === 0,
+            callbacks: {
+              label: ctx => ` ${ctx.parsed.y != null ? Math.round(ctx.parsed.y) : '—'}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'hour',
+              displayFormats: { hour: 'HH:mm' },
+            },
+            adapters: { date: {} },
+            grid: { color: GRID },
+            ticks: { color: TICK, maxTicksLimit: 8, font: baseFont },
+            border: { color: '#2A2418' },
+          },
+          y: {
+            grid: { color: GRID },
+            ticks: { color: TICK, font: baseFont },
+            border: { color: '#2A2418' },
+          },
+        },
+      },
+    });
+  </script>
+)}
 
 </Layout>
 
@@ -453,6 +596,19 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   }
   .td-right { text-align: right; }
   .td-val { color: #F0A32C; }
+
+  /* Moisture chart */
+  .day-chart-frame {
+    background: #0D0B07;
+    border: 1px solid #2A2418;
+    padding: 0.75rem;
+    height: 180px;
+    position: relative;
+  }
+  .day-chart-frame canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
 
   /* Light timeline */
   .timeline { display: flex; flex-direction: column; gap: 0; }

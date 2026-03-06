@@ -135,8 +135,7 @@ def test_build_hourly_stats_populates_moisture_light_water():
             {"timestamp": "2026-02-24T08:10:00+00:00", "ml": 20},
         ]},
     }
-    # Use cutoff_days=400 to avoid filtering out test data
-    result = build_hourly_stats({}, records_by_type, cutoff_days=400)
+    result = build_hourly_stats({}, records_by_type)
     assert "2026-02-24T08:00:00Z" in result
     hour = result["2026-02-24T08:00:00Z"]
     assert hour["moisture"]["count"] == 2
