@@ -1,6 +1,4 @@
 """Process sensor JSONL files into daily and hourly aggregated statistics."""
-from datetime import datetime, timedelta, timezone
-
 from processor.helpers import date_of, hour_bucket, parse_ts, ts_gt
 from processor.r2_client import get_jsonl_lines
 
@@ -200,14 +198,8 @@ def merge_daily_stats(
 def build_hourly_stats(
     daily_stats: dict[str, dict],
     records_by_type: dict[str, dict[str, list]],
-    cutoff_days: int = 7,
 ) -> dict[str, dict]:
-    """Build hourly sensor_stats_hourly.json (last N days only).
-
-    Records older than cutoff_days are excluded from the hourly file.
-    (They're still in sensor_stats_daily.json.)
-    """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=cutoff_days)
+    """Build hourly sensor_stats_hourly.json for all available records."""
     hourly: dict[str, dict] = {}
 
     def _get_or_init(hk: str) -> dict:
@@ -217,8 +209,6 @@ def build_hourly_stats(
     for _date, by_date in records_by_type.get("moisture", {}).items():
         for rec in by_date:
             ts = parse_ts(rec.get("timestamp", "1970-01-01T00:00:00Z"))
-            if ts < cutoff:
-                continue
             h = _get_or_init(hour_bucket(ts))
             h["moisture"].append(rec.get("value", 0))
 
@@ -229,8 +219,6 @@ def build_hourly_stats(
             if not ts_str:
                 continue
             ts = parse_ts(ts_str)
-            if ts < cutoff:
-                continue
             if rec.get("event_type") == "turn_on":
                 h = _get_or_init(hour_bucket(ts))
                 h["light_on"] = True
@@ -242,8 +230,6 @@ def build_hourly_stats(
             if not ts_str:
                 continue
             ts = parse_ts(ts_str)
-            if ts < cutoff:
-                continue
             h = _get_or_init(hour_bucket(ts))
             h["water_ml"] = h.get("water_ml", 0) + rec.get("ml", 0)
 

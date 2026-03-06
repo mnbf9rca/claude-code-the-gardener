@@ -162,9 +162,7 @@ def main(tmp_dir: Path, state_dir: Path) -> None:
     merged_daily = merge_daily_stats({}, new_by_type)
     write_json(state_dir / "sensor_stats_daily.json", merged_daily)
 
-    # cutoff_days=9999 so all historical records are included in the hourly file
-    # (production uses 7 days to keep the file small; no such constraint locally).
-    hourly = build_hourly_stats(merged_daily, new_by_type, cutoff_days=9999)
+    hourly = build_hourly_stats(merged_daily, new_by_type)
     write_json(state_dir / "sensor_stats_hourly.json", hourly)
     log(f"sensor_stats_daily.json: {len(merged_daily)} days, hourly: {len(hourly)} hours")
 

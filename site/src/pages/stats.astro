@@ -63,9 +63,9 @@ const summaryReadouts = [
     </div>
   </section>
 
-  <!-- Hourly moisture chart -->
+  <!-- Daily moisture chart -->
   <section class="chart-section">
-    <div class="section-rule">MOISTURE (HOURLY)</div>
+    <div class="section-rule">MOISTURE (DAILY AVG)</div>
     <div class="chart-frame">
       <canvas id="moistureChart"></canvas>
       <div class="chart-loading" id="moistureLoading">LOADING TELEMETRY&hellip;</div>
@@ -85,6 +85,8 @@ const summaryReadouts = [
 <script is:inline type="module">
   import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
   import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
+  import ZoomPlugin from 'https://esm.sh/chartjs-plugin-zoom@2.0.1?deps=chart.js@4.4.9';
+  Chart.register(ZoomPlugin);
 
   const AMBER      = 'rgba(240,163,44,0.85)';
   const AMBER_DIM  = 'rgba(240,163,44,0.25)';
@@ -125,19 +127,35 @@ const summaryReadouts = [
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   }
 
+  // Tracks dates currently visible in charts — read by drag-zoom callbacks
+  let currentFiltered = [];
+
+  function applyDragRange(chart) {
+    const minIdx = Math.max(0, Math.round(chart.scales.x.min));
+    const maxIdx = Math.min(currentFiltered.length - 1, Math.round(chart.scales.x.max));
+    if (minIdx >= maxIdx) { chart.resetZoom(); return; }
+    drFrom.value = currentFiltered[minIdx] ?? '';
+    drTo.value   = currentFiltered[maxIdx] ?? '';
+    chart.resetZoom();
+    update();
+  }
+
+  const DRAG_OPTS = {
+    drag: { enabled: true, backgroundColor: 'rgba(240,163,44,0.06)', borderColor: 'rgba(240,163,44,0.4)', borderWidth: 1 },
+    mode: 'x',
+    onZoomComplete({ chart }) { applyDragRange(chart); },
+  };
+
   try {
-    const [aiRes, hourlyRes, dailyRes] = await Promise.all([
+    const [aiRes, dailyRes] = await Promise.all([
       fetch('/state/ai_stats.json'),
-      fetch('/state/sensor_stats_hourly.json'),
       fetch('/state/sensor_stats_daily.json'),
     ]);
 
-    const aiData     = aiRes.ok     ? await aiRes.json()     : {};
-    const hourlyData = hourlyRes.ok ? await hourlyRes.json() : {};
-    const dailyData  = dailyRes.ok  ? await dailyRes.json()  : {};
+    const aiData    = aiRes.ok    ? await aiRes.json()    : {};
+    const dailyData = dailyRes.ok ? await dailyRes.json() : {};
 
     const allCostDates = Object.keys(aiData).sort();
-    const allHourKeys  = Object.keys(hourlyData).sort();
 
     if (allCostDates.length > 0) {
       drFrom.min = allCostDates[0];  drFrom.max = allCostDates.at(-1);
@@ -151,7 +169,8 @@ const summaryReadouts = [
 
     function buildCostChart(from, to) {
       const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
-      const values   = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
+      currentFiltered = filtered;
+      const values = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
       if (costChart) {
         costChart.data.labels = filtered.map(d => fmtD(d));
         costChart.data.datasets[0].data = values;
@@ -163,8 +182,18 @@ const summaryReadouts = [
           data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
           options: {
             responsive: true, maintainAspectRatio: false,
+            onClick(evt, elements) {
+              if (elements.length > 0) {
+                const date = currentFiltered[elements[0].index];
+                if (date) window.location.href = `/day/${date}/`;
+              }
+            },
+            onHover(evt, elements) {
+              if (evt.native?.target) evt.native.target.style.cursor = elements.length ? 'pointer' : 'crosshair';
+            },
             plugins: {
               legend: { display: false },
+              zoom: { zoom: DRAG_OPTS },
               tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
             },
             scales: {
@@ -176,49 +205,34 @@ const summaryReadouts = [
       }
     }
 
-    // ── Moisture chart ────────────────────────────────────────────────────────
+    // ── Moisture chart (daily avg, same x-axis as cost chart) ─────────────────
     let moistureChart = null;
 
     function buildMoistureChart(from, to) {
-      const filteredKeys = allHourKeys.filter(k => { const d = k.slice(0, 10); return (!from || d >= from) && (!to || d <= to); });
-      if (filteredKeys.length === 0) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      if (filtered.length === 0) {
         hideLoader('moistureLoading'); showError('moistureError');
         if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
         return;
       }
       document.getElementById('moistureError').hidden = true;
-      const moistureVals = filteredKeys.map(k => hourlyData[k]?.moisture?.avg ?? null);
+
+      const moistureVals = filtered.map(d => dailyData[d]?.moisture?.avg ?? null);
       const validVals = moistureVals.filter(v => v != null);
       const yMin   = validVals.length ? Math.min(...validVals) : 0;
       const yMax   = validVals.length ? Math.max(...validVals) : 0;
       const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
       const fixedY = yMin - spread * 0.15;
 
-      // Build category labels (one per hour key)
-      const moistureLabels = filteredKeys.map(k => {
-        const d = new Date(k);
-        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-      });
-
-      // Map water events to nearest filteredKey index
-      const windowStart = filteredKeys[0]?.slice(0, 10);
-      const windowEnd   = filteredKeys.at(-1)?.slice(0, 10);
-      const waterVals = new Array(filteredKeys.length).fill(null);
-      for (const [day, dayStats] of Object.entries(dailyData)) {
-        if (!windowStart || !windowEnd || day < windowStart || day > windowEnd) continue;
-        for (const evt of dayStats?.water?.events ?? []) {
-          const ts = evt.timestamp?.slice(0, 16); // YYYY-MM-DDTHH:MM
-          const idx = filteredKeys.findIndex(k => k.slice(0, 16) >= ts);
-          if (idx >= 0) waterVals[idx] = fixedY;
-        }
-      }
+      // One marker per day that had a watering event
+      const waterVals = filtered.map(d => (dailyData[d]?.water?.events?.length > 0 ? fixedY : null));
 
       if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
       hideLoader('moistureLoading');
       moistureChart = new Chart(document.getElementById('moistureChart'), {
         type: 'line',
         data: {
-          labels: moistureLabels,
+          labels: filtered.map(d => fmtD(d)),
           datasets: [
             { data: moistureVals, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
             { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
@@ -228,11 +242,12 @@ const summaryReadouts = [
           responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
+            zoom: { zoom: DRAG_OPTS },
             tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
           },
           scales: {
-            x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#2A2418' } },
-            y: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+            x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#2A2418' } },
+            y: { title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
           },
         },
       });
@@ -492,7 +507,11 @@ const summaryReadouts = [
     gap: 0.75rem;
   }
   .tool-name {
-    min-width: 180px;
+    min-width: 140px;
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: #C8B888;
   }
   .tool-bar {
