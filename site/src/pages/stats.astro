@@ -316,6 +316,7 @@ const summaryReadouts = [
         lightChart.data.labels = filtered.map(d => fmtD(d));
         lightChart.data.datasets[0].data = values;
         lightChart.update();
+        hideLoader('lightLoading');
       } else {
         hideLoader('lightLoading');
         lightChart = new Chart(document.getElementById('lightChart'), {

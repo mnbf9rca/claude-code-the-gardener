@@ -282,9 +282,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
           const evt = lightEvents[i];
           if (evt.event_type !== 'turn_on') continue;
           const xOn = scales.x.getPixelForValue(new Date(evt.timestamp).getTime());
-          // Prefer scheduled_off on the turn_on event; fall back to the next non-turn_on event
+          // Prefer scheduled_off on the turn_on event; fall back to the next turn_off event
           const offTs = evt.scheduled_off
-            ?? lightEvents.slice(i + 1).find(e => e.event_type !== 'turn_on')?.timestamp;
+            ?? lightEvents.slice(i + 1).find(e => e.event_type === 'turn_off')?.timestamp;
           const xOff = offTs ? scales.x.getPixelForValue(new Date(offTs).getTime()) : right;
           const xStart = Math.max(left, Math.min(xOn, right));
           const xEnd   = Math.max(left, Math.min(xOff, right));
