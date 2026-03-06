@@ -237,9 +237,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
               <tbody>
                 {dayToolCalls.map(([tool, count]) => (
                   <tr class="tr">
-                    <td class="td" style="color:#B8D0C0">{tool.replace('mcp__plant-tools__', '')}</td>
+                    <td class="td td-tool-name">{tool.replace('mcp__plant-tools__', '')}</td>
                     <td class="td td-right td-val">{count}</td>
-                    <td class="td td-right" style="color:#273A2D">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
+                    <td class="td td-right td-tool-pct">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -596,6 +596,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   }
   .td-right { text-align: right; }
   .td-val { color: var(--color-green); }
+  .td-tool-name { color: var(--color-dim); }
+  .td-tool-pct  { color: var(--color-text-prose); }
 
   /* Moisture chart */
   .day-chart-frame {
