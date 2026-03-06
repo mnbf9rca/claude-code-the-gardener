@@ -78,9 +78,9 @@ jobs:
         run: npm run build
         working-directory: site
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site/dist --project-name=gardener-site
+          workingDirectory: site

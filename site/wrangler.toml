@@ -1,0 +1,10 @@
+name = "gardener-site"
+compatibility_date = "2025-03-01"
+workers_dev = false
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "plants.cynexia.com"
+custom_domain = true
