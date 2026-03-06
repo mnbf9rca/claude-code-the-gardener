@@ -724,7 +724,7 @@ const summaryReadouts = [
 
 <style>
   .page-header {
-    border-bottom: 1px solid #C8D5C0;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 1.25rem;
     margin-bottom: 2rem;
     animation: fade-up 0.35s ease both;
@@ -734,21 +734,21 @@ const summaryReadouts = [
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #96B09A;
+    color: var(--color-dim);
     margin-bottom: 0.4rem;
   }
   .page-title {
     font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2rem;
-    color: #162018;
+    color: var(--color-text);
     margin: 0 0 0.4rem;
     line-height: 1;
   }
   .header-count {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #4A6855;
+    color: var(--color-muted);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -758,14 +758,14 @@ const summaryReadouts = [
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 1px;
-    background: #C8D5C0;
-    border: 1px solid #C8D5C0;
+    background: var(--color-border);
+    border: 1px solid var(--color-border);
     margin-bottom: 2.5rem;
     animation: fade-up 0.35s ease both;
     animation-delay: 0.06s;
   }
   .readout-cell {
-    background: #FFFFFF;
+    background: var(--color-surface);
     padding: 1rem 0.875rem;
   }
   .readout-key {
@@ -773,13 +773,13 @@ const summaryReadouts = [
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #96B09A;
+    color: var(--color-dim);
     margin-bottom: 0.5rem;
   }
   .readout-val {
     font-family: 'Azeret Mono', monospace;
     font-size: 1.15rem;
-    color: #1C7840;
+    color: var(--color-green);
     letter-spacing: 0.02em;
     line-height: 1;
   }
@@ -796,12 +796,12 @@ const summaryReadouts = [
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #96B09A;
+    color: var(--color-dim);
   }
   .dr-input {
-    background: #FFFFFF;
-    border: 1px solid #C8D5C0;
-    color: #162018;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
     padding: 0.25rem 0.4rem;
@@ -809,16 +809,16 @@ const summaryReadouts = [
     cursor: pointer;
     color-scheme: light;
   }
-  .dr-input:focus { border-color: #1C7840; }
+  .dr-input:focus { border-color: var(--color-green); }
   .dr-sep {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
-    color: #96B09A;
+    color: var(--color-dim);
   }
   .dr-reset {
     background: transparent;
-    border: 1px solid #C8D5C0;
-    color: #96B09A;
+    border: 1px solid var(--color-border);
+    color: var(--color-dim);
     font-family: 'Azeret Mono', monospace;
     font-size: 0.7rem;
     text-transform: uppercase;
@@ -827,7 +827,7 @@ const summaryReadouts = [
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
   }
-  .dr-reset:hover { color: #1C7840; border-color: #1C7840; }
+  .dr-reset:hover { color: var(--color-green); border-color: var(--color-green); }
 
   /* Chart sections */
   .chart-section {
@@ -840,14 +840,14 @@ const summaryReadouts = [
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #4A6855;
-    border-bottom: 1px solid #C8D5C0;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 0.4rem;
     margin-bottom: 0.75rem;
   }
   .chart-frame {
-    background: #FFFFFF;
-    border: 1px solid #C8D5C0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     padding: 1rem;
     height: 240px;
     position: relative;
@@ -864,7 +864,7 @@ const summaryReadouts = [
     justify-content: center;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.72rem;
-    color: #96B09A;
+    color: var(--color-dim);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     pointer-events: none;
@@ -877,7 +877,7 @@ const summaryReadouts = [
     justify-content: center;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.75rem;
-    color: #96B09A;
+    color: var(--color-dim);
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
@@ -910,20 +910,20 @@ const summaryReadouts = [
   .th {
     text-align: left;
     padding: 0 0 0.4rem;
-    color: #96B09A;
+    color: var(--color-dim);
     font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    border-bottom: 1px solid #C8D5C0;
+    border-bottom: 1px solid var(--color-border);
   }
   .th-right { text-align: right; padding-left: 0.75rem; }
-  .tr { border-bottom: 1px solid #EBF0E7; }
-  .tr:hover { background: #F8FBF7; }
-  .td { padding: 0.35rem 0; color: #4A6855; vertical-align: middle; }
-  .td-rank { color: #96B09A; width: 2.5rem; }
+  .tr { border-bottom: 1px solid var(--color-surface-2); }
+  .tr:hover { background: var(--color-surface-alt); }
+  .td { padding: 0.35rem 0; color: var(--color-muted); vertical-align: middle; }
+  .td-rank { color: var(--color-dim); width: 2.5rem; }
   .td-right { text-align: right; padding-left: 0.75rem; }
-  .td-val { color: #1C7840; min-width: 4rem; }
-  .td-dim { color: #96B09A; min-width: 3.5rem; }
+  .td-val { color: var(--color-green); min-width: 4rem; }
+  .td-dim { color: var(--color-dim); min-width: 3.5rem; }
 
   .tool-bar-wrap {
     display: flex;
@@ -936,12 +936,12 @@ const summaryReadouts = [
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #2E4A38;
+    color: var(--color-text-prose);
   }
   .tool-bar {
     display: inline-block;
     height: 4px;
-    background: #EBF0E7;
+    background: var(--color-surface-2);
     flex-shrink: 0;
     position: relative;
   }
@@ -949,7 +949,7 @@ const summaryReadouts = [
     content: '';
     position: absolute;
     inset: 0;
-    background: #1C7840;
+    background: var(--color-green);
     opacity: 0.45;
   }
 

@@ -116,8 +116,8 @@ const currentPath = Astro.url.pathname;
     flex-shrink: 0;
     position: fixed;
     top: 0; left: 0; bottom: 0;
-    border-right: 1px solid #C8D5C0;
-    background: #FFFFFF;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
     display: flex;
     flex-direction: column;
     padding: 2rem 0 1.5rem;
@@ -138,7 +138,7 @@ const currentPath = Astro.url.pathname;
     font-style: italic;
     font-weight: 600;
     font-size: 1.15rem;
-    color: #162018;
+    color: var(--color-text);
     line-height: 1.25;
   }
 
@@ -146,7 +146,7 @@ const currentPath = Astro.url.pathname;
     margin-top: 0.4rem;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.68rem;
-    color: #96B09A;
+    color: var(--color-dim);
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
@@ -167,13 +167,13 @@ const currentPath = Astro.url.pathname;
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #1C7840;
+    background: var(--color-green);
   }
 
   .live-label {
     font-family: 'Azeret Mono', monospace;
     font-size: 0.68rem;
-    color: #96B09A;
+    color: var(--color-dim);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -193,11 +193,11 @@ const currentPath = Astro.url.pathname;
   }
 
   .site-footer {
-    border-top: 1px solid #C8D5C0;
+    border-top: 1px solid var(--color-border);
     padding: 1rem 3rem;
     font-family: 'Azeret Mono', monospace;
     font-size: 0.68rem;
-    color: #96B09A;
+    color: var(--color-dim);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     display: flex;
