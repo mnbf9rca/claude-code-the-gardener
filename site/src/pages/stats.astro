@@ -218,10 +218,33 @@ const summaryReadouts = [
     // Forces all three charts to use the same y-axis width so chart areas align horizontally.
     // 65px covers the widest label ("$40.000") in Martian Mono 10px with padding.
     const Y_AXIS_W = 65;
-    const yAlignPlugin = {
-      id: 'yAlign',
-      afterFit(scale) { if (scale.axis === 'y') scale.width = Y_AXIS_W; },
-    };
+    const yAfterFit = scale => { scale.width = Y_AXIS_W; };
+
+    // Merge consecutive light on/off intervals separated by ≤ 1 hour into solid blocks.
+    const MERGE_GAP_MS = 60 * 60 * 1000;
+    function buildLightIntervals(sortedEvents) {
+      const raw = [];
+      let onMs = null;
+      for (const ev of sortedEvents) {
+        const ms = new Date(ev.timestamp).getTime();
+        if (ev.event_type === 'turn_on' && onMs === null) {
+          onMs = ms;
+        } else if (ev.event_type.startsWith('turn_off') && onMs !== null) {
+          raw.push({ on: onMs, off: ms }); onMs = null;
+        }
+      }
+      if (onMs !== null) raw.push({ on: onMs, off: null });
+      const merged = [];
+      for (const iv of raw) {
+        const prev = merged.at(-1);
+        if (prev && prev.off !== null && iv.on - prev.off <= MERGE_GAP_MS) {
+          prev.off = iv.off;
+        } else {
+          merged.push({ ...iv });
+        }
+      }
+      return merged;
+    }
 
     // ── Cost chart ────────────────────────────────────────────────────────────
     let costChart = null;
@@ -261,7 +284,6 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             zoom: ZOOM_PLUGIN_OPTS,
-            yAlign: yAlignPlugin,
             tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
           },
         };
@@ -269,22 +291,20 @@ const summaryReadouts = [
           // Time scale: bars aligned with moisture/light charts
           costChart = new Chart(document.getElementById('costChart'), {
             type: 'bar',
-            plugins: [yAlignPlugin],
             data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0, parsing: false }] },
             options: { ...commonOpts, scales: {
               x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
             }},
           });
         } else {
           // Category scale: daily labels
           costChart = new Chart(document.getElementById('costChart'), {
             type: 'bar',
-            plugins: [yAlignPlugin],
             data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
             options: { ...commonOpts, scales: {
               x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#2A2418' } },
-              y: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
             }},
           });
         }
@@ -310,22 +330,10 @@ const summaryReadouts = [
           const lightEvents = chart._lightEvents;
           if (lightEvents && lightEvents.length > 0) {
             const sorted = [...lightEvents].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-            let isOn = false;
-            let onPx = null;
-            for (const ev of sorted) {
-              const px = xScale.getPixelForValue(new Date(ev.timestamp).getTime());
-              if (ev.event_type === 'turn_on' && !isOn) {
-                onPx = px; isOn = true;
-              } else if ((ev.event_type === 'turn_off' || ev.event_type === 'scheduled_off') && isOn) {
-                const x1 = Math.max(left, onPx);
-                const x2 = Math.min(right, px);
-                if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
-                isOn = false;
-              }
-            }
-            if (isOn && onPx != null) {
-              const x1 = Math.max(left, onPx);
-              if (x1 < right) ctx.fillRect(x1, top, right - x1, BAND_H);
+            for (const { on, off } of buildLightIntervals(sorted)) {
+              const x1 = Math.max(left, xScale.getPixelForValue(on));
+              const x2 = Math.min(right, xScale.getPixelForValue(off ?? xScale.max));
+              if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
             }
           }
           // No fallback: band stays empty until _lightEvents is set and update() is called
@@ -385,7 +393,7 @@ const summaryReadouts = [
 
         moistureChart = new Chart(document.getElementById('moistureChart'), {
           type: 'line',
-          plugins: [lightBandPlugin, yAlignPlugin],
+          plugins: [lightBandPlugin],
           data: {
             datasets: [
               { data: readings, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
@@ -400,8 +408,8 @@ const summaryReadouts = [
               tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { tooltipFormat: 'dd MMM HH:mm', displayFormats: { hour: 'HH:mm', day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
             },
           },
         });
@@ -439,7 +447,7 @@ const summaryReadouts = [
             },
             scales: {
               x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
             },
           },
         });
@@ -468,27 +476,20 @@ const summaryReadouts = [
           hideLoader('lightLoading'); showError('lightError'); return;
         }
 
-        // Build step-function with state-tracking: ignores redundant same-state
-        // events (e.g. repeated turn_on while light is already on) so consecutive
-        // check cycles produce solid ON blocks rather than a "comb" pattern.
+        // Merge intervals with gaps ≤ MERGE_GAP_MS so each session is a solid block.
         const startMs = new Date(filtered[0] + 'T00:00:00Z').getTime();
         const endMs   = new Date(filtered.at(-1) + 'T23:59:59Z').getTime();
+        const intervals = buildLightIntervals(lightEvents);
         const stepData = [{ x: startMs, y: 0 }];
-        let lightIsOn = false;
-        for (const ev of lightEvents) {
-          const x = new Date(ev.timestamp).getTime();
-          if (ev.event_type === 'turn_on' && !lightIsOn) {
-            stepData.push({ x, y: 1 }); lightIsOn = true;
-          } else if ((ev.event_type === 'turn_off' || ev.event_type === 'scheduled_off') && lightIsOn) {
-            stepData.push({ x, y: 0 }); lightIsOn = false;
-          }
+        for (const { on, off } of intervals) {
+          stepData.push({ x: on, y: 1 });
+          if (off !== null) stepData.push({ x: off, y: 0 });
         }
-        stepData.push({ x: endMs, y: lightIsOn ? 0 : 0 });
+        stepData.push({ x: endMs, y: 0 });
 
         hideLoader('lightLoading');
         lightChart = new Chart(document.getElementById('lightChart'), {
           type: 'line',
-          plugins: [yAlignPlugin],
           data: {
             datasets: [{ data: stepData, borderColor: AMBER, backgroundColor: AMBER_DIM, fill: true, stepped: 'before', pointRadius: 0, borderWidth: 1.5, parsing: false }],
           },
@@ -497,13 +498,12 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              yAlign: yAlignPlugin,
               tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0',
                 callbacks: { label: ctx => ctx.parsed.y === 1 ? ' LIGHT ON' : ' LIGHT OFF' } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { tooltipFormat: 'dd MMM HH:mm', displayFormats: { hour: 'HH:mm', day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: '#2A2418' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
+              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: '#2A2418' } },
             },
           },
         });
@@ -530,7 +530,6 @@ const summaryReadouts = [
           hideLoader('lightLoading');
           lightChart = new Chart(document.getElementById('lightChart'), {
             type: 'bar',
-            plugins: [yAlignPlugin],
             data: {
               labels: filtered.map(d => fmtD(d)),
               datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }],
@@ -540,12 +539,11 @@ const summaryReadouts = [
               plugins: {
                 legend: { display: false },
                 zoom: ZOOM_PLUGIN_OPTS,
-                yAlign: yAlignPlugin,
                 tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
               },
               scales: {
                 x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#2A2418' } },
-                y: { title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' }, beginAtZero: true },
+                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' }, beginAtZero: true },
               },
             },
           });
