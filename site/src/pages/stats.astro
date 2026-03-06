@@ -195,6 +195,17 @@ const summaryReadouts = [
 
   const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
   const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
+
+  // CSS token resolution — reads theme values from :root at runtime
+  const cs = getComputedStyle(document.documentElement);
+  const C_SURFACE  = cs.getPropertyValue('--color-surface').trim();   // #FFFFFF
+  const C_BORDER   = cs.getPropertyValue('--color-border').trim();    // #C8D5C0
+  const C_TEXT     = cs.getPropertyValue('--color-text').trim();      // #162018
+  const C_GREEN    = cs.getPropertyValue('--color-green').trim();     // #1C7840
+  const C_MUTED    = cs.getPropertyValue('--color-muted').trim();     // #4A6855
+  const C_DIM      = cs.getPropertyValue('--color-dim').trim();       // #96B09A
+  const C_STRESSED = cs.getPropertyValue('--color-stressed').trim();  // #C87800
+
   const BAND_H = 6;
 
   try {
@@ -284,7 +295,7 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             zoom: ZOOM_PLUGIN_OPTS,
-            tooltip: { backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: '#1C7840', bodyColor: '#162018', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
+            tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_GREEN, bodyColor: C_TEXT, callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
           },
         };
         if (isHourly) {
@@ -293,8 +304,8 @@ const summaryReadouts = [
             type: 'bar',
             data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0, parsing: false }] },
             options: { ...commonOpts, scales: {
-              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#C8D5C0' } },
-              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#C8D5C0' }, beginAtZero: true },
+              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: C_BORDER }, beginAtZero: true },
             }},
           });
         } else {
@@ -303,8 +314,8 @@ const summaryReadouts = [
             type: 'bar',
             data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }] },
             options: { ...commonOpts, scales: {
-              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#C8D5C0' } },
-              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#C8D5C0' }, beginAtZero: true },
+              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: C_BORDER }, beginAtZero: true },
             }},
           });
         }
@@ -405,11 +416,11 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#C8D5C0' } },
-              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#C8D5C0' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER } },
             },
           },
         });
@@ -443,11 +454,11 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#C8D5C0' } },
-              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#C8D5C0' } },
+              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER } },
             },
           },
         });
@@ -498,12 +509,12 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: '#C87800', bodyColor: '#162018',
+              tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_STRESSED, bodyColor: C_TEXT,
                 callbacks: { label: ctx => ctx.parsed.y === 1 ? ' LIGHT ON' : ' LIGHT OFF' } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#C8D5C0' } },
-              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: '#C8D5C0' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: C_BORDER } },
             },
           },
         });
@@ -539,11 +550,11 @@ const summaryReadouts = [
               plugins: {
                 legend: { display: false },
                 zoom: ZOOM_PLUGIN_OPTS,
-                tooltip: { backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1, titleColor: '#C87800', bodyColor: '#162018', callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
+                tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_STRESSED, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
               },
               scales: {
-                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#C8D5C0' } },
-                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#C8D5C0' }, beginAtZero: true },
+                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: C_BORDER } },
+                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER }, beginAtZero: true },
               },
             },
           });
@@ -607,10 +618,10 @@ const summaryReadouts = [
           // Centre label
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.font = `700 14px 'Azeret Mono', monospace`;
-          ctx.fillStyle = '#1C7840';
+          ctx.fillStyle = C_GREEN;
           ctx.fillText(totalCalls.toLocaleString(), cx, cy - 8);
           ctx.font = `400 8px 'Azeret Mono', monospace`;
-          ctx.fillStyle = '#96B09A';
+          ctx.fillStyle = C_DIM;
           ctx.fillText('CALLS', cx, cy + 8);
 
           // Arc labels for slices large enough to label (>= 3.5% share)
@@ -628,7 +639,7 @@ const summaryReadouts = [
             const label = data.labels[j];
             const maxCh = 12;
             ctx.font = `400 8px 'Azeret Mono', monospace`;
-            ctx.fillStyle = '#4A6855';
+            ctx.fillStyle = C_MUTED;
             ctx.textAlign = lx >= cx ? 'left' : 'right';
             ctx.textBaseline = 'middle';
             ctx.fillText(label.length > maxCh ? label.slice(0, maxCh) + '…' : label, lx, ly);
@@ -643,7 +654,7 @@ const summaryReadouts = [
         plugins: [donutCentrePlugin],
         data: {
           labels: slices.map(s => s.label),
-          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: '#FFFFFF', borderWidth: 2, hoverOffset: 4 }],
+          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: C_SURFACE, borderWidth: 2, hoverOffset: 4 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
@@ -652,8 +663,8 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#FFFFFF', borderColor: '#C8D5C0', borderWidth: 1,
-              titleColor: '#1C7840', bodyColor: '#162018',
+              backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1,
+              titleColor: C_GREEN, bodyColor: C_TEXT,
               callbacks: { label: ctx => ` ${ctx.parsed.toLocaleString()} (${((ctx.parsed / totalCalls) * 100).toFixed(1)}%)` },
             },
           },
