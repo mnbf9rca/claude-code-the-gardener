@@ -73,10 +73,25 @@ const summaryReadouts = [
     </div>
   </section>
 
+  <!-- Light minutes per day chart -->
+  <section class="chart-section">
+    <div class="section-rule">LIGHT (MIN / DAY)</div>
+    <div class="chart-frame" style="height:120px">
+      <canvas id="lightChart"></canvas>
+      <div class="chart-loading" id="lightLoading">LOADING TELEMETRY&hellip;</div>
+      <div class="chart-error" id="lightError" hidden>NO TELEMETRY AVAILABLE</div>
+    </div>
+  </section>
+
   <!-- Tool call breakdown (client-rendered, reacts to date filter) -->
   <section id="toolSection" class="chart-section" hidden>
     <div class="section-rule" id="toolSectionRule">TOOL CALL FREQUENCY</div>
-    <div id="toolTableContainer"></div>
+    <div class="tool-layout">
+      <div class="tool-donut-wrap">
+        <canvas id="toolDonut" width="400" height="400"></canvas>
+      </div>
+      <div id="toolTableContainer"></div>
+    </div>
   </section>
 
 </Layout>
@@ -140,11 +155,18 @@ const summaryReadouts = [
     update();
   }
 
-  const DRAG_OPTS = {
+  const ZOOM_DRAG = {
     drag: { enabled: true, backgroundColor: 'rgba(240,163,44,0.06)', borderColor: 'rgba(240,163,44,0.4)', borderWidth: 1 },
     mode: 'x',
+  };
+  const ZOOM_PLUGIN_OPTS = {
+    zoom: ZOOM_DRAG,
     onZoomComplete({ chart }) { applyDragRange(chart); },
   };
+
+  const AMBER_BAND    = 'rgba(240,163,44,0.65)';
+  const AMBER_BAND_BG = 'rgba(240,163,44,0.10)';
+  const BAND_H = 6;
 
   try {
     const [aiRes, dailyRes] = await Promise.all([
@@ -193,7 +215,7 @@ const summaryReadouts = [
             },
             plugins: {
               legend: { display: false },
-              zoom: { zoom: DRAG_OPTS },
+              zoom: ZOOM_PLUGIN_OPTS,
               tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
             },
             scales: {
@@ -204,6 +226,28 @@ const summaryReadouts = [
         });
       }
     }
+
+    // ── Light band plugin (reads dailyData via closure, must be inside try) ────
+    const lightBandPlugin = {
+      id: 'lightBand',
+      afterDraw(chart) {
+        const filtered = chart._lightFiltered;
+        if (!filtered) return;
+        const { ctx, chartArea } = chart;
+        const { left, right, top } = chartArea;
+        const slotW = (right - left) / filtered.length;
+        ctx.save();
+        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillRect(left, top, right - left, BAND_H);
+        ctx.fillStyle = AMBER_BAND;
+        filtered.forEach((d, i) => {
+          if ((dailyData[d]?.light?.minutes_on ?? 0) > 0) {
+            ctx.fillRect(left + i * slotW, top, slotW, BAND_H);
+          }
+        });
+        ctx.restore();
+      },
+    };
 
     // ── Moisture chart (daily avg, same x-axis as cost chart) ─────────────────
     let moistureChart = null;
@@ -231,6 +275,7 @@ const summaryReadouts = [
       hideLoader('moistureLoading');
       moistureChart = new Chart(document.getElementById('moistureChart'), {
         type: 'line',
+        plugins: [lightBandPlugin],
         data: {
           labels: filtered.map(d => fmtD(d)),
           datasets: [
@@ -242,7 +287,7 @@ const summaryReadouts = [
           responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            zoom: { zoom: DRAG_OPTS },
+            zoom: ZOOM_PLUGIN_OPTS,
             tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
           },
           scales: {
@@ -251,9 +296,53 @@ const summaryReadouts = [
           },
         },
       });
+      moistureChart._lightFiltered = filtered;
     }
 
-    // ── Tool table (DOM-built, no innerHTML on data) ───────────────────────
+    // ── Light chart ──────────────────────────────────────────────────────────
+    let lightChart = null;
+
+    function buildLightChart(from, to) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      const values = filtered.map(d => dailyData[d]?.light?.minutes_on ?? 0);
+      const hasAny = values.some(v => v > 0);
+      if (!hasAny) {
+        hideLoader('lightLoading'); showError('lightError');
+        if (lightChart) { lightChart.destroy(); lightChart = null; }
+        return;
+      }
+      document.getElementById('lightError').hidden = true;
+      if (lightChart) {
+        lightChart.data.labels = filtered.map(d => fmtD(d));
+        lightChart.data.datasets[0].data = values;
+        lightChart.update();
+      } else {
+        hideLoader('lightLoading');
+        lightChart = new Chart(document.getElementById('lightChart'), {
+          type: 'bar',
+          data: {
+            labels: filtered.map(d => fmtD(d)),
+            datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              zoom: ZOOM_PLUGIN_OPTS,
+              tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
+            },
+            scales: {
+              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#2A2418' } },
+              y: { title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' }, beginAtZero: true },
+            },
+          },
+        });
+      }
+    }
+
+    // ── Tool table + doughnut ─────────────────────────────────────────────────
+    let donutChart = null;
+
     function buildToolTable(from, to) {
       const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
       const toolCounts = {};
@@ -261,7 +350,8 @@ const summaryReadouts = [
         for (const [tool, count] of Object.entries(aiData[d].tool_calls ?? {}))
           toolCounts[tool] = (toolCounts[tool] ?? 0) + count;
 
-      const tools      = Object.entries(toolCounts).sort(([, a], [, b]) => b - a).slice(0, 20);
+      // ALL tools sorted by count (no cap)
+      const tools      = Object.entries(toolCounts).sort(([, a], [, b]) => b - a);
       const totalCalls = tools.reduce((s, [, c]) => s + c, 0);
       const maxCalls   = tools[0]?.[1] ?? 1;
 
@@ -270,9 +360,96 @@ const summaryReadouts = [
       const container = document.getElementById('toolTableContainer');
       if (tools.length === 0) { section.hidden = true; return; }
 
-      rule.textContent = `TOOL CALL FREQUENCY \u2014 TOP ${tools.length}`;
+      rule.textContent = `TOOL CALL FREQUENCY \u2014 ${tools.length} TOOLS`;
       section.hidden = false;
 
+      // ── Doughnut chart ──────────────────────────────────────────────────────
+      // Add tools until 20 slices or cumulative share > 80%
+      const slices = [];
+      let cumShare = 0;
+      for (const [tool, count] of tools) {
+        slices.push({ label: tool.replace('mcp__plant-tools__', ''), count });
+        cumShare += count / totalCalls;
+        if (slices.length >= 20 || cumShare >= 0.80) break;
+      }
+      const otherCount = totalCalls - slices.reduce((s, t) => s + t.count, 0);
+      if (otherCount > 0) slices.push({ label: 'Other', count: otherCount });
+
+      // Alternating palette: even slices are brighter, odd are dimmer — gives clear contrast between neighbours
+      const palette = slices.map((s, i) => {
+        if (s.label === 'Other') return '#1A1508';
+        const bright = i % 2 === 0;
+        const l   = Math.max(18, (bright ? 58 : 40) - i * 1.2);
+        const sat = Math.max(35, (bright ? 82 : 58) - i * 1.0);
+        const hue = 38 + (i % 4) * 4; // slight hue shift 38–50° keeps amber feel but adds variety
+        return `hsl(${hue},${sat}%,${l}%)`;
+      });
+
+      const donutCentrePlugin = {
+        id: 'donutCentre',
+        afterDraw(chart) {
+          const { ctx, chartArea, data } = chart;
+          const cx = (chartArea.left + chartArea.right) / 2;
+          const cy = (chartArea.top + chartArea.bottom) / 2;
+          ctx.save();
+
+          // Centre label
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.font = `700 14px 'Martian Mono', monospace`;
+          ctx.fillStyle = '#F0A32C';
+          ctx.fillText(totalCalls.toLocaleString(), cx, cy - 8);
+          ctx.font = `400 8px 'Martian Mono', monospace`;
+          ctx.fillStyle = '#6A5A3A';
+          ctx.fillText('CALLS', cx, cy + 8);
+
+          // Arc labels for slices large enough to label (>= 3.5% share)
+          const meta = chart.getDatasetMeta(0);
+          const dsData = data.datasets[0].data;
+          const tot = dsData.reduce((s, v) => s + v, 0);
+          for (let j = 0; j < meta.data.length; j++) {
+            const share = dsData[j] / tot;
+            if (share < 0.035) continue;
+            const arc = meta.data[j];
+            const midAngle = arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
+            const r = arc.outerRadius + 14;
+            const lx = cx + Math.cos(midAngle) * r;
+            const ly = cy + Math.sin(midAngle) * r;
+            const label = data.labels[j];
+            const maxCh = 12;
+            ctx.font = `400 8px 'Martian Mono', monospace`;
+            ctx.fillStyle = '#C8B888';
+            ctx.textAlign = lx >= cx ? 'left' : 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label.length > maxCh ? label.slice(0, maxCh) + '…' : label, lx, ly);
+          }
+          ctx.restore();
+        },
+      };
+
+      if (donutChart) { donutChart.destroy(); donutChart = null; }
+      donutChart = new Chart(document.getElementById('toolDonut'), {
+        type: 'doughnut',
+        plugins: [donutCentrePlugin],
+        data: {
+          labels: slices.map(s => s.label),
+          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: '#0D0B07', borderWidth: 2, hoverOffset: 4 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          cutout: '52%',
+          layout: { padding: 32 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1,
+              titleColor: '#F0A32C', bodyColor: '#E8D4A0',
+              callbacks: { label: ctx => ` ${ctx.parsed.toLocaleString()} (${((ctx.parsed / totalCalls) * 100).toFixed(1)}%)` },
+            },
+          },
+        },
+      });
+
+      // ── Table (all tools, no cap) ───────────────────────────────────────────
       const tbody = document.createElement('tbody');
       for (const [i, [tool, count]] of tools.entries()) {
         const barWrap = mkEl('div', { className: 'tool-bar-wrap' },
@@ -301,6 +478,7 @@ const summaryReadouts = [
     function update() {
       buildCostChart(drFrom.value, drTo.value);
       buildMoistureChart(drFrom.value, drTo.value);
+      buildLightChart(drFrom.value, drTo.value);
       buildToolTable(drFrom.value, drTo.value);
     }
     drFrom.addEventListener('change', update);
@@ -312,6 +490,7 @@ const summaryReadouts = [
     console.error('[stats] load failed:', err);
     hideLoader('costLoading');     showError('costError');
     hideLoader('moistureLoading'); showError('moistureError');
+    hideLoader('lightLoading');    showError('lightError');
   }
 </script>
 
@@ -473,6 +652,23 @@ const summaryReadouts = [
     color: #4A3E28;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+
+  /* Tool layout */
+  .tool-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .tool-donut-wrap {
+    flex-shrink: 0;
+    width: 400px;
+    height: 400px;
+    position: relative;
+  }
+  @media (max-width: 700px) {
+    .tool-layout { flex-direction: column; }
+    .tool-donut-wrap { width: 100%; height: 320px; }
   }
 
   /* Tool table */

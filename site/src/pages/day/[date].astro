@@ -44,6 +44,7 @@ try {
 const visiblePhotos = dayData?.photos ?? [];
 const moistureReadings = dayData?.moisture_readings ?? [];
 const waterEvents = dayData?.water_events ?? [];
+const lightEvents = dayData?.light_events ?? [];
 
 const dayToolCalls = Object.entries(dayData?.token_usage?.tool_calls ?? {})
   .sort(([, a], [, b]) => b - a)
@@ -252,7 +253,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
 
 
 {dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
-  <script is:inline type="module" define:vars={{ moistureReadings, waterEvents }}>
+  <script is:inline type="module" define:vars={{ moistureReadings, waterEvents, lightEvents }}>
     import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
     import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
@@ -262,6 +263,36 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     const GRID      = '#1C1408';
     const TICK      = '#6A5A3A';
     const baseFont  = { family: "'Martian Mono','Courier New',monospace", size: 9 };
+
+    const AMBER_BAND    = 'rgba(240,163,44,0.65)';
+    const AMBER_BAND_BG = 'rgba(240,163,44,0.10)';
+    const BAND_H = 6;
+
+    const lightBandPlugin = {
+      id: 'lightBand',
+      afterDraw(chart) {
+        if (!lightEvents.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const { left, right, top } = chartArea;
+        ctx.save();
+        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillRect(left, top, right - left, BAND_H);
+        ctx.fillStyle = AMBER_BAND;
+        for (let i = 0; i < lightEvents.length; i++) {
+          const evt = lightEvents[i];
+          if (evt.event_type !== 'turn_on') continue;
+          const xOn = scales.x.getPixelForValue(new Date(evt.timestamp).getTime());
+          // Prefer scheduled_off on the turn_on event; fall back to the next non-turn_on event
+          const offTs = evt.scheduled_off
+            ?? lightEvents.slice(i + 1).find(e => e.event_type !== 'turn_on')?.timestamp;
+          const xOff = offTs ? scales.x.getPixelForValue(new Date(offTs).getTime()) : right;
+          const xStart = Math.max(left, Math.min(xOn, right));
+          const xEnd   = Math.max(left, Math.min(xOff, right));
+          if (xEnd > xStart) ctx.fillRect(xStart, top, xEnd - xStart, BAND_H);
+        }
+        ctx.restore();
+      },
+    };
 
     const values = moistureReadings.map(r => r.value);
     const moisturePoints = moistureReadings.map(r => ({ x: r.timestamp, y: r.value }));
@@ -275,6 +306,7 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
 
     new Chart(document.getElementById('moistureChart'), {
       type: 'line',
+      plugins: [lightBandPlugin],
       data: {
         datasets: [
           {
