@@ -89,7 +89,7 @@ h1 { font-size: 2rem; line-height: 1.1; }
 h2 { font-size: 1.25rem; line-height: 1.2; }
 
 /* Status colour utilities */
-.status-healthy  { color: #1C7840; border-color: #98C8A8; background-color: #EBF5EE; }
+.status-healthy  { color: var(--color-green); border-color: #98C8A8; background-color: #EBF5EE; }
 .status-stressed { color: #C87800; border-color: #E8C878; background-color: #FDF5E0; }
 .status-critical { color: #C42020; border-color: #E88888; background-color: #FDF0F0; }
 .status-unknown  { color: var(--color-dim); border-color: var(--color-border); background-color: var(--color-bg); }
