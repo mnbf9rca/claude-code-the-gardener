@@ -1,60 +1,52 @@
 @import "tailwindcss";
 
 @theme {
-  --font-serif: 'Playfair Display', Georgia, serif;
-  --font-mono: 'Martian Mono', 'Courier New', monospace;
+  --font-serif: 'Spectral', Georgia, serif;
+  --font-mono: 'Azeret Mono', 'Courier New', monospace;
 
-  --color-bg: #0C0A06;
-  --color-surface: #131008;
-  --color-surface-2: #1C180C;
-  --color-border: #2A2418;
-  --color-border-bright: #3D3520;
+  --color-bg: #F1F5EF;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EBF0E7;
+  --color-border: #C8D5C0;
+  --color-border-bright: #98B890;
 
-  --color-text: #E8D4A0;
-  --color-muted: #7A6A42;
-  --color-dim: #3E3420;
+  --color-text: #162018;
+  --color-muted: #4A6855;
+  --color-dim: #96B09A;
 
-  --color-amber: #F0A32C;
-  --color-amber-dim: #7A5215;
-  --color-sage: #6BAA5E;
-  --color-sage-dim: #2A5022;
-  --color-stressed: #D4821E;
-  --color-critical: #E04848;
+  --color-green: #1C7840;
+  --color-green-dim: #C0DEC8;
+  --color-orange: #C84815;
+  --color-orange-dim: #F0C8B0;
+  --color-stressed: #C87800;
+  --color-critical: #C42020;
+
+  --color-surface-alt: #F8FBF7;   /* subtle raised surface — strip frames, card backs */
+  --color-text-prose: #2E4A38;    /* forest-green prose body text — transmission bodies */
+  --color-water: #1E6AAA;         /* water/moisture indicator — labels and values */
 }
 
 /* Base */
 *, *::before, *::after { box-sizing: border-box; }
 
 html {
-  background-color: #0C0A06;
-  color: #E8D4A0;
-  font-family: 'Martian Mono', 'Courier New', monospace;
-  font-size: 15px;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Azeret Mono', 'Courier New', monospace;
+  font-size: 16px;
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dot-matrix background texture on body */
+/* Subtle paper-grid background */
 body {
   min-height: 100vh;
-  background-color: #0C0A06;
+  background-color: var(--color-bg);
   background-image:
-    radial-gradient(ellipse 60% 40% at 50% 0%, #1a1408 0%, transparent 70%),
-    radial-gradient(circle at 1px 1px, #1c1608 1px, transparent 0);
+    radial-gradient(ellipse 70% 50% at 50% 0%, #E5EDE0 0%, transparent 70%),
+    radial-gradient(circle at 1px 1px, #D8E4D0 1px, transparent 0);
   background-size: 100% 100%, 28px 28px;
   position: relative;
-}
-
-/* Very subtle noise overlay */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-  background-size: 256px 256px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.35;
 }
 
 /* Page load animation */
@@ -64,13 +56,13 @@ body::before {
 }
 
 @keyframes pulse-beacon {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(240,163,44,0.4); }
-  50%       { opacity: 0.6; box-shadow: 0 0 0 5px rgba(240,163,44,0); }
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(28,120,64,0.35); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(28,120,64,0); }
 }
 
 @keyframes pulse-healthy {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(107,170,94,0.4); }
-  50%       { box-shadow: 0 0 0 5px rgba(107,170,94,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(28,120,64,0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(28,120,64,0); }
 }
 
 .animate-load {
@@ -87,47 +79,47 @@ body::before {
 
 /* Headings use the serif face */
 h1, h2, h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Spectral', Georgia, serif;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #E8D4A0;
+  color: var(--color-text);
 }
 
 h1 { font-size: 2rem; line-height: 1.1; }
 h2 { font-size: 1.25rem; line-height: 1.2; }
 
 /* Status colour utilities */
-.status-healthy  { color: #6BAA5E; border-color: #2A5022; background-color: #0D1C0A; }
-.status-stressed { color: #D4821E; border-color: #5A3000; background-color: #1A0C00; }
-.status-critical { color: #E04848; border-color: #600000; background-color: #1A0000; }
-.status-unknown  { color: #7A6A42; border-color: #2A2418; background-color: #131008; }
+.status-healthy  { color: var(--color-green); border-color: #98C8A8; background-color: #EBF5EE; }
+.status-stressed { color: #C87800; border-color: #E8C878; background-color: #FDF5E0; }
+.status-critical { color: #C42020; border-color: #E88888; background-color: #FDF0F0; }
+.status-unknown  { color: var(--color-dim); border-color: var(--color-border); background-color: var(--color-bg); }
 
-/* Amber link style */
+/* Green link style */
 a {
-  color: #F0A32C;
+  color: var(--color-green);
   text-decoration: none;
   transition: color 0.15s ease;
 }
-a:hover { color: #F8CC78; }
+a:hover { color: #155E32; }
 
 /* Card / surface */
 .card {
-  background: #131008;
-  border: 1px solid #2A2418;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 2px;
   transition: border-color 0.2s ease;
 }
-.card:hover { border-color: #3D3520; }
+.card:hover { border-color: var(--color-border-bright); }
 
 /* Sidebar nav link styles */
 .nav-link {
   display: block;
   padding: 0.5rem 1rem;
-  font-family: 'Martian Mono', monospace;
-  font-size: 0.72rem;
+  font-family: 'Azeret Mono', monospace;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #B09A6A;
+  letter-spacing: 0.1em;
+  color: var(--color-muted);
   border-left: 2px solid transparent;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   text-decoration: none;
@@ -135,25 +127,25 @@ a:hover { color: #F8CC78; }
 
 .nav-link:hover,
 .nav-link[aria-current="page"] {
-  color: #F0A32C;
-  border-left-color: #F0A32C;
-  background: rgba(240,163,44,0.04);
+  color: var(--color-green);
+  border-left-color: var(--color-green);
+  background: rgba(28,120,64,0.06);
 }
 
 /* Ruling lines for data sections */
 .section-rule {
-  font-family: 'Martian Mono', monospace;
-  font-size: 0.68rem;
+  font-family: 'Azeret Mono', monospace;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: #8A7A52;
-  border-bottom: 1px solid #3A3020;
+  letter-spacing: 0.12em;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 0.4rem;
   margin-bottom: 1rem;
 }
 
 /* Monospace data value display */
 .data-val {
-  font-family: 'Martian Mono', monospace;
-  color: #F0A32C;
+  font-family: 'Azeret Mono', monospace;
+  color: var(--color-green);
 }

@@ -103,14 +103,14 @@ const summaryReadouts = [
   import ZoomPlugin from 'https://esm.sh/chartjs-plugin-zoom@2.0.1?deps=chart.js@4.4.9';
   Chart.register(ZoomPlugin);
 
-  const AMBER      = 'rgba(240,163,44,0.85)';
-  const AMBER_DIM  = 'rgba(240,163,44,0.25)';
-  const SAGE       = 'rgba(107,170,94,0.9)';
-  const SAGE_FILL  = 'rgba(107,170,94,0.08)';
-  const GRID       = '#1C1408';
-  const TICK       = '#6A5A3A';
+  const ACCENT_GREEN      = 'rgba(28,120,64,0.75)';
+  const ACCENT_GREEN_FILL  = 'rgba(28,120,64,0.18)';
+  const MOISTURE_BLUE       = 'rgba(30,120,190,0.85)';
+  const MOISTURE_BLUE_FILL  = 'rgba(30,120,190,0.08)';
+  const GRID       = '#DDE8D5';
+  const TICK       = '#6A9070';
 
-  const baseFont = { family: "'Martian Mono', 'Courier New', monospace", size: 10 };
+  const baseFont = { family: "'Azeret Mono', 'Courier New', monospace", size: 10 };
 
   Chart.defaults.color = TICK;
   Chart.defaults.font  = baseFont;
@@ -183,7 +183,7 @@ const summaryReadouts = [
 
   // onZoomComplete lives inside the zoom object for chartjs-plugin-zoom v2.0.x
   const ZOOM_DRAG = {
-    drag: { enabled: true, backgroundColor: 'rgba(240,163,44,0.06)', borderColor: 'rgba(240,163,44,0.4)', borderWidth: 1 },
+    drag: { enabled: true, backgroundColor: 'rgba(28,120,64,0.06)', borderColor: 'rgba(28,120,64,0.4)', borderWidth: 1 },
     mode: 'x',
     onZoomComplete({ chart }) {
       applyDragRange(chart);
@@ -193,8 +193,19 @@ const summaryReadouts = [
     zoom: ZOOM_DRAG,
   };
 
-  const AMBER_BAND    = 'rgba(240,163,44,0.65)';
-  const AMBER_BAND_BG = 'rgba(240,163,44,0.10)';
+  const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
+  const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
+
+  // CSS token resolution — reads theme values from :root at runtime
+  const cs = getComputedStyle(document.documentElement);
+  const C_SURFACE  = cs.getPropertyValue('--color-surface').trim();   // #FFFFFF
+  const C_BORDER   = cs.getPropertyValue('--color-border').trim();    // #C8D5C0
+  const C_TEXT     = cs.getPropertyValue('--color-text').trim();      // #162018
+  const C_GREEN    = cs.getPropertyValue('--color-green').trim();     // #1C7840
+  const C_MUTED    = cs.getPropertyValue('--color-muted').trim();     // #4A6855
+  const C_DIM      = cs.getPropertyValue('--color-dim').trim();       // #96B09A
+  const C_STRESSED = cs.getPropertyValue('--color-stressed').trim();  // #C87800
+
   const BAND_H = 6;
 
   try {
@@ -284,27 +295,27 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             zoom: ZOOM_PLUGIN_OPTS,
-            tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
+            tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_GREEN, bodyColor: C_TEXT, callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
           },
         };
         if (isHourly) {
           // Time scale: bars aligned with moisture/light charts
           costChart = new Chart(document.getElementById('costChart'), {
             type: 'bar',
-            data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0, parsing: false }] },
+            data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0, parsing: false }] },
             options: { ...commonOpts, scales: {
-              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
+              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: C_BORDER }, beginAtZero: true },
             }},
           });
         } else {
           // Category scale: daily labels
           costChart = new Chart(document.getElementById('costChart'), {
             type: 'bar',
-            data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }] },
+            data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }] },
             options: { ...commonOpts, scales: {
-              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#2A2418' } },
-              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: '#2A2418' }, beginAtZero: true },
+              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: C_BORDER }, beginAtZero: true },
             }},
           });
         }
@@ -322,9 +333,9 @@ const summaryReadouts = [
         const { left, right, top } = chartArea;
         const xScale = scales.x;
         ctx.save();
-        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillStyle = LIGHT_BAND_BG;
         ctx.fillRect(left, top, right - left, BAND_H);
-        ctx.fillStyle = AMBER_BAND;
+        ctx.fillStyle = LIGHT_BAND;
         if (xScale.type === 'time') {
           // Hourly view: state-tracking to merge redundant events into solid on-blocks
           const lightEvents = chart._lightEvents;
@@ -396,7 +407,7 @@ const summaryReadouts = [
           plugins: [lightBandPlugin],
           data: {
             datasets: [
-              { data: readings, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
+              { data: readings, borderColor: MOISTURE_BLUE, backgroundColor: MOISTURE_BLUE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
               { data: waterPts, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1, parsing: false },
             ],
           },
@@ -405,11 +416,11 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER } },
             },
           },
         });
@@ -434,7 +445,7 @@ const summaryReadouts = [
           data: {
             labels: filtered.map(d => fmtD(d)),
             datasets: [
-              { data: moistureVals, borderColor: SAGE, backgroundColor: SAGE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
+              { data: moistureVals, borderColor: MOISTURE_BLUE, backgroundColor: MOISTURE_BLUE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
               { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
             ],
           },
@@ -443,11 +454,11 @@ const summaryReadouts = [
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: SAGE, bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
             },
             scales: {
-              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' } },
+              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER } },
             },
           },
         });
@@ -491,19 +502,19 @@ const summaryReadouts = [
         lightChart = new Chart(document.getElementById('lightChart'), {
           type: 'line',
           data: {
-            datasets: [{ data: stepData, borderColor: AMBER, backgroundColor: AMBER_DIM, fill: true, stepped: 'before', pointRadius: 0, borderWidth: 1.5, parsing: false }],
+            datasets: [{ data: stepData, borderColor: ACCENT_GREEN, backgroundColor: ACCENT_GREEN_FILL, fill: true, stepped: 'before', pointRadius: 0, borderWidth: 1.5, parsing: false }],
           },
           options: {
             responsive: true, maintainAspectRatio: false,
             plugins: {
               legend: { display: false },
               zoom: ZOOM_PLUGIN_OPTS,
-              tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0',
+              tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_STRESSED, bodyColor: C_TEXT,
                 callbacks: { label: ctx => ctx.parsed.y === 1 ? ' LIGHT ON' : ' LIGHT OFF' } },
             },
             scales: {
-              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: '#2A2418' } },
-              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: '#2A2418' } },
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: C_BORDER } },
             },
           },
         });
@@ -532,18 +543,18 @@ const summaryReadouts = [
             type: 'bar',
             data: {
               labels: filtered.map(d => fmtD(d)),
-              datasets: [{ data: values, backgroundColor: AMBER_DIM, borderColor: AMBER, borderWidth: 1, borderRadius: 0 }],
+              datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }],
             },
             options: {
               responsive: true, maintainAspectRatio: false,
               plugins: {
                 legend: { display: false },
                 zoom: ZOOM_PLUGIN_OPTS,
-                tooltip: { backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1, titleColor: '#F0A32C', bodyColor: '#E8D4A0', callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
+                tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_STRESSED, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
               },
               scales: {
-                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: '#2A2418' } },
-                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: '#2A2418' }, beginAtZero: true },
+                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: C_BORDER } },
+                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER }, beginAtZero: true },
               },
             },
           });
@@ -588,11 +599,11 @@ const summaryReadouts = [
 
       // Alternating palette: even slices are brighter, odd are dimmer — gives clear contrast between neighbours
       const palette = slices.map((s, i) => {
-        if (s.label === 'Other') return '#1A1508';
+        if (s.label === 'Other') return '#B8CDB8';
         const bright = i % 2 === 0;
-        const l   = Math.max(18, (bright ? 58 : 40) - i * 1.2);
-        const sat = Math.max(35, (bright ? 82 : 58) - i * 1.0);
-        const hue = 38 + (i % 4) * 4; // slight hue shift 38–50° keeps amber feel but adds variety
+        const l   = Math.min(82, Math.max(30, (bright ? 48 : 62) + i * 0.8));
+        const sat = Math.max(28, (bright ? 65 : 42) - i * 0.6);
+        const hue = 145 + (i % 6) * 8; // slight hue shift 145–185° botanical green feel
         return `hsl(${hue},${sat}%,${l}%)`;
       });
 
@@ -606,11 +617,11 @@ const summaryReadouts = [
 
           // Centre label
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.font = `700 14px 'Martian Mono', monospace`;
-          ctx.fillStyle = '#F0A32C';
+          ctx.font = `700 14px 'Azeret Mono', monospace`;
+          ctx.fillStyle = C_GREEN;
           ctx.fillText(totalCalls.toLocaleString(), cx, cy - 8);
-          ctx.font = `400 8px 'Martian Mono', monospace`;
-          ctx.fillStyle = '#6A5A3A';
+          ctx.font = `400 8px 'Azeret Mono', monospace`;
+          ctx.fillStyle = C_DIM;
           ctx.fillText('CALLS', cx, cy + 8);
 
           // Arc labels for slices large enough to label (>= 3.5% share)
@@ -627,8 +638,8 @@ const summaryReadouts = [
             const ly = cy + Math.sin(midAngle) * r;
             const label = data.labels[j];
             const maxCh = 12;
-            ctx.font = `400 8px 'Martian Mono', monospace`;
-            ctx.fillStyle = '#C8B888';
+            ctx.font = `400 8px 'Azeret Mono', monospace`;
+            ctx.fillStyle = C_MUTED;
             ctx.textAlign = lx >= cx ? 'left' : 'right';
             ctx.textBaseline = 'middle';
             ctx.fillText(label.length > maxCh ? label.slice(0, maxCh) + '…' : label, lx, ly);
@@ -643,7 +654,7 @@ const summaryReadouts = [
         plugins: [donutCentrePlugin],
         data: {
           labels: slices.map(s => s.label),
-          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: '#0D0B07', borderWidth: 2, hoverOffset: 4 }],
+          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: C_SURFACE, borderWidth: 2, hoverOffset: 4 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
@@ -652,8 +663,8 @@ const summaryReadouts = [
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#1C1408', borderColor: '#2A2418', borderWidth: 1,
-              titleColor: '#F0A32C', bodyColor: '#E8D4A0',
+              backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1,
+              titleColor: C_GREEN, bodyColor: C_TEXT,
               callbacks: { label: ctx => ` ${ctx.parsed.toLocaleString()} (${((ctx.parsed / totalCalls) * 100).toFixed(1)}%)` },
             },
           },
@@ -724,32 +735,32 @@ const summaryReadouts = [
 
 <style>
   .page-header {
-    border-bottom: 1px solid #2A2418;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 1.25rem;
     margin-bottom: 2rem;
     animation: fade-up 0.35s ease both;
   }
   .header-meta {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #4A3E28;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
     margin-bottom: 0.4rem;
   }
   .page-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2rem;
-    color: #E8D4A0;
+    color: var(--color-text);
     margin: 0 0 0.4rem;
     line-height: 1;
   }
   .header-count {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #6A5A3A;
-    letter-spacing: 0.08em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
@@ -758,28 +769,28 @@ const summaryReadouts = [
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 1px;
-    background: #1C1408;
-    border: 1px solid #2A2418;
+    background: var(--color-border);
+    border: 1px solid var(--color-border);
     margin-bottom: 2.5rem;
     animation: fade-up 0.35s ease both;
     animation-delay: 0.06s;
   }
   .readout-cell {
-    background: #0D0B07;
-    padding: 1rem 0.75rem;
+    background: var(--color-surface);
+    padding: 1rem 0.875rem;
   }
   .readout-key {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #4A3E28;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
     margin-bottom: 0.5rem;
   }
   .readout-val {
-    font-family: 'Martian Mono', monospace;
-    font-size: 1.1rem;
-    color: #F0A32C;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 1.15rem;
+    color: var(--color-green);
     letter-spacing: 0.02em;
     line-height: 1;
   }
@@ -792,42 +803,42 @@ const summaryReadouts = [
     margin-bottom: 0.75rem;
   }
   .dr-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #4A3E28;
+    letter-spacing: 0.1em;
+    color: var(--color-dim);
   }
   .dr-input {
-    background: #0D0B07;
-    border: 1px solid #2A2418;
-    color: #C8B888;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     padding: 0.25rem 0.4rem;
     outline: none;
     cursor: pointer;
-    color-scheme: dark;
+    color-scheme: light;
   }
-  .dr-input:focus { border-color: #F0A32C; }
+  .dr-input:focus { border-color: var(--color-green); }
   .dr-sep {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #3E3420;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-dim);
   }
   .dr-reset {
     background: transparent;
-    border: 1px solid #2A2418;
-    color: #6A5A3A;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    border: 1px solid var(--color-border);
+    color: var(--color-dim);
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     padding: 0.25rem 0.5rem;
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
   }
-  .dr-reset:hover { color: #F0A32C; border-color: #F0A32C; }
+  .dr-reset:hover { color: var(--color-green); border-color: var(--color-green); }
 
   /* Chart sections */
   .chart-section {
@@ -836,18 +847,18 @@ const summaryReadouts = [
     animation-delay: 0.1s;
   }
   .section-rule {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #4A3E28;
-    border-bottom: 1px solid #2A2418;
+    letter-spacing: 0.12em;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 0.4rem;
     margin-bottom: 0.75rem;
   }
   .chart-frame {
-    background: #0D0B07;
-    border: 1px solid #2A2418;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     padding: 1rem;
     height: 240px;
     position: relative;
@@ -862,10 +873,10 @@ const summaryReadouts = [
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #3E3420;
-    letter-spacing: 0.15em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     pointer-events: none;
   }
@@ -875,10 +886,10 @@ const summaryReadouts = [
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.65rem;
-    color: #4A3E28;
-    letter-spacing: 0.12em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.1em;
     text-transform: uppercase;
   }
 
@@ -904,26 +915,26 @@ const summaryReadouts = [
   .tool-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
   }
   .th {
     text-align: left;
     padding: 0 0 0.4rem;
-    color: #4A3E28;
+    color: var(--color-dim);
     font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border-bottom: 1px solid #2A2418;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--color-border);
   }
   .th-right { text-align: right; padding-left: 0.75rem; }
-  .tr { border-bottom: 1px solid #1C1408; }
-  .tr:hover { background: #100E06; }
-  .td { padding: 0.35rem 0; color: #7A6A42; vertical-align: middle; }
-  .td-rank { color: #3E3420; width: 2.5rem; }
+  .tr { border-bottom: 1px solid var(--color-surface-2); }
+  .tr:hover { background: var(--color-surface-alt); }
+  .td { padding: 0.35rem 0; color: var(--color-muted); vertical-align: middle; }
+  .td-rank { color: var(--color-dim); width: 2.5rem; }
   .td-right { text-align: right; padding-left: 0.75rem; }
-  .td-val { color: #F0A32C; min-width: 4rem; }
-  .td-dim { color: #4A3E28; min-width: 3.5rem; }
+  .td-val { color: var(--color-green); min-width: 4rem; }
+  .td-dim { color: var(--color-dim); min-width: 3.5rem; }
 
   .tool-bar-wrap {
     display: flex;
@@ -936,12 +947,12 @@ const summaryReadouts = [
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #C8B888;
+    color: var(--color-text-prose);
   }
   .tool-bar {
     display: inline-block;
     height: 4px;
-    background: #2A2418;
+    background: var(--color-surface-2);
     flex-shrink: 0;
     position: relative;
   }
@@ -949,8 +960,8 @@ const summaryReadouts = [
     content: '';
     position: absolute;
     inset: 0;
-    background: #F0A32C;
-    opacity: 0.4;
+    background: var(--color-green);
+    opacity: 0.45;
   }
 
   @media (max-width: 900px) {

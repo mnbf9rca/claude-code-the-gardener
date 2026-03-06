@@ -106,52 +106,52 @@ for (const msg of messages) {
 
 <style>
   .page-header {
-    border-bottom: 1px solid #2A2418;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 1.25rem;
     margin-bottom: 2.5rem;
     animation: fade-up 0.35s ease both;
   }
   .header-meta {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #4A3E28;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
     margin-bottom: 0.4rem;
   }
   .page-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2rem;
-    color: #E8D4A0;
+    color: var(--color-text);
     margin: 0 0 0.4rem;
     line-height: 1;
   }
   .header-count {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #6A5A3A;
-    letter-spacing: 0.08em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
   .empty-log {
     text-align: center;
     padding: 4rem 2rem;
-    border: 1px solid #1C1408;
+    border: 1px solid var(--color-surface-2);
   }
   .empty-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.7rem;
-    color: #3E3420;
-    letter-spacing: 0.15em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
   }
   .empty-sub {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #2A2018;
-    letter-spacing: 0.1em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-top: 0.4rem;
   }
@@ -181,14 +181,14 @@ for (const msg of messages) {
   .date-sep-line {
     flex: 1;
     height: 1px;
-    background: #1C1408;
+    background: var(--color-surface-2);
   }
   .date-sep-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #3E3420;
+    letter-spacing: 0.1em;
+    color: var(--color-dim);
     white-space: nowrap;
   }
 
@@ -197,59 +197,59 @@ for (const msg of messages) {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.35rem 0.75rem;
-    background: #0C0A06;
-    border-bottom: 1px solid #2A2418;
+    padding: 0.4rem 0.875rem;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
   }
   .msg-seq {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #3E3420;
-    letter-spacing: 0.05em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.04em;
     flex-shrink: 0;
   }
   .msg-time {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #4A3E28;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
     margin-left: auto;
     flex-shrink: 0;
   }
 
   /* Agent message */
   .msg-agent {
-    border: 1px solid #2A2418;
-    border-left: 2px solid #F0A32C;
-    background: #100E06;
+    border: 1px solid var(--color-border);
+    border-left: 2px solid var(--color-green);
+    background: var(--color-surface-alt);
   }
   .msg-from-agent {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #F0A32C;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
   }
   .msg-body-agent {
-    padding: 0.75rem;
-    font-family: 'Playfair Display', serif;
+    padding: 0.875rem;
+    font-family: 'Spectral', serif;
     font-style: italic;
-    font-size: 0.9rem;
-    color: #C8B888;
-    line-height: 1.7;
+    font-size: 1rem;
+    color: var(--color-text-prose);
+    line-height: 1.75;
   }
   .msg-body-agent :global(p) { margin: 0 0 0.5rem; }
   .msg-body-agent :global(h1),
   .msg-body-agent :global(h2),
   .msg-body-agent :global(h3) {
-    font-family: 'Martian Mono', monospace;
+    font-family: 'Azeret Mono', monospace;
     font-style: normal;
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #F0A32C;
+    color: var(--color-green);
     margin: 0.75rem 0 0.4rem;
   }
-  .msg-body-agent :global(strong) { font-style: normal; color: #E8D4A0; font-weight: 600; }
+  .msg-body-agent :global(strong) { font-style: normal; color: var(--color-text); font-weight: 600; }
   .msg-body-agent :global(ul),
   .msg-body-agent :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
   .msg-body-agent :global(li) { margin-bottom: 0.2rem; }
@@ -257,31 +257,31 @@ for (const msg of messages) {
   /* Human message — inset, annotative style */
   .msg-human {
     margin-left: 3rem;
-    border: 1px solid #1C2A1C;
-    border-left: 2px solid #3A6A3A;
-    background: #0A0F0A;
+    border: 1px solid #D8E8E0;
+    border-left: 2px solid #60A878;
+    background: #F4F9F6;
   }
   .msg-header-human {
-    background: #080D08;
-    border-bottom-color: #1C2A1C;
+    background: var(--color-surface);
+    border-bottom-color: #D8E8E0;
   }
-  .msg-seq-human { color: #2A3E2A; }
+  .msg-seq-human { color: var(--color-dim); }
   .msg-from-human {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #6BAA5E;
+    letter-spacing: 0.1em;
+    color: #3A9060;
   }
   .msg-body-human {
-    padding: 0.75rem;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.7rem;
-    color: #5A8A52;
-    line-height: 1.7;
+    padding: 0.875rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.8rem;
+    color: #4A7060;
+    line-height: 1.75;
   }
   .msg-body-human :global(p) { margin: 0 0 0.4rem; }
-  .msg-body-human :global(strong) { color: #8AC882; font-weight: 500; }
+  .msg-body-human :global(strong) { color: #2A6848; font-weight: 500; }
   .msg-body-human :global(ul),
   .msg-body-human :global(ol) { margin: 0.2rem 0 0.4rem 1rem; padding: 0; }
   .msg-body-human :global(li) { margin-bottom: 0.15rem; }

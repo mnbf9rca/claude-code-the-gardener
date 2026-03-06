@@ -55,10 +55,10 @@ const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
 const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;
 
 const statusColor: Record<string, string> = {
-  healthy:  '#6BAA5E',
-  stressed: '#D4821E',
-  critical: '#E04848',
-  unknown:  '#4A3E28',
+  healthy:  '#1C7840',
+  stressed: '#C87800',
+  critical: '#C42020',
+  unknown:  '#96B09A',
 };
 
 function fmtTime(ts: string) {
@@ -237,9 +237,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
               <tbody>
                 {dayToolCalls.map(([tool, count]) => (
                   <tr class="tr">
-                    <td class="td" style="color:#C8B888">{tool.replace('mcp__plant-tools__', '')}</td>
+                    <td class="td td-tool-name">{tool.replace('mcp__plant-tools__', '')}</td>
                     <td class="td td-right td-val">{count}</td>
-                    <td class="td td-right" style="color:#4A3E28">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
+                    <td class="td td-right td-tool-pct">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -257,15 +257,15 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
     import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
 
-    const SAGE      = 'rgba(107,170,94,0.9)';
-    const SAGE_FILL = 'rgba(107,170,94,0.06)';
-    const WATER     = 'rgba(160,208,220,0.9)';
-    const GRID      = '#1C1408';
-    const TICK      = '#6A5A3A';
-    const baseFont  = { family: "'Martian Mono','Courier New',monospace", size: 9 };
+    const MOISTURE_BLUE      = 'rgba(30,120,190,0.85)';
+    const MOISTURE_BLUE_FILL = 'rgba(30,120,190,0.08)';
+    const WATER     = 'rgba(14,165,210,0.9)';
+    const GRID      = '#DDE8D5';
+    const TICK      = '#6A9070';
+    const baseFont  = { family: "'Azeret Mono','Courier New',monospace", size: 9 };
 
-    const AMBER_BAND    = 'rgba(240,163,44,0.65)';
-    const AMBER_BAND_BG = 'rgba(240,163,44,0.10)';
+    const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
+    const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
     const BAND_H = 6;
 
     const lightBandPlugin = {
@@ -275,9 +275,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
         const { ctx, chartArea, scales } = chart;
         const { left, right, top } = chartArea;
         ctx.save();
-        ctx.fillStyle = AMBER_BAND_BG;
+        ctx.fillStyle = LIGHT_BAND_BG;
         ctx.fillRect(left, top, right - left, BAND_H);
-        ctx.fillStyle = AMBER_BAND;
+        ctx.fillStyle = LIGHT_BAND;
         for (let i = 0; i < lightEvents.length; i++) {
           const evt = lightEvents[i];
           if (evt.event_type !== 'turn_on') continue;
@@ -311,8 +311,8 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
         datasets: [
           {
             data: moisturePoints,
-            borderColor: SAGE,
-            backgroundColor: SAGE_FILL,
+            borderColor: MOISTURE_BLUE,
+            backgroundColor: MOISTURE_BLUE_FILL,
             showLine: true,
             tension: 0.3,
             pointRadius: 0,
@@ -340,11 +340,11 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#1C1408',
-            borderColor: '#2A2418',
+            backgroundColor: '#0E1510',
+            borderColor: '#1E2A1E',
             borderWidth: 1,
-            titleColor: SAGE,
-            bodyColor: '#E8D4A0',
+            titleColor: MOISTURE_BLUE,
+            bodyColor: '#E4EDEA',
             filter: item => item.datasetIndex === 0,
             callbacks: {
               label: ctx => ` ${ctx.parsed.y != null ? Math.round(ctx.parsed.y) : '—'}`,
@@ -361,12 +361,12 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
             adapters: { date: {} },
             grid: { color: GRID },
             ticks: { color: TICK, maxTicksLimit: 8, font: baseFont },
-            border: { color: '#2A2418' },
+            border: { color: '#1E2A1E' },
           },
           y: {
             grid: { color: GRID },
             ticks: { color: TICK, font: baseFont },
-            border: { color: '#2A2418' },
+            border: { color: '#1E2A1E' },
           },
         },
       },
@@ -385,32 +385,32 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     animation: fade-up 0.3s ease both;
   }
   .back-link {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #6A5A3A;
+    letter-spacing: 0.08em;
+    color: var(--color-muted);
     text-decoration: none;
     transition: color 0.15s;
   }
-  .back-link:hover { color: #F0A32C; }
+  .back-link:hover { color: var(--color-green); }
   .date-nav {
     display: flex;
     gap: 1.5rem;
   }
   .date-nav-link {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6A5A3A;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
     text-decoration: none;
     transition: color 0.15s;
   }
-  .date-nav-link:hover { color: #F0A32C; }
+  .date-nav-link:hover { color: var(--color-green); }
 
   .day-header {
-    border-bottom: 1px solid #2A2418;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 1.25rem;
     margin-bottom: 2.5rem;
     animation: fade-up 0.3s ease both;
@@ -424,10 +424,10 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     margin-bottom: 0.5rem;
   }
   .day-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2.25rem;
-    color: #E8D4A0;
+    color: var(--color-text);
     margin: 0;
     line-height: 1;
     letter-spacing: -0.01em;
@@ -436,9 +436,9 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.12em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     border: 1px solid transparent;
     padding: 0.2rem 0.5rem;
@@ -455,57 +455,57 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     align-items: center;
   }
   .water-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #4A7A8A;
+    letter-spacing: 0.08em;
+    color: var(--color-water);
   }
   .water-val {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.7rem;
-    color: #A0D0DC;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--color-water);
   }
 
   .no-photos {
     padding: 2rem;
-    border: 1px solid #1C1408;
+    border: 1px solid var(--color-surface-2);
     text-align: center;
   }
   .no-photos-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.65rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #3E3420;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
   }
   .no-photos-sub {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #2A2018;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
     margin-top: 0.35rem;
   }
 
   .no-data {
     text-align: center;
     padding: 4rem 2rem;
-    border: 1px solid #1C1408;
+    border: 1px solid var(--color-surface-2);
   }
   .no-data-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.7rem;
-    color: #3E3420;
-    letter-spacing: 0.15em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     margin-bottom: 0.5rem;
   }
   .no-data-sub {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #2A2018;
-    letter-spacing: 0.1em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
@@ -520,12 +520,12 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   .day-section { display: flex; flex-direction: column; gap: 0.75rem; }
 
   .section-rule {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #4A3E28;
-    border-bottom: 1px solid #2A2418;
+    letter-spacing: 0.12em;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 0.4rem;
   }
 
@@ -536,30 +536,30 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     overflow-x: auto;
     padding-bottom: 6px;
     scrollbar-width: thin;
-    scrollbar-color: #2A2418 transparent;
+    scrollbar-color: var(--color-border) transparent;
   }
   .strip-frame {
     flex-shrink: 0;
     width: 200px;
-    border: 1px solid #2A2418;
+    border: 1px solid var(--color-border);
     overflow: hidden;
-    background: #0D0B07;
+    background: var(--color-surface-alt);
   }
   .strip-img {
     display: block;
     width: 100%;
     height: 150px;
     object-fit: cover;
-    filter: sepia(0.08) contrast(1.03);
+    filter: contrast(1.03) saturate(0.95);
   }
   .strip-caption {
     padding: 3px 6px;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.5rem;
-    color: #4A3E28;
-    letter-spacing: 0.1em;
-    background: #0C0A06;
-    border-top: 1px solid #1C1408;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
   }
 
   /* Two-column layout */
@@ -576,31 +576,33 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
   }
   .th {
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #4A3E28;
+    letter-spacing: 0.08em;
+    color: var(--color-muted);
     font-weight: 400;
     padding: 0 0 0.4rem;
-    border-bottom: 1px solid #2A2418;
+    border-bottom: 1px solid var(--color-border);
     text-align: left;
   }
   .th-right { text-align: right; }
-  .tr { border-bottom: 1px solid #1C1408; }
+  .tr { border-bottom: 1px solid var(--color-surface-2); }
   .td {
     padding: 0.35rem 0;
-    color: #7A6A42;
+    color: var(--color-muted);
   }
   .td-right { text-align: right; }
-  .td-val { color: #F0A32C; }
+  .td-val { color: var(--color-green); }
+  .td-tool-name { color: var(--color-dim); }
+  .td-tool-pct  { color: var(--color-text-prose); }
 
   /* Moisture chart */
   .day-chart-frame {
-    background: #0D0B07;
-    border: 1px solid #2A2418;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
     padding: 0.75rem;
     height: 180px;
     position: relative;
@@ -616,13 +618,13 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0.35rem 0;
-    border-bottom: 1px solid #1C1408;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--color-surface-2);
   }
   .tl-time {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #6A5A3A;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-dim);
     width: 3.5rem;
     flex-shrink: 0;
   }
@@ -632,64 +634,64 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .tl-dot-on { background: #F0A32C; }
-  .tl-dot-off { background: #3E3420; }
+  .tl-dot-on { background: var(--color-stressed); }
+  .tl-dot-off { background: var(--color-border); }
   .tl-event {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.08em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
   }
-  .tl-on { color: #F0A32C; }
-  .tl-off { color: #4A3E28; }
+  .tl-on { color: var(--color-stressed); }
+  .tl-off { color: var(--color-dim); }
 
   /* Messages */
   .messages { display: flex; flex-direction: column; gap: 1rem; }
   .transmission {
-    border: 1px solid #2A2418;
-    border-left: 2px solid #F0A32C;
-    background: #100E06;
+    border: 1px solid var(--color-border);
+    border-left: 2px solid var(--color-green);
+    background: var(--color-surface-alt);
   }
   .transmission-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.4rem 0.75rem;
-    border-bottom: 1px solid #2A2418;
-    background: #0C0A06;
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
   }
   .transmission-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #F0A32C;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
   }
   .transmission-time {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
-    color: #4A3E28;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
   }
   .transmission-body {
-    padding: 0.75rem;
-    font-family: 'Playfair Display', serif;
+    padding: 0.875rem;
+    font-family: 'Spectral', serif;
     font-style: italic;
-    font-size: 0.9rem;
-    color: #C8B888;
-    line-height: 1.65;
+    font-size: 1rem;
+    color: var(--color-text-prose);
+    line-height: 1.7;
   }
   .transmission-body :global(p) { margin: 0 0 0.5rem; }
   .transmission-body :global(h1),
   .transmission-body :global(h2),
   .transmission-body :global(h3) {
-    font-family: 'Martian Mono', monospace;
+    font-family: 'Azeret Mono', monospace;
     font-style: normal;
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #F0A32C;
+    color: var(--color-green);
     margin: 0.75rem 0 0.4rem;
   }
-  .transmission-body :global(strong) { font-style: normal; color: #E8D4A0; font-weight: 600; }
+  .transmission-body :global(strong) { font-style: normal; color: var(--color-text); font-weight: 600; }
   .transmission-body :global(ul),
   .transmission-body :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
   .transmission-body :global(li) { margin-bottom: 0.2rem; }
@@ -699,26 +701,26 @@ const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1px;
-    background: #1C1408;
-    border: 1px solid #2A2418;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
   }
   .readout-cell {
-    background: #0D0B07;
-    padding: 0.75rem;
+    background: var(--color-surface-alt);
+    padding: 0.875rem;
   }
   .readout-key {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #4A3E28;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
     margin-bottom: 0.4rem;
   }
   .readout-val {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.85rem;
-    color: #F0A32C;
-    letter-spacing: 0.03em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--color-green);
+    letter-spacing: 0.02em;
   }
 
   @media (max-width: 700px) {
