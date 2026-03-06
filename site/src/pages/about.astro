@@ -90,24 +90,24 @@ import Layout from '../layouts/Layout.astro';
 
 <style>
   .page-header {
-    border-bottom: 1px solid #2A2418;
+    border-bottom: 1px solid #1E2A1E;
     padding-bottom: 1.25rem;
     margin-bottom: 2.5rem;
     animation: fade-up 0.35s ease both;
   }
   .header-meta {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #4A3E28;
+    letter-spacing: 0.12em;
+    color: #273A2D;
     margin-bottom: 0.4rem;
   }
   .page-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Spectral', serif;
     font-style: italic;
     font-size: 2rem;
-    color: #E8D4A0;
+    color: #E4EDEA;
     margin: 0;
     line-height: 1;
   }
@@ -125,21 +125,21 @@ import Layout from '../layouts/Layout.astro';
     margin-bottom: 2rem;
   }
   .section-rule {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #4A3E28;
-    border-bottom: 1px solid #2A2418;
+    letter-spacing: 0.12em;
+    color: #628A72;
+    border-bottom: 1px solid #1E2A1E;
     padding-bottom: 0.4rem;
     margin-bottom: 1rem;
   }
 
   .body-text {
-    font-family: 'Playfair Display', serif;
-    font-size: 1rem;
-    color: #C8B888;
-    line-height: 1.75;
+    font-family: 'Spectral', serif;
+    font-size: 1.05rem;
+    color: #B8D0C0;
+    line-height: 1.8;
     margin: 0;
   }
 
@@ -153,33 +153,33 @@ import Layout from '../layouts/Layout.astro';
     display: flex;
     gap: 1rem;
     align-items: flex-start;
-    padding: 0.65rem 0;
-    border-bottom: 1px solid #1C1408;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #141C14;
   }
   .step-num {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #3E3420;
-    letter-spacing: 0.08em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: #273A2D;
+    letter-spacing: 0.06em;
     flex-shrink: 0;
     padding-top: 0.1rem;
     width: 1.5rem;
   }
   .step-content { flex: 1; }
   .step-label {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #F0A32C;
-    margin-bottom: 0.2rem;
+    letter-spacing: 0.1em;
+    color: #4ECC85;
+    margin-bottom: 0.25rem;
   }
   .step-desc {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #7A6A42;
-    line-height: 1.6;
-    letter-spacing: 0.03em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: #628A72;
+    line-height: 1.65;
+    letter-spacing: 0.02em;
   }
 
   /* Stack list */
@@ -189,36 +189,36 @@ import Layout from '../layouts/Layout.astro';
     gap: 0;
   }
   .stack-group {
-    padding: 0.6rem 0;
-    border-bottom: 1px solid #1C1408;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid #141C14;
   }
   .stack-cat {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.55rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #F0A32C;
+    letter-spacing: 0.1em;
+    color: #4ECC85;
     margin-bottom: 0.3rem;
   }
   .stack-item {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.6rem;
-    color: #6A5A3A;
-    letter-spacing: 0.04em;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: #628A72;
+    letter-spacing: 0.02em;
     line-height: 1.8;
   }
 
   .source-link {
-    font-family: 'Martian Mono', monospace;
-    font-size: 0.65rem;
-    color: #F0A32C;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: #4ECC85;
     text-decoration: none;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     transition: color 0.15s;
     display: inline-block;
     padding: 0.5rem 0;
   }
-  .source-link:hover { color: #F8CC78; }
+  .source-link:hover { color: #72DFA0; }
 
   @media (max-width: 700px) {
     .about-grid { grid-template-columns: 1fr; }
