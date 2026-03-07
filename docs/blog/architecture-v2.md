@@ -3,13 +3,11 @@
 
 ## The Setup
 
-An autonomous AI agent on a Raspberry Pi keeps a houseplant alive. Every 15 minutes it wakes, reads the soil moisture sensor, checks a photo, decides whether to water, runs the grow light schedule, and writes a journal entry. Then the cycle resets. It has been doing this for months.
-
 After several months of continuous operation, the data store holds over 110,000 files: sensor readings in JSONL format, Claude session exports, and photos. A monitoring site at [plants.cynexia.com](https://plants.cynexia.com) rebuilds every 30 minutes. Build time: 2 to 5 minutes.
 
-This is how the pipeline works.
+An autonomous AI agent on a Raspberry Pi keeps a houseplant alive. Every 15 minutes it wakes, reads the soil moisture sensor, checks a photo, decides whether to water, runs the grow light schedule, and writes a journal entry. Then the cycle resets. 96 sessions per day, around the clock.
 
-## Four Layers, Four Jobs
+## Five Components, Five Jobs
 
 The system has five components with a clean hierarchy: Raspberry Pi, Cloudflare R2, a GHA processor, a GHA builder, and Cloudflare Workers.
 
@@ -25,7 +23,7 @@ The constraint that makes recovery mechanical: the Pi writes to `raw/`. GHA read
 
 ## The Cursor
 
-The most technically interesting piece is `state/current_state.json`, which serves as a processing bookmark for every data source.
+`state/current_state.json` serves as a processing bookmark for every data source.
 
 At the start of each processor run, `load_cursor()` reads this file and fills in any missing watermarks with Unix epoch:
 
@@ -43,7 +41,7 @@ If `current_state.json` doesn't exist, every watermark defaults to `1970-01-01T0
 
 On a normal run, the processor checks each watermark before pulling data. For session files, it lists R2 objects and filters to those with a `LastModified` timestamp newer than the watermark. For sensor JSONL files, it reads records and filters by the `timestamp` field in each line. Only new records get processed, then merged into existing aggregated state files: new days are added, old days are untouched.
 
-The atomicity guarantee comes from where `save_cursor` is called. It is the final call in `main()`:
+`save_cursor` is the final call in `main()`. That ordering is the atomicity guarantee:
 
 ```python
 def save_cursor(s3, bucket: str, state: dict) -> None:
@@ -52,7 +50,7 @@ def save_cursor(s3, bucket: str, state: dict) -> None:
     put_json(s3, bucket, "state/current_state.json", state)
 ```
 
-Every other state file, `ai_stats.json`, `sensor_stats_daily.json`, `plant_timeline.json`, `day_index.json`, the per-day detail files under `state/day/`, all get written before the cursor advances. If the process crashes mid-run, the next run replays from the same watermarks. Some state files may get written twice, but the merge logic is idempotent: new data overwrites same-date entries and old entries stay.
+Every other state file, `ai_stats.json`, `sensor_stats_daily.json`, `plant_timeline.json`, `day_index.json`, the per-day detail files under `state/day/`, all get written before the cursor advances. If the process crashes mid-run, the next run replays from the same watermarks. Some state files get written twice. The merge logic is idempotent: new data overwrites same-date entries and old entries stay.
 
 Build time before the cursor pattern: 45 to 60 minutes, eventually exceeding the 30-minute schedule. Build time after: 2 to 5 minutes. The processor now only examines records added since the last run, which is typically a handful of sensor readings and one or two photos.
 
@@ -72,13 +70,13 @@ Called in a loop over `find "$src" -type f -newer "$STATE_FILE" -not -path '*/.g
 
 `rclone copyto` is idempotent: if a file already exists at the destination with the same content, it is skipped. This means re-running the script after a partial failure is safe. No manifest required.
 
-The one subtle piece is the timestamp ratchet. The script records the start time before any work begins:
+The one subtle piece is the timestamp ratchet. The script creates a temporary sentinel file before any work begins:
 
 ```bash
 SYNC_START=$(mktemp)
 ```
 
-Then sets the state file to that timestamp at the end rather than the current time:
+`SYNC_START` is not a timestamp string — it is a file. Its mtime marks when this sync run started. At the end of a successful run, that mtime gets copied to the state file:
 
 ```bash
 touch -r "$SYNC_START" "$STATE_FILE"
@@ -102,6 +100,4 @@ Infrastructure runs around $6 per month: R2 storage and egress for both buckets,
 
 The Claude API cost is a different story. The daily average has settled at $41.46. Early in the project, on older and more expensive models, costs peaked above $180 per day on high-activity days. The agent runs 96 sessions per day around the clock. Each session involves multiple tool calls: reading the moisture sensor, checking the latest photo, deciding whether to water, writing a status note, updating the journal.
 
-Infrastructure: $6/month. AI: $41/day. The server is nearly free. The model is the entire cost.
-
-In systems built around AI capabilities, the natural instinct is to optimize infrastructure, because infrastructure costs are visible and familiar. Model costs arrive in the same invoice format, but they scale with decisions, not with uptime. Optimizing the wrong line item is easy to do and easy to miss.
+The infrastructure is nearly free. The model is the entire cost. For a system where every decision routes through an API call, that ratio holds regardless of how efficiently the pipeline runs.
