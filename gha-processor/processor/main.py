@@ -75,10 +75,14 @@ def build_current_state_updates(
             merged_daily[latest_data_date].get("water", {}).get("total_ml", 0)
         )
 
-    if timeline_sorted:
-        latest_photo_date = max(timeline_sorted.keys())
-        updates["latest_photo_date"] = latest_photo_date
-        updates["latest_photo_url"] = timeline_sorted[latest_photo_date].get("noon_photo_url")
+    # Find the most recent date with an actual lit photo URL — the latest date
+    # in timeline may have no lit photo yet (e.g. today's photos are still dark).
+    for photo_date in sorted(timeline_sorted.keys(), reverse=True):
+        url = timeline_sorted[photo_date].get("noon_photo_url")
+        if url:
+            updates["latest_photo_date"] = photo_date
+            updates["latest_photo_url"] = url
+            break
 
     return updates
 

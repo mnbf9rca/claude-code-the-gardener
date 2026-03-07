@@ -157,3 +157,32 @@ def test_current_state_no_timeline_photo_fields_absent():
 
     assert "latest_photo_url" not in updates
     assert "latest_photo_date" not in updates
+
+
+def test_current_state_latest_photo_skips_dates_with_no_noon_url():
+    """When the latest timeline date has no noon_photo_url, fall back to the previous date."""
+    from processor.main import build_current_state_updates
+
+    merged_daily = _make_merged_daily({"2026-03-06": "healthy", "2026-03-07": "healthy"})
+    # 2026-03-07 is in timeline but has no noon_photo_url (light not on yet today)
+    timeline = {
+        "2026-03-06": {
+            "date": "2026-03-06",
+            "status": "healthy",
+            "photos": ["https://photos.example.com/2026-03-06/plant_1.jpg"],
+            "noon_photo_url": "https://photos.example.com/2026-03-06/plant_1.jpg",
+            "has_watering": False,
+        },
+        "2026-03-07": {
+            "date": "2026-03-07",
+            "status": "healthy",
+            "photos": [],
+            "noon_photo_url": None,
+            "has_watering": False,
+        },
+    }
+
+    updates = build_current_state_updates(merged_daily, timeline)
+
+    assert updates["latest_photo_date"] == "2026-03-06"
+    assert "2026-03-06" in updates["latest_photo_url"]
