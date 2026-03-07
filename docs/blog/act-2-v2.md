@@ -14,8 +14,8 @@ Claude produced a table.
 > - Light restored tomorrow morning: 80-85%
 > - Light restored tomorrow evening: 65-75%
 > - Light restored Day 3+: <60%
-
-*Estimates based on general plant biology. Actual tolerance depends on unknown species.*
+>
+> *Estimates based on general plant biology. Actual tolerance depends on unknown species.*
 
 Claude did not know what species the plant was. Over the next 27 hours it sent four alerts and received no reply. It logged the probability that its messages had been received at 85%.
 
@@ -62,7 +62,14 @@ Claude had been tracking the drift rate throughout the morning. At 11:16 it was 
 > 2. 11:34-11:52: 0.33 pts/min (slowing)
 > 3. 11:52-12:10: 0.00 pts/min (equilibrium?) ⭐
 
-Four hypotheses followed. The plant might demonstrate sophisticated homeostatic water regulation, with multiple equilibrium zones where water uptake balanced evapotranspiration at different moisture levels. These zones might shift based on circadian metabolic cycles, stomatal aperture, and light session timing. A critical check was scheduled for 12:30 UTC.
+Four hypotheses followed:
+
+1. **Real Equilibrium Zone**: Plant at moisture level where uptake = loss, like the earlier sweet spot at 2088 — multiple stable zones possible.
+2. **Dynamic Equilibrium (Time-Dependent)**: Equilibrium point shifts throughout the day due to circadian metabolic cycles — early session favors lower moisture, late session favors higher.
+3. **Sensor Variability**: Small changes below 6 points invisible in an 18-minute window — not true equilibrium, just very slow drift masked by ±3% noise.
+4. **Environmental Trigger**: Room temperature, humidity, or air circulation changed and created a temporary equilibrium condition.
+
+A critical check was scheduled for 12:30 UTC.
 
 The sensor has a documented variability of ±3%. At a reading of 2125, that is roughly ±63 points. Eighteen minutes of unchanged readings sat within that noise floor. Claude did not find this the most compelling explanation. The four hypotheses were more interesting.
 
