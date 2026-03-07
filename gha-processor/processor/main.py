@@ -23,17 +23,71 @@ from processor.sensors import (
 )
 from processor.sessions import load_pricing, process_sessions
 
-BUCKET = os.environ["R2_BUCKET_NAME"]
-PHOTOS_BUCKET = os.environ["R2_PHOTOS_BUCKET_NAME"]
-PUBLIC_URL = os.environ["R2_PHOTOS_PUBLIC_URL"]
-
-
 def log(msg: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"[{ts}] {msg}", flush=True)
 
 
+def build_day_index(
+    merged_daily: dict[str, dict],
+    timeline_sorted: dict[str, dict],
+) -> dict[str, dict]:
+    """Build day_index.json from all sensor dates (+ photo dates).
+
+    Unlike plant_timeline.json, this includes every day the agent ran,
+    even if no lit photos exist. photo_url is null for photo-less days.
+    """
+    # sorted() ensures insertion order is ascending by date (CPython 3.7+ preserves dict insertion order)
+    all_dates = sorted(set(list(merged_daily.keys()) + list(timeline_sorted.keys())))
+    return {
+        date: {
+            "date": date,
+            "status": merged_daily.get(date, {}).get("plant_status", {}).get("dominant", "unknown"),
+            "photo_url": timeline_sorted.get(date, {}).get("noon_photo_url"),
+            "has_watering": bool(
+                merged_daily.get(date, {}).get("water", {}).get("total_ml", 0)
+            ),
+        }
+        for date in all_dates
+    }
+
+
+def build_current_state_updates(
+    merged_daily: dict[str, dict],
+    timeline_sorted: dict[str, dict],
+) -> dict:
+    """Return fields to merge into current_state.json.
+
+    Separates data currency (latest agent-run date) from photo currency
+    (latest date with a lit photo), which may differ by days.
+    """
+    updates: dict = {}
+
+    if merged_daily:
+        latest_data_date = max(merged_daily.keys())
+        updates["latest_data_date"] = latest_data_date
+        updates["plant_status"] = (
+            merged_daily[latest_data_date]
+            .get("plant_status", {})
+            .get("dominant", "unknown")
+        )
+        updates["latest_data_has_watering"] = bool(
+            merged_daily[latest_data_date].get("water", {}).get("total_ml", 0)
+        )
+
+    if timeline_sorted:
+        latest_photo_date = max(timeline_sorted.keys())
+        updates["latest_photo_date"] = latest_photo_date
+        updates["latest_photo_url"] = timeline_sorted[latest_photo_date].get("noon_photo_url")
+
+    return updates
+
+
 def main() -> None:
+    BUCKET = os.environ["R2_BUCKET_NAME"]
+    PHOTOS_BUCKET = os.environ["R2_PHOTOS_BUCKET_NAME"]
+    PUBLIC_URL = os.environ["R2_PHOTOS_PUBLIC_URL"]
+
     s3 = get_s3_client()
     pricing = load_pricing()
 
@@ -129,19 +183,9 @@ def main() -> None:
     put_json(s3, BUCKET, "state/plant_timeline.json", timeline_sorted)
 
     # Build day_index: lightweight per-day summary for grid view
-    day_index = {
-        date: {
-            "date": date,
-            "status": entry.get("status", "unknown"),
-            "photo_url": entry.get("noon_photo_url"),
-            "has_watering": bool(
-                merged_daily.get(date, {}).get("water", {}).get("total_ml", 0)
-            ),
-        }
-        for date, entry in timeline_sorted.items()
-    }
+    day_index = build_day_index(merged_daily, timeline_sorted)
     put_json(s3, BUCKET, "state/day_index.json", day_index)
-    log(f"plant_timeline.json ({len(timeline_sorted)} days), day_index.json")
+    log(f"plant_timeline.json ({len(timeline_sorted)} days), day_index.json ({len(day_index)} days)")
 
     # ── 4. Per-day detail files (state/day/YYYY-MM-DD.json) ─────────────────
     log("Building day detail files...")
@@ -187,11 +231,7 @@ def main() -> None:
 
     # ── 6. current_state.json — ALWAYS LAST ─────────────────────────────────
     # Update display fields from latest data
-    if timeline_sorted:
-        latest_date = max(timeline_sorted.keys())
-        latest_tl = timeline_sorted[latest_date]
-        state["plant_status"] = latest_tl.get("status", "unknown")
-        state["latest_photo_url"] = latest_tl.get("noon_photo_url")
+    state.update(build_current_state_updates(merged_daily, timeline_sorted))
     agent_msgs = [m for m in conversation if m.get("direction") == "to_human"]
     if agent_msgs:
         last_agent = agent_msgs[-1]
