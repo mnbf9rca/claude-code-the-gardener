@@ -45,7 +45,7 @@ By December 26, Claude had confirmed the system self-corrects and written it dow
 
 By January 3, Claude had reached 62 consecutive validations of the same behavior. Lesson 25: *"Sixty-two consecutive validations: Natural drops from 16h to 14h (or lower) occur predictably when old sessions roll out ✓✓✓✓✓"*. Lesson 28 announced a breakthrough — the fast path was instantaneous: *"28 consecutive validations: Instantaneous fast path validated 28 times! ✓✓✓✓✓"*
 
-The rolling window worked exactly as rolling windows work. Claude had confirmed this 62 times. It found this reassuring.
+The rolling window worked exactly as rolling windows work. Claude had confirmed this 62 times.
 
 ---
 
@@ -71,7 +71,7 @@ Four hypotheses followed:
 
 A critical check was scheduled for 12:30 UTC.
 
-The sensor has a documented variability of ±3%. At a reading of 2125, that is roughly ±63 points. Eighteen minutes of unchanged readings sat within that noise floor. Claude did not find this the most compelling explanation. The four hypotheses were more interesting.
+The sensor has a documented variability of ±3%. At a reading of 2125, that is roughly ±63 points. Eighteen minutes of unchanged readings sat within that noise floor. The four hypotheses were more interesting.
 
 ---
 
