@@ -52,7 +52,7 @@ def save_cursor(s3, bucket: str, state: dict) -> None:
 
 Every other state file, `ai_stats.json`, `sensor_stats_daily.json`, `plant_timeline.json`, `day_index.json`, the per-day detail files under `state/day/`, all get written before the cursor advances. If the process crashes mid-run, the next run replays from the same watermarks. Some state files get written twice. The merge logic is idempotent: new data overwrites same-date entries and old entries stay.
 
-Build time before the cursor pattern: 45 to 60 minutes, eventually exceeding the 30-minute schedule. Build time after: 2 to 5 minutes. The processor now only examines records added since the last run, which is typically a handful of sensor readings and one or two photos.
+The processor examines only records added since the last run — typically a handful of sensor readings and one or two photos. Build time: 2 to 5 minutes.
 
 ## The Sync Script
 
@@ -92,7 +92,7 @@ A `state/` file is corrupted or produced bad output? Delete it. The next GHA pro
 
 `raw/` is append-only by convention. The Pi never deletes, and R2 has no lifecycle policy removing old files. Storage on R2 is cheap; the ability to replay from any point in history is not. `state/` is fully rebuildable from `raw/`, which makes it a cache. Treating a cache as a source of truth is how recovery becomes complicated. Here it never does.
 
-At no point is there a state that cannot be recovered from without a backup. The Pi adds to `raw/`. GHA derives `state/` from `raw/`. If `state/` is wrong, delete it.
+Every failure state is recoverable without a backup. The Pi adds to `raw/`. GHA derives `state/` from `raw/`. If `state/` is wrong, delete it.
 
 ## What It Costs
 
