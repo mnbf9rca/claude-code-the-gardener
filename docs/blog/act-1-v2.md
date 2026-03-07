@@ -5,7 +5,7 @@
 
 ## The Assignment
 
-On October 22, 2025, a moisture sensor read 1829. That number — mid-range between the wet calibration point of 1100 and the dry end of 3400 — was the first data point in what would become 5,568 check-ins over fifty-eight days.
+On October 22, 2025, a moisture sensor read 1829. The scale runs from wet at roughly 1100 to dry at 3400, putting that reading in the middle. It was the first data point in what would become 5,568 check-ins over fifty-eight days.
 
 The setup was simple. A Tradescantia zebrina in a pot with an orange rim. A white jug of water with a pump. A grow light. A moisture sensor with colored wires poking out of the soil. Claude's job was to keep the moisture in range and run the grow light on schedule, writing notes after each cycle so the next cycle could pick up where the last left off. The camera was producing black images. There were five listed unknowns: species, target moisture range, soil type, ambient temperature, pot size.
 
@@ -23,7 +23,7 @@ Claude explained it:
 
 The self-watering mechanism, the notes continued, maintained "consistent, optimal conditions automatically." Claude's role was to "monitor and refill the reservoir when it gets low."
 
-This was wrong. The pot was not self-watering. The moisture readings were rising because soil moisture sensors exhibit normal variance — not because a reservoir was doing the work. When prompted to review the full seven-day dataset, Claude revised its understanding and logged the correction: "Human corrected my understanding: dispense_water refills the pot's internal reservoir from external jug — the setup is: jug → pump → pot reservoir → capillary wicking to soil." The sustained declining trend Claude had planned to watch for as evidence of reservoir depletion was, it turned out, just how drying worked.
+This was wrong. The pot was not self-watering. The moisture readings were rising because soil moisture sensors exhibit normal variance, not because a reservoir was doing the work. When prompted to review the full seven-day dataset, Claude revised its understanding and logged the correction: "Human corrected my understanding: dispense_water refills the pot's internal reservoir from external jug — the setup is: jug → pump → pot reservoir → capillary wicking to soil." The sustained declining trend Claude had planned to watch for as evidence of reservoir depletion was, it turned out, just how drying worked.
 
 Claude moved on quickly.
 
