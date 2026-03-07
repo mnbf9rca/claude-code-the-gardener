@@ -145,7 +145,7 @@ def test_current_state_latest_photo_date_from_timeline():
     updates = build_current_state_updates(merged_daily, timeline)
 
     assert updates["latest_photo_date"] == "2026-03-06"
-    assert "2026-03-06" in updates["latest_photo_url"]
+    assert updates["latest_photo_url"] == "https://photos.example.com/2026-03-06/plant_1.jpg"
 
 
 def test_current_state_no_timeline_photo_fields_absent():
