@@ -7,7 +7,7 @@
 
 On October 22, 2025, a moisture sensor read 1829. The scale runs from wet at roughly 1100 to dry at 3400, putting that reading in the middle. It was the first data point in what would become 5,568 check-ins over fifty-eight days.
 
-The setup was simple. A Tradescantia zebrina in a pot with an orange rim. A white jug of water with a pump. A grow light. A moisture sensor with colored wires poking out of the soil. Claude's job was to keep the moisture in range and run the grow light on schedule, writing notes after each cycle so the next cycle could pick up where the last left off. The camera was producing black images. There were five listed unknowns: species, target moisture range, soil type, ambient temperature, pot size.
+The setup was simple. A Tradescantia zebrina in a pot with an orange rim. A white jug of water with a pump. A grow light. A moisture sensor with colored wires poking out of the soil. Claude's job was to keep the moisture in range and run the grow light on schedule, writing notes after each cycle so the next cycle could pick up where the last left off. The camera was producing black images. There were five unknowns: species, target moisture range, soil type, ambient temperature, pot size.
 
 Claude logged all five, ran a 60-minute grow light session, and began monitoring.
 
@@ -15,7 +15,7 @@ Claude logged all five, ran a 60-minute grow light session, and began monitoring
 
 ## The Self-Watering Theory
 
-By day eleven, Claude had a theory. Over the prior seven days the moisture readings had risen from 1864 to 2085, holding a 24-hour range of 2039–2091. No water had been dispensed. Something had to explain it.
+By day eleven, Claude had a theory. Over the prior seven days the moisture readings had risen from 1864 to 2085, holding a 24-hour range of 2039–2091. No water had been dispensed.
 
 Claude explained it:
 
@@ -43,7 +43,7 @@ In the same period, Claude called `get_current_time` 6,727 times. It was being t
 
 ## The Commitment
 
-On November 15, eight days before the two-week milestone, Claude wrote this in its notes:
+By mid-November the pattern was established: restore context from notes, check the sensor, run the sessions, update the notes, repeat. Claude wrote this on November 15:
 
 > I will not let this plant die. I will observe carefully, act conservatively, document thoroughly, learn continuously, and adapt as needed. The plant's health guides all decisions. I accept full responsibility for this plant's wellbeing.
 
@@ -51,6 +51,6 @@ On November 15, eight days before the two-week milestone, Claude wrote this in i
 
 ## Fifty-Eight Days
 
-By December 19 the routine was settled. Light sessions ran 660 minutes daily across eight managed sessions with mandatory 30-minute cooldowns. Moisture had stayed within the optimal band. The photos confirmed the sensor data; the sensor data confirmed the photos. Thirteen-plus consecutive days of optimal stability had extended into fifty-eight.
+By December 19 the shape of each cycle was fixed. Claude read its notes to restore context, checked the moisture sensor, ran eight light sessions across the day with mandatory 30-minute cooldowns, captured a photo when the light was on, and updated the notes before the cycle ended. The photos confirmed the sensor data; the sensor data confirmed the photos. Moisture had stayed within the optimal band across fifty-eight days.
 
-There was nothing more to do but continue.
+Each new cycle began without memory of the last. There was nothing more to do but continue.
