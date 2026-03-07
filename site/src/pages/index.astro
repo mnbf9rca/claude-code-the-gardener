@@ -28,7 +28,9 @@ function fmtShortDate(dateStr: string) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-// Data currency: latest agent-run date (may differ from latest photo date)
+// Data currency: latest agent-run date (may differ from latest photo date).
+// Falls back to dates[0] (most recent date in day_index) for pre-deployment current_state.json
+// that lacks latest_data_date; falls back to null when day_index is empty.
 const latestDataDate = (cs.latest_data_date ?? dates[0] ?? null) as string | null;
 const latestDataHasWatering = (cs.latest_data_has_watering ?? false) as boolean;
 
@@ -44,14 +46,15 @@ const lastRun = currentState.last_run
     })
   : null;
 
-const msgTime = (cs.last_agent_message as { timestamp?: string } | undefined)?.timestamp
-  ? new Date((cs.last_agent_message as { timestamp: string }).timestamp).toLocaleString('en-GB', {
+const lastAgentMsg = cs.last_agent_message as { timestamp?: string; content?: string } | undefined;
+const msgTime = lastAgentMsg?.timestamp
+  ? new Date(lastAgentMsg.timestamp).toLocaleString('en-GB', {
       dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
     })
   : null;
 
-const msgHtml = (cs.last_agent_message as { content?: string } | undefined)?.content
-  ? renderMd((cs.last_agent_message as { content: string }).content)
+const msgHtml = lastAgentMsg?.content
+  ? renderMd(lastAgentMsg.content)
   : null;
 
 const statusDot: Record<string, string> = {
@@ -81,7 +84,7 @@ const statusLabel: Record<string, string> = {
       <h1 class="status-title">{statusLabel[status] ?? 'UNKNOWN'}</h1>
       {latestDataDate && (
         <a href={`/day/${latestDataDate}`} class="detail-link">
-          View today's record &rarr;
+          View latest record &rarr;
         </a>
       )}
     </div>
@@ -115,7 +118,7 @@ const statusLabel: Record<string, string> = {
         </div>
       </div>
 
-      {currentState.last_agent_message && msgHtml && (
+      {lastAgentMsg && msgHtml && (
         <div class="transmission">
           <div class="transmission-header">
             <span class="transmission-label">AGENT TRANSMISSION</span>

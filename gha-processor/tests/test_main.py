@@ -73,6 +73,21 @@ def test_day_index_status_from_merged_daily():
     assert result["2026-03-04"]["status"] == "stressed"
 
 
+def test_day_index_includes_photo_only_dates():
+    """Days with a photo but no sensor data must appear with unknown status and no watering."""
+    from processor.main import build_day_index
+
+    merged_daily = _make_merged_daily({"2026-03-04": "healthy"})
+    timeline = _make_timeline(["2026-03-04", "2026-03-05"])  # 2026-03-05 is photo-only
+
+    result = build_day_index(merged_daily, timeline)
+
+    assert "2026-03-05" in result
+    assert result["2026-03-05"]["status"] == "unknown"
+    assert result["2026-03-05"]["has_watering"] is False
+    assert result["2026-03-05"]["photo_url"] is not None
+
+
 def test_day_index_has_watering_from_merged_daily():
     """has_watering reflects water.total_ml from merged_daily."""
     from processor.main import build_day_index

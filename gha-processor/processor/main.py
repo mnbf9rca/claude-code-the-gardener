@@ -37,6 +37,7 @@ def build_day_index(
     Unlike plant_timeline.json, this includes every day the agent ran,
     even if no lit photos exist. photo_url is null for photo-less days.
     """
+    # sorted() ensures insertion order is ascending by date (CPython 3.7+ preserves dict insertion order)
     all_dates = sorted(set(list(merged_daily.keys()) + list(timeline_sorted.keys())))
     return {
         date: {
