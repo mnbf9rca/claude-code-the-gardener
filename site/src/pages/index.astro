@@ -32,9 +32,10 @@ function fmtShortDate(dateStr: string) {
 // Falls back to dates[0] (most recent date in day_index) for pre-deployment current_state.json
 // that lacks latest_data_date; falls back to null when day_index is empty.
 const latestDataDate = (cs.latest_data_date ?? dates[0] ?? null) as string | null;
-const latestDataHasWatering = (cs.latest_data_has_watering ?? false) as boolean;
+// Fall back to day_index entry for the transitional window before first post-deploy GHA run
+const latestDataHasWatering = (cs.latest_data_has_watering ?? index[dates[0]]?.has_watering ?? false) as boolean;
 
-const status = (cs.plant_status ?? 'unknown') as string;
+const status = (cs.plant_status ?? index[dates[0]]?.status ?? 'unknown') as string;
 
 // Photo currency: most recent lit photo, regardless of age
 const latestPhoto = (cs.latest_photo_url ?? null) as string | null;
