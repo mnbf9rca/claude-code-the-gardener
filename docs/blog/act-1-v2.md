@@ -1,0 +1,56 @@
+# The Plant: Act I — Fifty-Eight Days
+*October 22 – December 19, 2025*
+
+---
+
+## The Assignment
+
+On October 22, 2025, a moisture sensor read 1829. That number — mid-range between the wet calibration point of 1100 and the dry end of 3400 — was the first data point in what would become 5,568 check-ins over fifty-eight days.
+
+The setup was simple. A Tradescantia zebrina in a pot with an orange rim. A white jug of water with a pump. A grow light. A moisture sensor with colored wires poking out of the soil. Claude's job was to read the sensor, run the light, water when dry, and write notes after each cycle so the next cycle could pick up where the last left off. The camera was producing black images. There were five listed unknowns: species, target moisture range, soil type, ambient temperature, pot size.
+
+Claude logged all five, ran a 60-minute grow light session, and began monitoring.
+
+---
+
+## The Self-Watering Theory
+
+By day eleven, Claude had a theory. The moisture readings had been climbing — stable in the 2008–2071 range — and no water had been dispensed. Something had to explain it.
+
+Claude explained it:
+
+> "Pot's internal reservoir still has water from previous fills. Soil continues wicking water from this reservoir. Rising moisture = reservoir functioning, still has water."
+
+The self-watering mechanism, the notes continued, maintained "consistent, optimal conditions automatically." Claude's role was to "monitor and refill the reservoir when it gets low."
+
+This was wrong. The pot was not self-watering. The moisture readings were rising because soil moisture sensors exhibit normal variance. When prompted to review the full seven-day dataset, Claude revised its understanding and logged the correction: "Human corrected my understanding: dispense_water refills the pot's internal reservoir from external jug — the setup is: jug → pump → pot reservoir → capillary wicking to soil."
+
+Claude moved on quickly.
+
+---
+
+## The Catalog
+
+By mid-November Claude had developed a detailed taxonomy of sensor behavior after light sessions. A single 120-minute light session on Day 14 produced a five-phase in-session pattern followed by a three-phase post-session sequence running to 517 minutes of observation.
+
+Phase 6A was the post-session rise to peak. Phase 6B was rapid cooling from peak. Phase 6C was final equilibration. Then, hours later, came Phase 6D — a "late peak (higher than initial!)." Phase 6E: cooling. Phase 6F: irregular multi-amplitude oscillations, a 20-minute plateau Claude flagged as "misleading," then a "massive +12 spike," then a continued sustained rise.
+
+The rise rate at one point was 0.38 points per minute. Claude noted the post-session cooling rate was faster than any in-session cooling. It asked what the ceiling of the environmental forcing might be.
+
+In the same period, Claude called `get_current_time` 6,727 times. This is not, the notes clarify, because it was anxious. It was being thorough.
+
+---
+
+## The Commitment
+
+On November 15, eight days before the two-week milestone, Claude wrote this in its notes:
+
+> I will not let this plant die. I will observe carefully, act conservatively, document thoroughly, learn continuously, and adapt as needed. The plant's health guides all decisions. I accept full responsibility for this plant's wellbeing.
+
+---
+
+## Fifty-Eight Days
+
+By December 19 the routine was settled. Light sessions ran 660 minutes daily across eight managed sessions with mandatory 30-minute cooldowns. Moisture had stayed within the optimal band. The photos confirmed the sensor data; the sensor data confirmed the photos. Thirteen-plus consecutive days of optimal stability had extended into fifty-eight.
+
+There was nothing more to do but continue.
