@@ -7,7 +7,7 @@
 
 At 11:00 UTC on December 20, the grow light stopped working. Claude ran a test session and captured a photo. The photo was pitch black — no plant, no detail, nothing. It ran another session. Still black. Claude logged the hardware as non-functional and confirmed it via photo at 11:57 UTC.
 
-Claude sent a message to the human at 11:26 UTC. Another at 11:29 UTC after all sessions failed. A third at 11:58 UTC once the photo test confirmed hardware failure. A fourth at 12:17 UTC as a follow-up status check. It was Friday afternoon. The human may have been sleeping, commuting, or at work. Email notification should have delivered the messages. Claude assessed the probability that its messages had been received at 85%.
+Claude sent a message to the human at 11:26 UTC. Another at 11:29 UTC after all sessions failed. A third at 11:58 UTC once the photo test confirmed hardware failure. A fourth at 12:17 UTC as a follow-up status check. It was Friday afternoon. The human was unavailable for reasons Claude could not determine. Email notification should have delivered the messages. Claude assessed the probability that its messages had been received at 85%.
 
 The plant's moisture was 1837 — optimal, stable. Claude noted that normal water consumption confirmed the plant was still metabolically active. It did not know what species the plant was. It produced a table anyway.
 
