@@ -1,17 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import plantTimeline from '../data/state/plant_timeline.json';
+import dayIndex from '../data/state/day_index.json';
 
-const timeline = plantTimeline as Record<string, {
+const days = (Object.values(dayIndex) as Array<{
   date: string;
   status: string;
-  noon_photo_url: string | null;
-  photos: string[];
+  photo_url: string | null;
   has_watering: boolean;
-}>;
-
-
-const days = Object.values(timeline).sort((a, b) => b.date.localeCompare(a.date));
+}>).sort((a, b) => b.date.localeCompare(a.date));
 
 function fmtShortDate(dateStr: string) {
   const d = new Date(dateStr + 'T12:00:00Z');
@@ -56,7 +52,7 @@ const statusBorderColor: Record<string, string> = {
   <div class="contact-sheet">
     {days.map(day => {
       const bc = statusBorderColor[day.status] ?? statusBorderColor.unknown;
-      const photo = day.noon_photo_url ?? null;
+      const photo = day.photo_url ?? null;
       return (
         <a href={`/day/${day.date}`} class="sheet-cell" style={`border-left-color:${bc}`}>
           <div class="cell-thumb">
@@ -69,7 +65,7 @@ const statusBorderColor: Record<string, string> = {
               />
             ) : (
               <div class="cell-empty">
-                <span class="cell-no-photo">—</span>
+                <span class="cell-no-photo">UNLIT</span>
               </div>
             )}
             {day.has_watering && (

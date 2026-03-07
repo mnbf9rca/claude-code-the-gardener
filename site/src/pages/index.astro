@@ -3,50 +3,55 @@ import Layout from '../layouts/Layout.astro';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
 import currentState from '../data/state/current_state.json';
-import plantTimeline from '../data/state/plant_timeline.json';
+import dayIndex from '../data/state/day_index.json';
 
 function renderMd(content: string): string {
   return sanitizeHtml(marked.parse(content) as string, {
-    allowedTags: sanitizeHtml.defaults.allowedTags, // img intentionally excluded; agent messages are text-only
+    allowedTags: sanitizeHtml.defaults.allowedTags,
     allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
   });
 }
 
-const timeline = plantTimeline as Record<string, {
+const index = dayIndex as Record<string, {
   date: string;
   status: string;
-  noon_photo_url: string | null;
-  photos: string[];
+  photo_url: string | null;
   has_watering: boolean;
 }>;
 
+const cs = currentState as Record<string, unknown>;
 
-const dates = Object.keys(timeline).sort().reverse();
-const latestDate = dates[0];
+const dates = Object.keys(index).sort().reverse();
 
 function fmtShortDate(dateStr: string) {
   const d = new Date(dateStr + 'T12:00:00Z');
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
-const latestEntry = timeline[latestDate];
 
-const status = (currentState.plant_status ?? 'unknown') as string;
-const latestPhoto = latestEntry?.noon_photo_url ?? currentState.latest_photo_url ?? null;
+// Data currency: latest agent-run date (may differ from latest photo date)
+const latestDataDate = (cs.latest_data_date ?? dates[0] ?? null) as string | null;
+const latestDataHasWatering = (cs.latest_data_has_watering ?? false) as boolean;
+
+const status = (cs.plant_status ?? 'unknown') as string;
+
+// Photo currency: most recent lit photo, regardless of age
+const latestPhoto = (cs.latest_photo_url ?? null) as string | null;
+const latestPhotoDate = (cs.latest_photo_date ?? null) as string | null;
 
 const lastRun = currentState.last_run
-  ? new Date(currentState.last_run).toLocaleString('en-GB', {
+  ? new Date(currentState.last_run as string).toLocaleString('en-GB', {
       dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
     })
   : null;
 
-const msgTime = currentState.last_agent_message?.timestamp
-  ? new Date(currentState.last_agent_message.timestamp).toLocaleString('en-GB', {
+const msgTime = (cs.last_agent_message as { timestamp?: string } | undefined)?.timestamp
+  ? new Date((cs.last_agent_message as { timestamp: string }).timestamp).toLocaleString('en-GB', {
       dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
     })
   : null;
 
-const msgHtml = currentState.last_agent_message?.content
-  ? renderMd(currentState.last_agent_message.content)
+const msgHtml = (cs.last_agent_message as { content?: string } | undefined)?.content
+  ? renderMd((cs.last_agent_message as { content: string }).content)
   : null;
 
 const statusDot: Record<string, string> = {
@@ -74,8 +79,8 @@ const statusLabel: Record<string, string> = {
     <div class="status-row">
       <span class="status-beacon" style={`background:${statusDot[status] ?? statusDot.unknown}`}></span>
       <h1 class="status-title">{statusLabel[status] ?? 'UNKNOWN'}</h1>
-      {latestDate && (
-        <a href={`/day/${latestDate}`} class="detail-link">
+      {latestDataDate && (
+        <a href={`/day/${latestDataDate}`} class="detail-link">
           View today's record &rarr;
         </a>
       )}
@@ -98,11 +103,11 @@ const statusLabel: Record<string, string> = {
         </div>
         <div class="readout-row">
           <span class="readout-key">LATEST DATE</span>
-          <span class="readout-val">{latestDate ?? '—'}</span>
+          <span class="readout-val">{latestDataDate ?? '—'}</span>
         </div>
         <div class="readout-row">
           <span class="readout-key">WATERED TODAY</span>
-          <span class="readout-val">{latestEntry?.has_watering ? 'YES' : 'NO'}</span>
+          <span class="readout-val">{latestDataHasWatering ? 'YES' : 'NO'}</span>
         </div>
         <div class="readout-row">
           <span class="readout-key">DAYS ON RECORD</span>
@@ -133,13 +138,13 @@ const statusLabel: Record<string, string> = {
         <div class="photo-frame">
           <img
             src={latestPhoto}
-            alt={`Plant specimen ${latestDate}`}
+            alt={`Plant specimen ${latestPhotoDate ?? latestDataDate}`}
             class="specimen-photo"
             loading="eager"
           />
           <div class="photo-caption">
             <span>SPECIMEN PHOTO</span>
-            <span>{latestDate}</span>
+            <span>{latestPhotoDate ?? latestDataDate}</span>
           </div>
         </div>
       ) : (
@@ -160,9 +165,9 @@ const statusLabel: Record<string, string> = {
       <div class="readout-rule">RECENT FIELD RECORDS &mdash; {Math.min(dates.length, 14)} DAYS</div>
       <div class="recent-grid">
         {dates.slice(0, 14).map(date => {
-          const entry = timeline[date];
+          const entry = index[date];
           const ds = (entry?.status ?? 'unknown') as string;
-          const thumb = entry?.noon_photo_url ?? null;
+          const thumb = entry?.photo_url ?? null;
           return (
             <a href={`/day/${date}`} class="day-cell">
               <div class="day-thumb">
@@ -174,7 +179,9 @@ const statusLabel: Record<string, string> = {
                     loading="lazy"
                   />
                 ) : (
-                  <div class="thumb-empty"></div>
+                  <div class="thumb-empty">
+                    <span class="thumb-no-photo">UNLIT</span>
+                  </div>
                 )}
                 <span
                   class="thumb-dot"
@@ -449,7 +456,20 @@ const statusLabel: Record<string, string> = {
     object-fit: cover;
     display: block;
   }
-  .thumb-empty { width: 100%; height: 100%; }
+  .thumb-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .thumb-no-photo {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   .thumb-dot {
     position: absolute;
     bottom: 3px;
