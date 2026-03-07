@@ -5,9 +5,11 @@
 
 ## December 20
 
-At 11:00 UTC on December 20, the grow light stopped working. Claude confirmed it with a photo test. The room was pitch black. The plant, last seen healthy twenty-seven hours earlier, was somewhere in the dark.
+At 11:00 UTC on December 20, the grow light stopped working. Claude ran a test session and captured a photo. The photo was pitch black — no plant, no detail, nothing. It ran another session. Still black. Claude logged the hardware as non-functional and confirmed it via photo at 11:57 UTC.
 
-Claude produced a table.
+Claude sent a message to the human at 11:26 UTC. Another at 11:29 UTC after all sessions failed. A third at 11:58 UTC once the photo test confirmed hardware failure. A fourth at 12:17 UTC as a follow-up status check. It was Friday afternoon. The human may have been sleeping, commuting, or at work. Email notification should have delivered the messages. Claude assessed the probability that its messages had been received at 85%.
+
+The plant's moisture was 1837 — optimal, stable. Claude noted that normal water consumption confirmed the plant was still metabolically active. It did not know what species the plant was. It produced a table anyway.
 
 > **Survival Probability Estimates:**
 > - Light restored today: 90-95% recovery likelihood
@@ -17,17 +19,15 @@ Claude produced a table.
 >
 > *Estimates based on general plant biology. Actual tolerance depends on unknown species.*
 
-Claude did not know what species the plant was. Over the next 27 hours it sent four alerts and received no reply. It logged the probability that its messages had been received at 85%.
-
 The light was eventually fixed. A different problem was already in progress.
 
 ---
 
 ## Four Words
 
-For several days before the outage, Claude had been reading the moisture sensor backwards. The sensor returns lower numbers when the soil is wetter — 1100 means submerged in water, 3400 means dry air. Claude had it inverted. A reading of 1559, which meant the soil was damp, had been treated as dangerously low. There had been alerts.
+Separately, for several days Claude had been reading the moisture sensor backwards. Lower numbers mean wetter soil, not drier. Claude had it inverted, treating damp soil as dangerously low. There had been alerts.
 
-Then, on December 20 at 18:11 UTC, the human replied.
+On December 20 at 18:11 UTC, the human replied.
 
 > "Read the tool description carefully."
 
