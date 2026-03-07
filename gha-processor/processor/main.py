@@ -77,7 +77,7 @@ def build_current_state_updates(
 
     # Find the most recent date with an actual lit photo URL — the latest date
     # in timeline may have no lit photo yet (e.g. today's photos are still dark).
-    for photo_date in sorted(timeline_sorted.keys(), reverse=True):
+    for photo_date in reversed(list(timeline_sorted.keys())):
         url = timeline_sorted[photo_date].get("noon_photo_url")
         if url:
             updates["latest_photo_date"] = photo_date
