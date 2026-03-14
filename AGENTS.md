@@ -2,6 +2,10 @@
 
 This file provides guidelines for agentic coding assistants working on this codebase.
 
+## Project Overview
+
+**Read [`docs/PROJECT.md`](docs/PROJECT.md) before working on this codebase.** It covers the two-loop architecture, module directory, R2 data flows, CI/CD workflows, MCP tools, and key business rules. Reading it will save significant context-gathering time.
+
 ## Key rules agents often forget but must ALWAYS follow:
 
   - **NEVER** force commit or amend commits. Ever. Always create new commits for fixes, and use Git's revert feature to undo changes if needed. This preserves the integrity of the commit history and allows for proper code review.
