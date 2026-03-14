@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Spectral', Georgia, serif;
+  --font-mono: 'Azeret Mono', 'Courier New', monospace;
+
+  --color-bg: #F1F5EF;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EBF0E7;
+  --color-border: #C8D5C0;
+  --color-border-bright: #98B890;
+
+  --color-text: #162018;
+  --color-muted: #4A6855;
+  --color-dim: #96B09A;
+
+  --color-green: #1C7840;
+  --color-green-dim: #C0DEC8;
+  --color-orange: #C84815;
+  --color-orange-dim: #F0C8B0;
+  --color-stressed: #C87800;
+  --color-critical: #C42020;
+
+  --color-surface-alt: #F8FBF7;   /* subtle raised surface — strip frames, card backs */
+  --color-text-prose: #2E4A38;    /* forest-green prose body text — transmission bodies */
+  --color-water: #1E6AAA;         /* water/moisture indicator — labels and values */
+}
+
+/* Base */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Azeret Mono', 'Courier New', monospace;
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle paper-grid background */
+body {
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(ellipse 70% 50% at 50% 0%, #E5EDE0 0%, transparent 70%),
+    radial-gradient(circle at 1px 1px, #D8E4D0 1px, transparent 0);
+  background-size: 100% 100%, 28px 28px;
+  position: relative;
+}
+
+/* Page load animation */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-beacon {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(28,120,64,0.35); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 5px rgba(28,120,64,0); }
+}
+
+@keyframes pulse-healthy {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(28,120,64,0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(28,120,64,0); }
+}
+
+.animate-load {
+  animation: fade-up 0.5s ease both;
+}
+
+.beacon {
+  animation: pulse-beacon 2.5s ease-in-out infinite;
+}
+
+.beacon-healthy {
+  animation: pulse-healthy 2.5s ease-in-out infinite;
+}
+
+/* Headings use the serif face */
+h1, h2, h3 {
+  font-family: 'Spectral', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+h1 { font-size: 2rem; line-height: 1.1; }
+h2 { font-size: 1.25rem; line-height: 1.2; }
+
+/* Status colour utilities */
+.status-healthy  { color: var(--color-green); border-color: #98C8A8; background-color: #EBF5EE; }
+.status-stressed { color: #C87800; border-color: #E8C878; background-color: #FDF5E0; }
+.status-critical { color: #C42020; border-color: #E88888; background-color: #FDF0F0; }
+.status-unknown  { color: var(--color-dim); border-color: var(--color-border); background-color: var(--color-bg); }
+
+/* Green link style */
+a {
+  color: var(--color-green);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+a:hover { color: #155E32; }
+
+/* Card / surface */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  transition: border-color 0.2s ease;
+}
+.card:hover { border-color: var(--color-border-bright); }
+
+/* Sidebar nav link styles */
+.nav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-family: 'Azeret Mono', monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-muted);
+  border-left: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+}
+
+.nav-link:hover,
+.nav-link[aria-current="page"] {
+  color: var(--color-green);
+  border-left-color: var(--color-green);
+  background: rgba(28,120,64,0.06);
+}
+
+/* Ruling lines for data sections */
+.section-rule {
+  font-family: 'Azeret Mono', monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+/* Monospace data value display */
+.data-val {
+  font-family: 'Azeret Mono', monospace;
+  color: var(--color-green);
+}

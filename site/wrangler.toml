@@ -1,0 +1,25 @@
+name = "gardener-site"
+compatibility_date = "2025-03-01"
+workers_dev = false
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "plants.cynexia.com"
+custom_domain = true
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1

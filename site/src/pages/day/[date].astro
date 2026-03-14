@@ -1,0 +1,739 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+import dayIndex from '../../data/state/day_index.json';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags, // img intentionally excluded; agent messages are text-only
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
+
+const index = dayIndex as Record<string, { date: string; status: string; photo_url: string | null; has_watering: boolean; }>;
+
+export async function getStaticPaths() {
+  const idx = dayIndex as Record<string, unknown>;
+  return Object.keys(idx).map(date => ({ params: { date } }));
+}
+
+const { date } = Astro.params;
+
+type DayData = {
+  date: string;
+  status: string;
+  photos?: string[];
+  water_events?: Array<{ timestamp: string; ml?: number }>;
+  light_events?: Array<{ timestamp: string; event_type: string; duration_minutes?: number | null }>;
+  moisture_readings?: Array<{ timestamp: string; value: number }>;
+  messages_to_human?: Array<{ timestamp: string; content: string; direction?: string }>;
+  messages_from_human?: Array<{ timestamp: string; content: string; direction?: string }>;
+  token_usage?: { sessions: number; input_tokens: number; output_tokens: number; tool_calls?: Record<string, number> };
+  estimated_cost_usd?: number;
+};
+
+let dayData: DayData | null = null;
+try {
+  const mod = await import(`../../data/state/day/${date}.json`);
+  dayData = mod.default as DayData;
+} catch {
+  dayData = null;
+}
+
+const visiblePhotos = dayData?.photos ?? [];
+const moistureReadings = dayData?.moisture_readings ?? [];
+const waterEvents = dayData?.water_events ?? [];
+const lightEvents = dayData?.light_events ?? [];
+
+const dayToolCalls = Object.entries(dayData?.token_usage?.tool_calls ?? {})
+  .sort(([, a], [, b]) => b - a)
+  .slice(0, 10);
+const dayTotalCalls = dayToolCalls.reduce((s, [, c]) => s + c, 0);
+
+const status = (dayData?.status ?? index[date!]?.status ?? 'unknown') as string;
+const waterTotal = dayData?.water_events?.reduce((s, e) => s + (e.ml ?? 0), 0) ?? 0;
+
+const statusColor: Record<string, string> = {
+  healthy:  '#1C7840',
+  stressed: '#C87800',
+  critical: '#C42020',
+  unknown:  '#96B09A',
+};
+
+function fmtTime(ts: string) {
+  return new Date(ts).toLocaleTimeString('en-GB', {
+    timeZone: 'UTC', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function fmtDateTime(ts: string) {
+  return new Date(ts).toLocaleString('en-GB', {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
+  });
+}
+
+function fmtShortDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// Previous/next day navigation
+const allDates = Object.keys(dayIndex).sort();
+const idx = allDates.indexOf(date!);
+const prevDate = idx > 0 ? allDates[idx - 1] : null;
+const nextDate = idx < allDates.length - 1 ? allDates[idx + 1] : null;
+---
+
+<Layout title={`${date}`}>
+
+  <!-- Back nav + date navigation -->
+  <div class="day-nav">
+    <a href="/plant" class="back-link">&larr; Field records</a>
+    <div class="date-nav">
+      {prevDate && <a href={`/day/${prevDate}`} class="date-nav-link">&larr; {fmtShortDate(prevDate)}</a>}
+      {nextDate && <a href={`/day/${nextDate}`} class="date-nav-link">{fmtShortDate(nextDate)} &rarr;</a>}
+    </div>
+  </div>
+
+  <!-- Day header -->
+  <div class="day-header">
+    <div class="day-header-top">
+      <h1 class="day-title">{date}</h1>
+      <span class="status-badge" style={`color:${statusColor[status] ?? statusColor.unknown};border-color:${statusColor[status] ?? statusColor.unknown}40`}>
+        <span class="status-dot" style={`background:${statusColor[status] ?? statusColor.unknown}`}></span>
+        {status.toUpperCase()}
+      </span>
+    </div>
+    {(waterTotal > 0) && (
+      <div class="water-summary">
+        <span class="water-label">WATERED</span>
+        <span class="water-val">{waterTotal}ml</span>
+      </div>
+    )}
+  </div>
+
+  {!dayData && (
+    <div class="no-data">
+      <div class="no-data-label">NO RECORD</div>
+      <div class="no-data-sub">Day detail file not available</div>
+    </div>
+  )}
+
+  {dayData && (
+    <div class="day-content">
+
+      <!-- Photo strip -->
+      <section class="day-section">
+        <div class="section-rule">PHOTOGRAPHS{visiblePhotos.length > 0 ? ` \u2014 ${visiblePhotos.length}` : ''}</div>
+        {visiblePhotos.length > 0 ? (
+          <div class="photo-strip">
+            {visiblePhotos.map((url, i) => (
+              <div class="strip-frame">
+                <a href={url} target="_blank" rel="noopener noreferrer" class="strip-link">
+                  <img
+                    src={url}
+                    alt={`Photograph ${i + 1}`}
+                    class="strip-img"
+                    loading={i === 0 ? 'eager' : 'lazy'}
+                  />
+                </a>
+                <div class="strip-caption">{String(i + 1).padStart(2, '0')}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div class="no-photos">
+            <div class="no-photos-label">NO PHOTOGRAPHS</div>
+            <div class="no-photos-sub">No lit photos available for this day</div>
+          </div>
+        )}
+      </section>
+
+      <!-- Two-column: moisture + light events -->
+      <div class="two-col">
+
+        <!-- Moisture readings -->
+        {dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
+          <section class="day-section">
+            <div class="section-rule">MOISTURE &mdash; {dayData.moisture_readings.length} READINGS</div>
+            <div class="day-chart-frame">
+              <canvas id="moistureChart"></canvas>
+            </div>
+          </section>
+        )}
+
+        <!-- Light events -->
+        {dayData.light_events && dayData.light_events.length > 0 && (
+          <section class="day-section">
+            <div class="section-rule">LIGHT &mdash; {dayData.light_events.length} EVENTS</div>
+            <div class="timeline">
+              {dayData.light_events.map(e => (
+                <div class="timeline-row">
+                  <span class="tl-time">{fmtTime(e.timestamp)}</span>
+                  <span class={`tl-dot ${e.event_type === 'turn_on' ? 'tl-dot-on' : 'tl-dot-off'}`}></span>
+                  <span class={`tl-event ${e.event_type === 'turn_on' ? 'tl-on' : 'tl-off'}`}>
+                    {e.event_type === 'turn_on' ? 'ON' : 'OFF'}
+                    {e.duration_minutes ? ` · ${e.duration_minutes}min` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+      </div>
+
+      <!-- Messages -->
+      {((dayData.messages_to_human?.length ?? 0) + (dayData.messages_from_human?.length ?? 0)) > 0 && (
+        <section class="day-section">
+          <div class="section-rule">MESSAGES</div>
+          <div class="messages">
+            {[
+              ...(dayData.messages_to_human ?? []).map(m => ({ ...m, direction: 'to_human' })),
+              ...(dayData.messages_from_human ?? []).map(m => ({ ...m, direction: 'from_human' })),
+            ]
+              .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+              .map(msg => (
+                <div class="transmission">
+                  <div class="transmission-header">
+                    <span class="transmission-label">
+                      {msg.direction === 'to_human' ? 'AGENT' : 'HUMAN'}
+                    </span>
+                    <span class="transmission-time">{fmtDateTime(msg.timestamp)} UTC</span>
+                  </div>
+                  <div class="transmission-body" set:html={renderMd(msg.content)} />
+                </div>
+              ))
+            }
+          </div>
+        </section>
+      )}
+
+      <!-- AI usage -->
+      {dayData.token_usage && (dayData.token_usage.sessions ?? 0) > 0 && (
+        <section class="day-section">
+          <div class="section-rule">AI USAGE</div>
+          <div class="readout-grid">
+            {[
+              { k: 'SESSIONS',      v: String(dayData.token_usage.sessions) },
+              { k: 'INPUT TOKENS',  v: (dayData.token_usage.input_tokens ?? 0).toLocaleString() },
+              { k: 'OUTPUT TOKENS', v: (dayData.token_usage.output_tokens ?? 0).toLocaleString() },
+              { k: 'EST. COST',     v: `$${(dayData.estimated_cost_usd ?? 0).toFixed(4)}` },
+            ].map(item => (
+              <div class="readout-cell">
+                <div class="readout-key">{item.k}</div>
+                <div class="readout-val">{item.v}</div>
+              </div>
+            ))}
+          </div>
+          {dayToolCalls.length > 0 && (
+            <table class="data-table" style="margin-top:0.75rem">
+              <thead>
+                <tr>
+                  <th class="th">TOOL</th>
+                  <th class="th th-right">CALLS</th>
+                  <th class="th th-right">SHARE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dayToolCalls.map(([tool, count]) => (
+                  <tr class="tr">
+                    <td class="td td-tool-name">{tool.replace('mcp__plant-tools__', '')}</td>
+                    <td class="td td-right td-val">{count}</td>
+                    <td class="td td-right td-tool-pct">{((count / dayTotalCalls) * 100).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+    </div>
+  )}
+
+
+{dayData?.moisture_readings && dayData.moisture_readings.length > 0 && (
+  <script is:inline type="module" define:vars={{ moistureReadings, waterEvents, lightEvents }}>
+    import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
+    import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
+
+    const MOISTURE_BLUE      = 'rgba(30,120,190,0.85)';
+    const MOISTURE_BLUE_FILL = 'rgba(30,120,190,0.08)';
+    const WATER     = 'rgba(14,165,210,0.9)';
+    const GRID      = '#DDE8D5';
+    const TICK      = '#6A9070';
+    const baseFont  = { family: "'Azeret Mono','Courier New',monospace", size: 9 };
+
+    const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
+    const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
+    const BAND_H = 6;
+
+    const lightBandPlugin = {
+      id: 'lightBand',
+      afterDraw(chart) {
+        if (!lightEvents.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const { left, right, top } = chartArea;
+        ctx.save();
+        ctx.fillStyle = LIGHT_BAND_BG;
+        ctx.fillRect(left, top, right - left, BAND_H);
+        ctx.fillStyle = LIGHT_BAND;
+        for (let i = 0; i < lightEvents.length; i++) {
+          const evt = lightEvents[i];
+          if (evt.event_type !== 'turn_on') continue;
+          const xOn = scales.x.getPixelForValue(new Date(evt.timestamp).getTime());
+          // Prefer scheduled_off on the turn_on event; fall back to the next turn_off event
+          const offTs = evt.scheduled_off
+            ?? lightEvents.slice(i + 1).find(e => e.event_type === 'turn_off')?.timestamp;
+          const xOff = offTs ? scales.x.getPixelForValue(new Date(offTs).getTime()) : right;
+          const xStart = Math.max(left, Math.min(xOn, right));
+          const xEnd   = Math.max(left, Math.min(xOff, right));
+          if (xEnd > xStart) ctx.fillRect(xStart, top, xEnd - xStart, BAND_H);
+        }
+        ctx.restore();
+      },
+    };
+
+    const values = moistureReadings.map(r => r.value);
+    const moisturePoints = moistureReadings.map(r => ({ x: r.timestamp, y: r.value }));
+
+    const yMin = Math.min(...values);
+    const yMax = Math.max(...values);
+    const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+    const fixedY = yMin - spread * 0.15;
+
+    const waterPoints = waterEvents.map(e => ({ x: e.timestamp, y: fixedY }));
+
+    new Chart(document.getElementById('moistureChart'), {
+      type: 'line',
+      plugins: [lightBandPlugin],
+      data: {
+        datasets: [
+          {
+            data: moisturePoints,
+            borderColor: MOISTURE_BLUE,
+            backgroundColor: MOISTURE_BLUE_FILL,
+            showLine: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            fill: true,
+            borderWidth: 1.5,
+            order: 2,
+          },
+          {
+            data: waterPoints,
+            type: 'scatter',
+            pointStyle: 'triangle',
+            pointRadius: 6,
+            pointHoverRadius: 7,
+            backgroundColor: WATER,
+            borderColor: 'transparent',
+            showLine: false,
+            order: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0E1510',
+            borderColor: '#1E2A1E',
+            borderWidth: 1,
+            titleColor: MOISTURE_BLUE,
+            bodyColor: '#E4EDEA',
+            filter: item => item.datasetIndex === 0,
+            callbacks: {
+              label: ctx => ` ${ctx.parsed.y != null ? Math.round(ctx.parsed.y) : '—'}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'hour',
+              displayFormats: { hour: 'HH:mm' },
+            },
+            adapters: { date: {} },
+            grid: { color: GRID },
+            ticks: { color: TICK, maxTicksLimit: 8, font: baseFont },
+            border: { color: '#1E2A1E' },
+          },
+          y: {
+            grid: { color: GRID },
+            ticks: { color: TICK, font: baseFont },
+            border: { color: '#1E2A1E' },
+          },
+        },
+      },
+    });
+  </script>
+)}
+
+</Layout>
+
+<style>
+  .day-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    animation: fade-up 0.3s ease both;
+  }
+  .back-link {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .back-link:hover { color: var(--color-green); }
+  .date-nav {
+    display: flex;
+    gap: 1.5rem;
+  }
+  .date-nav-link {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .date-nav-link:hover { color: var(--color-green); }
+
+  .day-header {
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.3s ease both;
+    animation-delay: 0.05s;
+  }
+  .day-header-top {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .day-title {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 2.25rem;
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    padding: 0.2rem 0.5rem;
+  }
+  .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .water-summary {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .water-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-water);
+  }
+  .water-val {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--color-water);
+  }
+
+  .no-photos {
+    padding: 2rem;
+    border: 1px solid var(--color-surface-2);
+    text-align: center;
+  }
+  .no-photos-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
+  }
+  .no-photos-sub {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
+    margin-top: 0.35rem;
+  }
+
+  .no-data {
+    text-align: center;
+    padding: 4rem 2rem;
+    border: 1px solid var(--color-surface-2);
+  }
+  .no-data-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .no-data-sub {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .day-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    animation: fade-up 0.3s ease both;
+    animation-delay: 0.1s;
+  }
+
+  .day-section { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .section-rule {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.4rem;
+  }
+
+  /* Photo strip */
+  .photo-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  .strip-frame {
+    flex-shrink: 0;
+    width: 200px;
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    background: var(--color-surface-alt);
+  }
+  .strip-link {
+    display: block;
+    cursor: zoom-in;
+  }
+  .strip-img {
+    display: block;
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    filter: contrast(1.03) saturate(0.95);
+    transition: filter 0.15s;
+  }
+  .strip-link:hover .strip-img {
+    filter: contrast(1.08) saturate(1.0);
+  }
+  .strip-caption {
+    padding: 3px 6px;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* Two-column layout */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+  @media (max-width: 700px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  /* Data table */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+  }
+  .th {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-muted);
+    font-weight: 400;
+    padding: 0 0 0.4rem;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+  .th-right { text-align: right; }
+  .tr { border-bottom: 1px solid var(--color-surface-2); }
+  .td {
+    padding: 0.35rem 0;
+    color: var(--color-muted);
+  }
+  .td-right { text-align: right; }
+  .td-val { color: var(--color-green); }
+  .td-tool-name { color: var(--color-dim); }
+  .td-tool-pct  { color: var(--color-text-prose); }
+
+  /* Moisture chart */
+  .day-chart-frame {
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    padding: 0.75rem;
+    height: 180px;
+    position: relative;
+  }
+  .day-chart-frame canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Light timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--color-surface-2);
+  }
+  .tl-time {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-dim);
+    width: 3.5rem;
+    flex-shrink: 0;
+  }
+  .tl-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .tl-dot-on { background: var(--color-stressed); }
+  .tl-dot-off { background: var(--color-border); }
+  .tl-event {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+  }
+  .tl-on { color: var(--color-stressed); }
+  .tl-off { color: var(--color-dim); }
+
+  /* Messages */
+  .messages { display: flex; flex-direction: column; gap: 1rem; }
+  .transmission {
+    border: 1px solid var(--color-border);
+    border-left: 2px solid var(--color-green);
+    background: var(--color-surface-alt);
+  }
+  .transmission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.875rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .transmission-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
+  }
+  .transmission-time {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+  }
+  .transmission-body {
+    padding: 0.875rem;
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--color-text-prose);
+    line-height: 1.7;
+  }
+  .transmission-body :global(p) { margin: 0 0 0.5rem; }
+  .transmission-body :global(h1),
+  .transmission-body :global(h2),
+  .transmission-body :global(h3) {
+    font-family: 'Azeret Mono', monospace;
+    font-style: normal;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
+    margin: 0.75rem 0 0.4rem;
+  }
+  .transmission-body :global(strong) { font-style: normal; color: var(--color-text); font-weight: 600; }
+  .transmission-body :global(ul),
+  .transmission-body :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
+  .transmission-body :global(li) { margin-bottom: 0.2rem; }
+
+  /* AI usage readout grid */
+  .readout-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+  }
+  .readout-cell {
+    background: var(--color-surface-alt);
+    padding: 0.875rem;
+  }
+  .readout-key {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
+    margin-bottom: 0.4rem;
+  }
+  .readout-val {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--color-green);
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 700px) {
+    .readout-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>

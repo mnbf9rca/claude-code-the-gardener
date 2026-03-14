@@ -1,0 +1,973 @@
+---
+import Layout from '../layouts/Layout.astro';
+import aiStats from '../data/state/ai_stats.json';
+
+type DayAI = {
+  sessions: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: number;
+  tool_calls: Record<string, number>;
+};
+
+const stats = aiStats as Record<string, DayAI>;
+const totalSessions  = Object.values(stats).reduce((s, d) => s + (d.sessions ?? 0), 0);
+const totalCost      = Object.values(stats).reduce((s, d) => s + (d.estimated_cost_usd ?? 0), 0);
+const totalInput     = Object.values(stats).reduce((s, d) => s + (d.input_tokens ?? 0), 0);
+const totalOutput    = Object.values(stats).reduce((s, d) => s + (d.output_tokens ?? 0), 0);
+const daysMonitored  = Object.keys(stats).length;
+const avgCostPerDay  = daysMonitored > 0 ? totalCost / daysMonitored : 0;
+
+const summaryReadouts = [
+  { key: 'DAYS MONITORED',  val: String(daysMonitored) },
+  { key: 'TOTAL SESSIONS',  val: totalSessions.toLocaleString() },
+  { key: 'INPUT TOKENS',    val: totalInput.toLocaleString() },
+  { key: 'OUTPUT TOKENS',   val: totalOutput.toLocaleString() },
+  { key: 'TOTAL COST',      val: `$${totalCost.toFixed(2)}` },
+  { key: 'AVG COST / DAY',  val: `$${avgCostPerDay.toFixed(3)}` },
+];
+---
+
+<Layout title="Stats">
+
+  <div class="page-header">
+    <div class="header-meta">OPERATIONAL METRICS</div>
+    <h1 class="page-title">Stats</h1>
+    <div class="header-count">Since monitoring began</div>
+  </div>
+
+  <!-- Instrument readout strip -->
+  <div class="readout-strip">
+    {summaryReadouts.map(r => (
+      <div class="readout-cell">
+        <div class="readout-key">{r.key}</div>
+        <div class="readout-val">{r.val}</div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Daily cost chart -->
+  <div class="date-range-bar">
+    <span class="dr-label">RANGE</span>
+    <input type="date" id="drFrom" class="dr-input" />
+    <span class="dr-sep">—</span>
+    <input type="date" id="drTo" class="dr-input" />
+    <button id="drReset" class="dr-reset">ALL</button>
+  </div>
+  <section class="chart-section">
+    <div class="section-rule">DAILY COST (USD)</div>
+    <div class="chart-frame">
+      <canvas id="costChart"></canvas>
+      <div class="chart-loading" id="costLoading">LOADING TELEMETRY&hellip;</div>
+      <div class="chart-error" id="costError" hidden>NO TELEMETRY AVAILABLE</div>
+    </div>
+  </section>
+
+  <!-- Daily moisture chart -->
+  <section class="chart-section">
+    <div class="section-rule">MOISTURE (DAILY AVG)</div>
+    <div class="chart-frame">
+      <canvas id="moistureChart"></canvas>
+      <div class="chart-loading" id="moistureLoading">LOADING TELEMETRY&hellip;</div>
+      <div class="chart-error" id="moistureError" hidden>NO TELEMETRY AVAILABLE</div>
+    </div>
+  </section>
+
+  <!-- Light minutes per day chart -->
+  <section class="chart-section">
+    <div class="section-rule">LIGHT (MIN / DAY)</div>
+    <div class="chart-frame" style="height:120px">
+      <canvas id="lightChart"></canvas>
+      <div class="chart-loading" id="lightLoading">LOADING TELEMETRY&hellip;</div>
+      <div class="chart-error" id="lightError" hidden>NO TELEMETRY AVAILABLE</div>
+    </div>
+  </section>
+
+  <!-- Tool call breakdown (client-rendered, reacts to date filter) -->
+  <section id="toolSection" class="chart-section" hidden>
+    <div class="section-rule" id="toolSectionRule">TOOL CALL FREQUENCY</div>
+    <div class="tool-layout">
+      <div class="tool-donut-wrap">
+        <canvas id="toolDonut" width="400" height="400"></canvas>
+      </div>
+      <div id="toolTableContainer"></div>
+    </div>
+  </section>
+
+</Layout>
+
+<!-- Charts via esm.sh — loaded inline so Vite doesn't attempt to bundle it -->
+<script is:inline type="module">
+  import Chart from 'https://esm.sh/chart.js@4.4.9/auto';
+  import 'https://esm.sh/chartjs-adapter-date-fns@3.0.0?deps=chart.js@4.4.9';
+  import ZoomPlugin from 'https://esm.sh/chartjs-plugin-zoom@2.0.1?deps=chart.js@4.4.9';
+  Chart.register(ZoomPlugin);
+
+  const ACCENT_GREEN      = 'rgba(28,120,64,0.75)';
+  const ACCENT_GREEN_FILL  = 'rgba(28,120,64,0.18)';
+  const MOISTURE_BLUE       = 'rgba(30,120,190,0.85)';
+  const MOISTURE_BLUE_FILL  = 'rgba(30,120,190,0.08)';
+  const GRID       = '#DDE8D5';
+  const TICK       = '#6A9070';
+
+  const baseFont = { family: "'Azeret Mono', 'Courier New', monospace", size: 10 };
+
+  Chart.defaults.color = TICK;
+  Chart.defaults.font  = baseFont;
+
+  function hideLoader(id) { const el = document.getElementById(id); if (el) el.hidden = true; }
+  function showError(id)  { const el = document.getElementById(id); if (el) el.hidden = false; }
+
+  /** Safe DOM element builder — no innerHTML on data */
+  function mkEl(tag, attrs, ...children) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs ?? {})) {
+      if (k === 'className') el.className = v;
+      else if (k === 'style') el.style.cssText = v;
+      else el.setAttribute(k, v);
+    }
+    for (const child of children) {
+      if (typeof child === 'string') el.appendChild(document.createTextNode(child));
+      else if (child) el.appendChild(child);
+    }
+    return el;
+  }
+
+  const drFrom  = document.getElementById('drFrom');
+  const drTo    = document.getElementById('drTo');
+  const drReset = document.getElementById('drReset');
+
+  function fmtD(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
+  // Tracks dates currently visible in charts — read by drag-zoom callbacks
+  let currentFiltered = [];
+  // Set to the update() function once it is defined inside the try block.
+  // applyDragRange is defined here (outer scope) but update lives inside try,
+  // so we use an indirection to avoid a ReferenceError.
+  let _updateFn = null;
+  // Prevents re-entrant onZoomComplete when resetZoom() itself fires the callback.
+  let _resetting = false;
+
+  function applyDragRange(chart) {
+    if (_resetting) return;
+    // All chart interactions are deferred via setTimeout because calling any Chart.js
+    // method (resetZoom, update) synchronously inside onZoomComplete re-enters
+    // Chart.js's Proxy observation and causes a call stack overflow.
+    if (chart.scales.x.type === 'time') {
+      const fromDate = new Date(chart.scales.x.min).toISOString().slice(0, 10);
+      const toDate   = new Date(chart.scales.x.max).toISOString().slice(0, 10);
+      if (fromDate >= toDate) {
+        _resetting = true;
+        setTimeout(() => { chart.resetZoom(); _resetting = false; }, 0);
+        return;
+      }
+      drFrom.value = fromDate;
+      drTo.value   = toDate;
+    } else {
+      const minIdx = Math.max(0, Math.round(chart.scales.x.min));
+      const maxIdx = Math.min(currentFiltered.length - 1, Math.round(chart.scales.x.max));
+      if (minIdx >= maxIdx) {
+        _resetting = true;
+        setTimeout(() => { chart.resetZoom(); _resetting = false; }, 0);
+        return;
+      }
+      drFrom.value = currentFiltered[minIdx] ?? '';
+      drTo.value   = currentFiltered[maxIdx] ?? '';
+    }
+    _resetting = true;
+    setTimeout(() => { chart.resetZoom(); _resetting = false; _updateFn?.(); }, 0);
+  }
+
+  // onZoomComplete lives inside the zoom object for chartjs-plugin-zoom v2.0.x
+  const ZOOM_DRAG = {
+    drag: { enabled: true, backgroundColor: 'rgba(28,120,64,0.06)', borderColor: 'rgba(28,120,64,0.4)', borderWidth: 1 },
+    mode: 'x',
+    onZoomComplete({ chart }) {
+      applyDragRange(chart);
+    },
+  };
+  const ZOOM_PLUGIN_OPTS = {
+    zoom: ZOOM_DRAG,
+  };
+
+  const LIGHT_BAND    = 'rgba(200,120,0,0.55)';
+  const LIGHT_BAND_BG = 'rgba(200,120,0,0.08)';
+
+  // CSS token resolution — reads theme values from :root at runtime
+  const cs = getComputedStyle(document.documentElement);
+  const C_SURFACE  = cs.getPropertyValue('--color-surface').trim();   // #FFFFFF
+  const C_BORDER   = cs.getPropertyValue('--color-border').trim();    // #C8D5C0
+  const C_TEXT     = cs.getPropertyValue('--color-text').trim();      // #162018
+  const C_GREEN    = cs.getPropertyValue('--color-green').trim();     // #1C7840
+  const C_MUTED    = cs.getPropertyValue('--color-muted').trim();     // #4A6855
+  const C_DIM      = cs.getPropertyValue('--color-dim').trim();       // #96B09A
+  const C_STRESSED = cs.getPropertyValue('--color-stressed').trim();  // #C87800
+
+  const BAND_H = 6;
+
+  try {
+    const [aiRes, dailyRes] = await Promise.all([
+      fetch('/state/ai_stats.json'),
+      fetch('/state/sensor_stats_daily.json'),
+    ]);
+
+    const aiData    = aiRes.ok    ? await aiRes.json()    : {};
+    const dailyData = dailyRes.ok ? await dailyRes.json() : {};
+
+    const allCostDates = Object.keys(aiData).sort();
+
+    if (allCostDates.length > 0) {
+      drFrom.min = allCostDates[0];  drFrom.max = allCostDates.at(-1);
+      drTo.min   = allCostDates[0];  drTo.max   = allCostDates.at(-1);
+    } else {
+      hideLoader('costLoading'); showError('costError');
+    }
+
+    // Forces all three charts to use the same y-axis width so chart areas align horizontally.
+    // 65px covers the widest label ("$40.000") in Martian Mono 10px with padding.
+    const Y_AXIS_W = 65;
+    const yAfterFit = scale => { scale.width = Y_AXIS_W; };
+
+    // Merge consecutive light on/off intervals separated by ≤ 1 hour into solid blocks.
+    const MERGE_GAP_MS = 60 * 60 * 1000;
+    function buildLightIntervals(sortedEvents) {
+      const raw = [];
+      let onMs = null;
+      for (const ev of sortedEvents) {
+        const ms = new Date(ev.timestamp).getTime();
+        if (ev.event_type === 'turn_on' && onMs === null) {
+          onMs = ms;
+        } else if (ev.event_type.startsWith('turn_off') && onMs !== null) {
+          raw.push({ on: onMs, off: ms }); onMs = null;
+        }
+      }
+      if (onMs !== null) raw.push({ on: onMs, off: null });
+      const merged = [];
+      for (const iv of raw) {
+        const prev = merged.at(-1);
+        if (prev && prev.off !== null && iv.on - prev.off <= MERGE_GAP_MS) {
+          prev.off = iv.off;
+        } else {
+          merged.push({ ...iv });
+        }
+      }
+      return merged;
+    }
+
+    // ── Cost chart ────────────────────────────────────────────────────────────
+    let costChart = null;
+    let costChartMode = null; // 'time' | 'category' — tracks current scale type
+
+    function buildCostChart(from, to, xMin, xMax) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      const values   = filtered.map(d => aiData[d].estimated_cost_usd ?? 0);
+      const isHourly = filtered.length > 0 && filtered.length <= 7 && xMin != null;
+      const newMode  = isHourly ? 'time' : 'category';
+
+      // Destroy and recreate when switching modes (time ↔ category)
+      if (costChart && costChartMode !== newMode) { costChart.destroy(); costChart = null; }
+
+      if (costChart && costChartMode === 'time') {
+        costChart.data.datasets[0].data = filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] }));
+        costChart.options.scales.x.min = xMin;
+        costChart.options.scales.x.max = xMax;
+        costChart.update();
+      } else if (costChart && costChartMode === 'category') {
+        costChart.data.labels = filtered.map(d => fmtD(d));
+        costChart.data.datasets[0].data = values;
+        costChart.update();
+      } else {
+        hideLoader('costLoading');
+        const commonOpts = {
+          responsive: true, maintainAspectRatio: false,
+          onClick(evt, elements) {
+            if (elements.length > 0) {
+              const date = currentFiltered[elements[0].index];
+              if (date) window.location.href = `/day/${date}/`;
+            }
+          },
+          onHover(evt, elements) {
+            if (evt.native?.target) evt.native.target.style.cursor = elements.length ? 'pointer' : 'crosshair';
+          },
+          plugins: {
+            legend: { display: false },
+            zoom: ZOOM_PLUGIN_OPTS,
+            tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_GREEN, bodyColor: C_TEXT, callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(4)}` } },
+          },
+        };
+        if (isHourly) {
+          // Time scale: bars aligned with moisture/light charts
+          costChart = new Chart(document.getElementById('costChart'), {
+            type: 'bar',
+            data: { datasets: [{ data: filtered.map((d, i) => ({ x: new Date(d + 'T12:00:00Z').getTime(), y: values[i] })), backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0, parsing: false }] },
+            options: { ...commonOpts, scales: {
+              x: { type: 'time', min: xMin, max: xMax, time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 8, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: C_BORDER }, beginAtZero: true },
+            }},
+          });
+        } else {
+          // Category scale: daily labels
+          costChart = new Chart(document.getElementById('costChart'), {
+            type: 'bar',
+            data: { labels: filtered.map(d => fmtD(d)), datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }] },
+            options: { ...commonOpts, scales: {
+              x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => `$${Number(v).toFixed(3)}` }, border: { color: C_BORDER }, beginAtZero: true },
+            }},
+          });
+        }
+        costChartMode = newMode;
+      }
+    }
+
+    // ── Light band plugin (reads dailyData via closure, must be inside try) ────
+    const lightBandPlugin = {
+      id: 'lightBand',
+      afterDraw(chart) {
+        const filtered = chart._lightFiltered;
+        if (!filtered || !filtered.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const { left, right, top } = chartArea;
+        const xScale = scales.x;
+        ctx.save();
+        ctx.fillStyle = LIGHT_BAND_BG;
+        ctx.fillRect(left, top, right - left, BAND_H);
+        ctx.fillStyle = LIGHT_BAND;
+        if (xScale.type === 'time') {
+          // Hourly view: state-tracking to merge redundant events into solid on-blocks
+          const lightEvents = chart._lightEvents;
+          if (lightEvents && lightEvents.length > 0) {
+            const sorted = [...lightEvents].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+            for (const { on, off } of buildLightIntervals(sorted)) {
+              const x1 = Math.max(left, xScale.getPixelForValue(on));
+              const x2 = Math.min(right, xScale.getPixelForValue(off ?? xScale.max));
+              if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
+            }
+          }
+          // No fallback: band stays empty until _lightEvents is set and update() is called
+        } else {
+          // Category scale: use actual pixel positions so band tracks zoom
+          const halfSlot = filtered.length > 1
+            ? Math.abs(xScale.getPixelForValue(1) - xScale.getPixelForValue(0)) / 2
+            : (right - left) / 2;
+          filtered.forEach((d, i) => {
+            if ((dailyData[d]?.light?.minutes_on ?? 0) <= 0) return;
+            const px = xScale.getPixelForValue(i);
+            const x1 = Math.max(left, px - halfSlot);
+            const x2 = Math.min(right, px + halfSlot);
+            if (x2 > x1) ctx.fillRect(x1, top, x2 - x1, BAND_H);
+          });
+        }
+        ctx.restore();
+      },
+    };
+
+    // ── Moisture chart ────────────────────────────────────────────────────────
+    // ≤7 days: hourly readings on a time scale (fetches per-day JSON files)
+    // >7 days: daily averages on a category scale
+    let moistureChart = null;
+
+    async function buildMoistureChart(from, to, dayFiles = null, xMin = null, xMax = null) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      if (filtered.length === 0) {
+        hideLoader('moistureLoading'); showError('moistureError');
+        if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
+        return;
+      }
+      document.getElementById('moistureError').hidden = true;
+      if (moistureChart) { moistureChart.destroy(); moistureChart = null; }
+
+      if (filtered.length <= 7) {
+        // ── Hourly view ──────────────────────────────────────────────────────
+        // dayFiles pre-fetched by update(); fallback to fetching here if called directly
+        const files = dayFiles ?? await Promise.all(
+          filtered.map(d => fetch(`/state/day/${d}.json`).then(r => r.ok ? r.json() : null).catch(() => null))
+        );
+        hideLoader('moistureLoading');
+
+        const readings = files
+          .flatMap(f => (f?.moisture_readings ?? []).map(r => ({ x: new Date(r.timestamp).getTime(), y: r.value })))
+          .sort((a, b) => a.x - b.x);
+        if (readings.length === 0) { showError('moistureError'); return; }
+
+        const yVals  = readings.map(r => r.y);
+        const yMin   = Math.min(...yVals), yMax = Math.max(...yVals);
+        const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+        const fixedY = yMin - spread * 0.15;
+
+        // Watering events from per-day files, positioned at actual timestamps
+        const waterPts = files
+          .flatMap(f => (f?.water_events ?? []).map(e => ({ x: new Date(e.timestamp).getTime(), y: fixedY })));
+
+        moistureChart = new Chart(document.getElementById('moistureChart'), {
+          type: 'line',
+          plugins: [lightBandPlugin],
+          data: {
+            datasets: [
+              { data: readings, borderColor: MOISTURE_BLUE, backgroundColor: MOISTURE_BLUE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2, parsing: false },
+              { data: waterPts, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1, parsing: false },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              zoom: ZOOM_PLUGIN_OPTS,
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+            },
+            scales: {
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER } },
+            },
+          },
+        });
+        moistureChart._lightFiltered = filtered;
+        moistureChart._lightEvents = files.flatMap(f => f?.light_events ?? []);
+        moistureChart.update(); // re-render so lightBandPlugin sees _lightEvents
+
+      } else {
+        // ── Daily avg view ───────────────────────────────────────────────────
+        hideLoader('moistureLoading');
+        const moistureVals = filtered.map(d => dailyData[d]?.moisture?.avg ?? null);
+        const validVals = moistureVals.filter(v => v != null);
+        const yMin   = validVals.length ? Math.min(...validVals) : 0;
+        const yMax   = validVals.length ? Math.max(...validVals) : 0;
+        const spread = Math.max(yMax - yMin, Math.abs(yMin) * 0.02, 10);
+        const fixedY = yMin - spread * 0.15;
+        const waterVals = filtered.map(d => (dailyData[d]?.water?.events?.length > 0 ? fixedY : null));
+
+        moistureChart = new Chart(document.getElementById('moistureChart'), {
+          type: 'line',
+          plugins: [lightBandPlugin],
+          data: {
+            labels: filtered.map(d => fmtD(d)),
+            datasets: [
+              { data: moistureVals, borderColor: MOISTURE_BLUE, backgroundColor: MOISTURE_BLUE_FILL, showLine: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 3, fill: true, borderWidth: 1.5, order: 2 },
+              { data: waterVals, type: 'scatter', pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, backgroundColor: 'rgba(160,208,220,0.9)', borderColor: 'transparent', showLine: false, order: 1 },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              zoom: ZOOM_PLUGIN_OPTS,
+              tooltip: { filter: item => item.datasetIndex === 0, backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: MOISTURE_BLUE, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'}` } },
+            },
+            scales: {
+              x: { grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 14, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, title: { display: true, text: 'higher = dryer', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER } },
+            },
+          },
+        });
+        moistureChart._lightFiltered = filtered;
+      }
+    }
+
+    // ── Light chart ──────────────────────────────────────────────────────────
+    // ≤7 days: hourly step chart from light_events (time scale)
+    // >7 days: daily min/day bar chart (category scale)
+    let lightChart = null;
+
+    async function buildLightChart(from, to, dayFiles = null, xMin = null, xMax = null) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      document.getElementById('lightError').hidden = true;
+
+      if (filtered.length <= 7 && dayFiles) {
+        // ── Hourly view ──────────────────────────────────────────────────────
+        const lightEvents = dayFiles
+          .flatMap(f => f?.light_events ?? [])
+          .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+        if (lightChart) { lightChart.destroy(); lightChart = null; }
+
+        if (lightEvents.length === 0) {
+          hideLoader('lightLoading'); showError('lightError'); return;
+        }
+
+        // Merge intervals with gaps ≤ MERGE_GAP_MS so each session is a solid block.
+        const startMs = new Date(filtered[0] + 'T00:00:00Z').getTime();
+        const endMs   = new Date(filtered.at(-1) + 'T23:59:59Z').getTime();
+        const intervals = buildLightIntervals(lightEvents);
+        const stepData = [{ x: startMs, y: 0 }];
+        for (const { on, off } of intervals) {
+          stepData.push({ x: on, y: 1 });
+          if (off !== null) stepData.push({ x: off, y: 0 });
+        }
+        stepData.push({ x: endMs, y: 0 });
+
+        hideLoader('lightLoading');
+        lightChart = new Chart(document.getElementById('lightChart'), {
+          type: 'line',
+          data: {
+            datasets: [{ data: stepData, borderColor: ACCENT_GREEN, backgroundColor: ACCENT_GREEN_FILL, fill: true, stepped: 'before', pointRadius: 0, borderWidth: 1.5, parsing: false }],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              zoom: ZOOM_PLUGIN_OPTS,
+              tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_STRESSED, bodyColor: C_TEXT,
+                callbacks: { label: ctx => ctx.parsed.y === 1 ? ' LIGHT ON' : ' LIGHT OFF' } },
+            },
+            scales: {
+              x: { type: 'time', ...(xMin != null && { min: xMin, max: xMax }), time: { unit: 'day', tooltipFormat: 'dd MMM HH:mm', displayFormats: { day: 'dd MMM' } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, maxTicksLimit: 12, maxRotation: 0 }, border: { color: C_BORDER } },
+              y: { afterFit: yAfterFit, min: -0.1, max: 1.3, grid: { color: GRID }, ticks: { color: TICK, font: baseFont, callback: v => v === 1 ? 'ON' : v === 0 ? 'OFF' : '' }, border: { color: C_BORDER } },
+            },
+          },
+        });
+
+      } else {
+        // ── Daily view ───────────────────────────────────────────────────────
+        const values = filtered.map(d => dailyData[d]?.light?.minutes_on ?? 0);
+        const hasAny = values.some(v => v > 0);
+        if (!hasAny) {
+          hideLoader('lightLoading'); showError('lightError');
+          if (lightChart) { lightChart.destroy(); lightChart = null; }
+          return;
+        }
+        // Destroy if switching from hourly (line) back to daily (bar)
+        if (lightChart && lightChart.config.type !== 'bar') {
+          lightChart.destroy(); lightChart = null;
+        }
+        if (lightChart) {
+          lightChart.data.labels = filtered.map(d => fmtD(d));
+          lightChart.data.datasets[0].data = values;
+          lightChart.update();
+          hideLoader('lightLoading');
+        } else {
+          hideLoader('lightLoading');
+          lightChart = new Chart(document.getElementById('lightChart'), {
+            type: 'bar',
+            data: {
+              labels: filtered.map(d => fmtD(d)),
+              datasets: [{ data: values, backgroundColor: ACCENT_GREEN_FILL, borderColor: ACCENT_GREEN, borderWidth: 1, borderRadius: 0 }],
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                zoom: ZOOM_PLUGIN_OPTS,
+                tooltip: { backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1, titleColor: C_STRESSED, bodyColor: C_TEXT, callbacks: { label: ctx => ` ${ctx.parsed.y}min` } },
+              },
+              scales: {
+                x: { grid: { color: GRID }, ticks: { color: TICK, maxTicksLimit: 14, font: baseFont }, border: { color: C_BORDER } },
+                y: { afterFit: yAfterFit, title: { display: true, text: 'minutes', color: TICK, font: { ...baseFont, size: 9 } }, grid: { color: GRID }, ticks: { color: TICK, font: baseFont }, border: { color: C_BORDER }, beginAtZero: true },
+              },
+            },
+          });
+        }
+      }
+    }
+
+    // ── Tool table + doughnut ─────────────────────────────────────────────────
+    let donutChart = null;
+
+    function buildToolTable(from, to) {
+      const filtered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+      const toolCounts = {};
+      for (const d of filtered)
+        for (const [tool, count] of Object.entries(aiData[d].tool_calls ?? {}))
+          toolCounts[tool] = (toolCounts[tool] ?? 0) + count;
+
+      // ALL tools sorted by count (no cap)
+      const tools      = Object.entries(toolCounts).sort(([, a], [, b]) => b - a);
+      const totalCalls = tools.reduce((s, [, c]) => s + c, 0);
+      const maxCalls   = tools[0]?.[1] ?? 1;
+
+      const section   = document.getElementById('toolSection');
+      const rule      = document.getElementById('toolSectionRule');
+      const container = document.getElementById('toolTableContainer');
+      if (tools.length === 0) { section.hidden = true; return; }
+
+      rule.textContent = `TOOL CALL FREQUENCY \u2014 ${tools.length} TOOLS`;
+      section.hidden = false;
+
+      // ── Doughnut chart ──────────────────────────────────────────────────────
+      // Add tools until 20 slices or cumulative share > 80%
+      const slices = [];
+      let cumShare = 0;
+      for (const [tool, count] of tools) {
+        slices.push({ label: tool.replace('mcp__plant-tools__', ''), count });
+        cumShare += count / totalCalls;
+        if (slices.length >= 20 || cumShare >= 0.80) break;
+      }
+      const otherCount = totalCalls - slices.reduce((s, t) => s + t.count, 0);
+      if (otherCount > 0) slices.push({ label: 'Other', count: otherCount });
+
+      // Alternating palette: even slices are brighter, odd are dimmer — gives clear contrast between neighbours
+      const palette = slices.map((s, i) => {
+        if (s.label === 'Other') return '#B8CDB8';
+        const bright = i % 2 === 0;
+        const l   = Math.min(82, Math.max(30, (bright ? 48 : 62) + i * 0.8));
+        const sat = Math.max(28, (bright ? 65 : 42) - i * 0.6);
+        const hue = 145 + (i % 6) * 8; // slight hue shift 145–185° botanical green feel
+        return `hsl(${hue},${sat}%,${l}%)`;
+      });
+
+      const donutCentrePlugin = {
+        id: 'donutCentre',
+        afterDraw(chart) {
+          const { ctx, chartArea, data } = chart;
+          const cx = (chartArea.left + chartArea.right) / 2;
+          const cy = (chartArea.top + chartArea.bottom) / 2;
+          ctx.save();
+
+          // Centre label
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.font = `700 14px 'Azeret Mono', monospace`;
+          ctx.fillStyle = C_GREEN;
+          ctx.fillText(totalCalls.toLocaleString(), cx, cy - 8);
+          ctx.font = `400 8px 'Azeret Mono', monospace`;
+          ctx.fillStyle = C_DIM;
+          ctx.fillText('CALLS', cx, cy + 8);
+
+          // Arc labels for slices large enough to label (>= 3.5% share)
+          const meta = chart.getDatasetMeta(0);
+          const dsData = data.datasets[0].data;
+          const tot = dsData.reduce((s, v) => s + v, 0);
+          for (let j = 0; j < meta.data.length; j++) {
+            const share = dsData[j] / tot;
+            if (share < 0.035) continue;
+            const arc = meta.data[j];
+            const midAngle = arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
+            const r = arc.outerRadius + 14;
+            const lx = cx + Math.cos(midAngle) * r;
+            const ly = cy + Math.sin(midAngle) * r;
+            const label = data.labels[j];
+            const maxCh = 12;
+            ctx.font = `400 8px 'Azeret Mono', monospace`;
+            ctx.fillStyle = C_MUTED;
+            ctx.textAlign = lx >= cx ? 'left' : 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label.length > maxCh ? label.slice(0, maxCh) + '…' : label, lx, ly);
+          }
+          ctx.restore();
+        },
+      };
+
+      if (donutChart) { donutChart.destroy(); donutChart = null; }
+      donutChart = new Chart(document.getElementById('toolDonut'), {
+        type: 'doughnut',
+        plugins: [donutCentrePlugin],
+        data: {
+          labels: slices.map(s => s.label),
+          datasets: [{ data: slices.map(s => s.count), backgroundColor: palette, borderColor: C_SURFACE, borderWidth: 2, hoverOffset: 4 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          cutout: '52%',
+          layout: { padding: 32 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: C_SURFACE, borderColor: C_BORDER, borderWidth: 1,
+              titleColor: C_GREEN, bodyColor: C_TEXT,
+              callbacks: { label: ctx => ` ${ctx.parsed.toLocaleString()} (${((ctx.parsed / totalCalls) * 100).toFixed(1)}%)` },
+            },
+          },
+        },
+      });
+
+      // ── Table (all tools, no cap) ───────────────────────────────────────────
+      const tbody = document.createElement('tbody');
+      for (const [i, [tool, count]] of tools.entries()) {
+        const barWrap = mkEl('div', { className: 'tool-bar-wrap' },
+          mkEl('span', { className: 'tool-name' }, tool.replace('mcp__plant-tools__', '')),
+          mkEl('span', { className: 'tool-bar', style: `width:${Math.round((count / maxCalls) * 120)}px` })
+        );
+        tbody.appendChild(mkEl('tr', { className: 'tr' },
+          mkEl('td', { className: 'td td-rank' }, String(i + 1).padStart(2, '0')),
+          mkEl('td', { className: 'td' }, barWrap),
+          mkEl('td', { className: 'td td-right td-val' }, count.toLocaleString()),
+          mkEl('td', { className: 'td td-right td-dim' }, `${((count / totalCalls) * 100).toFixed(1)}%`)
+        ));
+      }
+      const thead = mkEl('thead', {},
+        mkEl('tr', {},
+          mkEl('th', { className: 'th' }, 'RANK'),
+          mkEl('th', { className: 'th' }, 'TOOL'),
+          mkEl('th', { className: 'th th-right', style: 'min-width:4.5rem' }, 'CALLS'),
+          mkEl('th', { className: 'th th-right', style: 'min-width:4rem' }, 'SHARE')
+        )
+      );
+      container.replaceChildren(mkEl('div', { className: 'tool-table-wrap' }, mkEl('table', { className: 'tool-table' }, thead, tbody)));
+    }
+
+    // ── Unified update ────────────────────────────────────────────────────────
+    async function update() {
+      const from = drFrom.value, to = drTo.value;
+      // Set currentFiltered here so all charts (including light) see a consistent
+      // date slice for drag-zoom index mapping, regardless of call order.
+      currentFiltered = allCostDates.filter(d => (!from || d >= from) && (!to || d <= to));
+
+      // Fetch per-day JSON files once for hourly mode; shared by moisture + light.
+      // xMin/xMax align all three charts to the same time window when ≤7 days.
+      let dayFiles = null, xMin = null, xMax = null;
+      if (currentFiltered.length > 0 && currentFiltered.length <= 7) {
+        dayFiles = await Promise.all(
+          currentFiltered.map(d => fetch(`/state/day/${d}.json`).then(r => r.ok ? r.json() : null).catch(() => null))
+        );
+        xMin = new Date(currentFiltered[0] + 'T00:00:00Z').getTime();
+        xMax = new Date(currentFiltered.at(-1) + 'T23:59:59Z').getTime();
+      }
+
+      buildCostChart(from, to, xMin, xMax);
+      await buildMoistureChart(from, to, dayFiles, xMin, xMax);
+      await buildLightChart(from, to, dayFiles, xMin, xMax);
+      buildToolTable(from, to);
+    }
+    _updateFn = update;  // wire up applyDragRange's deferred reference
+    drFrom.addEventListener('change', update);
+    drTo.addEventListener('change',   update);
+    drReset.addEventListener('click', () => { drFrom.value = ''; drTo.value = ''; update(); });
+    update();
+
+  } catch (err) {
+    console.error('[stats] load failed:', err);
+    hideLoader('costLoading');     showError('costError');
+    hideLoader('moistureLoading'); showError('moistureError');
+    hideLoader('lightLoading');    showError('lightError');
+  }
+</script>
+
+<style>
+  .page-header {
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+    animation: fade-up 0.35s ease both;
+  }
+  .header-meta {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
+    margin-bottom: 0.4rem;
+  }
+  .page-title {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 2rem;
+    color: var(--color-text);
+    margin: 0 0 0.4rem;
+    line-height: 1;
+  }
+  .header-count {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* Readout strip */
+  .readout-strip {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1px;
+    background: var(--color-border);
+    border: 1px solid var(--color-border);
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.35s ease both;
+    animation-delay: 0.06s;
+  }
+  .readout-cell {
+    background: var(--color-surface);
+    padding: 1rem 0.875rem;
+  }
+  .readout-key {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
+    margin-bottom: 0.5rem;
+  }
+  .readout-val {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 1.15rem;
+    color: var(--color-green);
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  /* Date range bar */
+  .date-range-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .dr-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-dim);
+  }
+  .dr-input {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.25rem 0.4rem;
+    outline: none;
+    cursor: pointer;
+    color-scheme: light;
+  }
+  .dr-input:focus { border-color: var(--color-green); }
+  .dr-sep {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-dim);
+  }
+  .dr-reset {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-dim);
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .dr-reset:hover { color: var(--color-green); border-color: var(--color-green); }
+
+  /* Chart sections */
+  .chart-section {
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.35s ease both;
+    animation-delay: 0.1s;
+  }
+  .section-rule {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.75rem;
+  }
+  .chart-frame {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    height: 240px;
+    position: relative;
+  }
+  .chart-frame canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .chart-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  .chart-error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Tool layout */
+  .tool-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .tool-donut-wrap {
+    flex-shrink: 0;
+    width: 400px;
+    height: 400px;
+    position: relative;
+  }
+  @media (max-width: 700px) {
+    .tool-layout { flex-direction: column; }
+    .tool-donut-wrap { width: 100%; height: 320px; }
+  }
+
+  /* Tool table */
+  .tool-table-wrap { overflow-x: auto; }
+  .tool-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+  }
+  .th {
+    text-align: left;
+    padding: 0 0 0.4rem;
+    color: var(--color-dim);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .th-right { text-align: right; padding-left: 0.75rem; }
+  .tr { border-bottom: 1px solid var(--color-surface-2); }
+  .tr:hover { background: var(--color-surface-alt); }
+  .td { padding: 0.35rem 0; color: var(--color-muted); vertical-align: middle; }
+  .td-rank { color: var(--color-dim); width: 2.5rem; }
+  .td-right { text-align: right; padding-left: 0.75rem; }
+  .td-val { color: var(--color-green); min-width: 4rem; }
+  .td-dim { color: var(--color-dim); min-width: 3.5rem; }
+
+  .tool-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .tool-name {
+    min-width: 140px;
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-prose);
+  }
+  .tool-bar {
+    display: inline-block;
+    height: 4px;
+    background: var(--color-surface-2);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .tool-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--color-green);
+    opacity: 0.45;
+  }
+
+  @media (max-width: 900px) {
+    .readout-strip { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .readout-strip { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>

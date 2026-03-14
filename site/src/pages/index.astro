@@ -1,0 +1,504 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+import currentState from '../data/state/current_state.json';
+import dayIndex from '../data/state/day_index.json';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags,
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
+
+const index = dayIndex as Record<string, {
+  date: string;
+  status: string;
+  photo_url: string | null;
+  has_watering: boolean;
+}>;
+
+const cs = currentState as Record<string, unknown>;
+
+const dates = Object.keys(index).sort().reverse();
+
+function fmtShortDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// Data currency: latest agent-run date (may differ from latest photo date).
+// Falls back to dates[0] (most recent date in day_index) for pre-deployment current_state.json
+// that lacks latest_data_date; falls back to null when day_index is empty.
+const latestDataDate = (cs.latest_data_date ?? dates[0] ?? null) as string | null;
+// Fall back to day_index entry for the transitional window before first post-deploy GHA run
+const latestDataHasWatering = (cs.latest_data_has_watering ?? index[dates[0]]?.has_watering ?? false) as boolean;
+
+const status = (cs.plant_status ?? index[dates[0]]?.status ?? 'unknown') as string;
+
+// Photo currency: most recent lit photo, regardless of age
+const latestPhoto = (cs.latest_photo_url ?? null) as string | null;
+const latestPhotoDate = (cs.latest_photo_date ?? null) as string | null;
+
+const lastRun = currentState.last_run
+  ? new Date(currentState.last_run as string).toLocaleString('en-GB', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
+    })
+  : null;
+
+const lastAgentMsg = cs.last_agent_message as { timestamp?: string; content?: string } | undefined;
+const msgTime = lastAgentMsg?.timestamp
+  ? new Date(lastAgentMsg.timestamp).toLocaleString('en-GB', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'
+    })
+  : null;
+
+const msgHtml = lastAgentMsg?.content
+  ? renderMd(lastAgentMsg.content)
+  : null;
+
+const statusDot: Record<string, string> = {
+  healthy:  '#1C7840',
+  stressed: '#C87800',
+  critical: '#C42020',
+  unknown:  '#96B09A',
+};
+const statusLabel: Record<string, string> = {
+  healthy:  'HEALTHY',
+  stressed: 'STRESSED',
+  critical: 'CRITICAL',
+  unknown:  'UNKNOWN',
+};
+---
+
+<Layout title="Dashboard">
+
+  <!-- SPECIMEN HEADER -->
+  <div class="specimen-header">
+    <div class="specimen-meta">
+      <span class="specimen-label">STATUS MONITOR</span>
+      {lastRun && <span class="specimen-time">LAST SYNC: {lastRun} UTC</span>}
+    </div>
+    <div class="status-row">
+      <span class="status-beacon" style={`background:${statusDot[status] ?? statusDot.unknown}`}></span>
+      <h1 class="status-title">{statusLabel[status] ?? 'UNKNOWN'}</h1>
+      {latestDataDate && (
+        <a href={`/day/${latestDataDate}`} class="detail-link">
+          View latest record &rarr;
+        </a>
+      )}
+    </div>
+  </div>
+
+  <!-- INSTRUMENT PANEL + PHOTO -->
+  <div class="panel-grid">
+
+    <!-- Left: Readouts + Transmission -->
+    <div class="instrument-panel">
+
+      <div class="readout-block">
+        <div class="readout-rule">FIELD READINGS</div>
+        <div class="readout-row">
+          <span class="readout-key">SPECIMEN STATUS</span>
+          <span class="readout-val" style={`color:${statusDot[status] ?? statusDot.unknown}`}>
+            {statusLabel[status] ?? 'UNKNOWN'}
+          </span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">LATEST DATE</span>
+          <span class="readout-val">{latestDataDate ?? '—'}</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">WATERED TODAY</span>
+          <span class="readout-val">{latestDataHasWatering ? 'YES' : 'NO'}</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">DAYS ON RECORD</span>
+          <span class="readout-val">{dates.length}</span>
+        </div>
+      </div>
+
+      {lastAgentMsg && msgHtml && (
+        <div class="transmission">
+          <div class="transmission-header">
+            <span class="transmission-label">AGENT TRANSMISSION</span>
+            {msgTime && <span class="transmission-time">{msgTime} UTC</span>}
+          </div>
+          <div class="transmission-body" set:html={msgHtml} />
+        </div>
+      )}
+
+      <div class="panel-links">
+        <a href="/plant" class="panel-link">All field records &rarr;</a>
+        <a href="/conversation" class="panel-link">Agent conversation &rarr;</a>
+        <a href="/stats" class="panel-link">Usage statistics &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Right: Latest photo -->
+    <div class="photo-panel">
+      {latestPhoto ? (
+        <div class="photo-frame">
+          <img
+            src={latestPhoto}
+            alt={`Plant specimen ${latestPhotoDate ?? latestDataDate}`}
+            class="specimen-photo"
+            loading="eager"
+          />
+          <div class="photo-caption">
+            <span>SPECIMEN PHOTO</span>
+            <span>{latestPhotoDate ?? latestDataDate}</span>
+          </div>
+        </div>
+      ) : (
+        <div class="photo-placeholder">
+          <div class="placeholder-inner">
+            <div class="placeholder-text">NO PHOTO</div>
+            <div class="placeholder-sub">Awaiting capture</div>
+          </div>
+        </div>
+      )}
+    </div>
+
+  </div>
+
+  <!-- RECENT FIELD RECORDS -->
+  {dates.length > 0 && (
+    <div class="recent-section">
+      <div class="readout-rule">RECENT FIELD RECORDS &mdash; {Math.min(dates.length, 14)} DAYS</div>
+      <div class="recent-grid">
+        {dates.slice(0, 14).map(date => {
+          const entry = index[date];
+          const ds = (entry?.status ?? 'unknown') as string;
+          const thumb = entry?.photo_url ?? null;
+          return (
+            <a href={`/day/${date}`} class="day-cell">
+              <div class="day-thumb">
+                {thumb ? (
+                  <img
+                    src={thumb}
+                    alt={date}
+                    class="thumb-img"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div class="thumb-empty">
+                    <span class="thumb-no-photo">UNLIT</span>
+                  </div>
+                )}
+                <span
+                  class="thumb-dot"
+                  style={`background:${statusDot[ds] ?? statusDot.unknown}`}
+                ></span>
+              </div>
+              <div class="day-label">{fmtShortDate(date)}</div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  )}
+
+</Layout>
+
+<style>
+  .specimen-header {
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.4s ease both;
+  }
+  .specimen-meta {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  .specimen-label,
+  .specimen-time {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
+    text-transform: uppercase;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .status-beacon {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: pulse-status 2.5s ease-in-out infinite;
+  }
+  .status-title {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 2.5rem;
+    color: var(--color-text);
+    margin: 0;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .detail-link {
+    margin-left: auto;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-green);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .detail-link:hover { color: #155E32; } /* one-off hover shade, not tokenized */
+
+  .panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 3rem;
+    margin-bottom: 3rem;
+    align-items: start;
+    animation: fade-up 0.4s ease both;
+    animation-delay: 0.08s;
+  }
+  .instrument-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .readout-rule {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+  .readout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--color-surface-2);
+    padding: 0.55rem 0;
+  }
+  .readout-key {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-muted);
+  }
+  .readout-val {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--color-green);
+    letter-spacing: 0.03em;
+  }
+
+  .transmission {
+    border: 1px solid var(--color-border);
+    border-left: 2px solid var(--color-green);
+    background: var(--color-surface-alt);
+  }
+  .transmission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .transmission-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
+  }
+  .transmission-time {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.03em;
+  }
+  .transmission-body {
+    padding: 0.875rem;
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--color-text-prose);
+    line-height: 1.7;
+  }
+  .transmission-body :global(h1),
+  .transmission-body :global(h2),
+  .transmission-body :global(h3) {
+    font-family: 'Azeret Mono', monospace;
+    font-style: normal;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
+    margin: 0.75rem 0 0.4rem;
+  }
+  .transmission-body :global(strong) {
+    font-style: normal;
+    color: var(--color-text);
+    font-weight: 600;
+  }
+  .transmission-body :global(p) { margin: 0 0 0.5rem; }
+  .transmission-body :global(ul),
+  .transmission-body :global(ol) {
+    margin: 0.25rem 0 0.5rem 1rem;
+    padding: 0;
+  }
+  .transmission-body :global(li) { margin-bottom: 0.2rem; }
+
+  .panel-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .panel-link {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--color-surface-2);
+  }
+  .panel-link:hover { color: var(--color-green); }
+
+  .photo-frame {
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+  }
+  .specimen-photo {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    filter: contrast(1.04) saturate(0.98);
+  }
+  .photo-caption {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0.6rem;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .photo-placeholder {
+    border: 1px solid var(--color-border);
+    aspect-ratio: 4 / 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-2);
+  }
+  .placeholder-text {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .placeholder-sub {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 0.4rem;
+    text-align: center;
+  }
+
+  .recent-section {
+    border-top: 1px solid var(--color-border);
+    padding-top: 1.5rem;
+    animation: fade-up 0.4s ease both;
+    animation-delay: 0.16s;
+  }
+  .recent-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .day-cell {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .day-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .day-cell:hover .day-thumb { border-color: var(--color-border-bright); }
+  .thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .thumb-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .thumb-no-photo {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .thumb-dot {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+  .day-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--color-dim);
+    letter-spacing: 0.03em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .day-cell:hover .day-label { color: var(--color-green); }
+
+  @keyframes pulse-status {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+  }
+
+  @media (max-width: 900px) {
+    .panel-grid { grid-template-columns: 1fr; }
+    .recent-grid { grid-template-columns: repeat(7, 1fr); }
+  }
+</style>

@@ -1,0 +1,235 @@
+---
+import Layout from '../layouts/Layout.astro';
+import dayIndex from '../data/state/day_index.json';
+
+const days = (Object.values(dayIndex) as Array<{
+  date: string;
+  status: string;
+  photo_url: string | null;
+  has_watering: boolean;
+}>).sort((a, b) => b.date.localeCompare(a.date));
+
+function fmtShortDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+const statusBorderColor: Record<string, string> = {
+  healthy:  '#1C7840',
+  stressed: '#C87800',
+  critical: '#C42020',
+  unknown:  '#C8D5C0',
+};
+---
+
+<Layout title="The Plant">
+
+  <div class="page-header">
+    <div class="header-meta">FIELD RECORDS</div>
+    <h1 class="page-title">The Plant</h1>
+    <div class="header-count">{days.length} days on record</div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    {[
+      { label: 'Healthy',  color: '#6BAA5E' },
+      { label: 'Stressed', color: '#D4821E' },
+      { label: 'Critical', color: '#E04848' },
+    ].map(s => (
+      <span class="legend-item">
+        <span class="legend-swatch" style={`background:${s.color}`}></span>
+        <span class="legend-label">{s.label}</span>
+      </span>
+    ))}
+    <span class="legend-item">
+      <span class="legend-swatch" style="background:#4A7A8A;font-size:0.5rem;display:flex;align-items:center;justify-content:center;color:#A0D0DC">W</span>
+      <span class="legend-label">Watered</span>
+    </span>
+  </div>
+
+  <!-- Contact sheet grid -->
+  <div class="contact-sheet">
+    {days.map(day => {
+      const bc = statusBorderColor[day.status] ?? statusBorderColor.unknown;
+      const photo = day.photo_url ?? null;
+      return (
+        <a href={`/day/${day.date}`} class="sheet-cell" style={`border-left-color:${bc}`}>
+          <div class="cell-thumb">
+            {photo ? (
+              <img
+                src={photo}
+                alt={`Specimen ${day.date}`}
+                class="cell-img"
+                loading="lazy"
+              />
+            ) : (
+              <div class="cell-empty">
+                <span class="cell-no-photo">UNLIT</span>
+              </div>
+            )}
+            {day.has_watering && (
+              <span class="water-mark">W</span>
+            )}
+          </div>
+          <div class="cell-footer">
+            <span class="cell-date">{fmtShortDate(day.date)}</span>
+            <span class="cell-year">{day.date.slice(0, 4)}</span>
+          </div>
+        </a>
+      );
+    })}
+  </div>
+
+</Layout>
+
+<style>
+  .page-header {
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
+    animation: fade-up 0.35s ease both;
+  }
+  .header-meta {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
+    margin-bottom: 0.4rem;
+  }
+  .page-title {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 2rem;
+    color: var(--color-text);
+    margin: 0 0 0.4rem;
+    line-height: 1;
+  }
+  .header-count {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    animation: fade-up 0.35s ease both;
+    animation-delay: 0.06s;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .legend-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+    flex-shrink: 0;
+  }
+  .legend-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .contact-sheet {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3px;
+    animation: fade-up 0.35s ease both;
+    animation-delay: 0.12s;
+  }
+
+  .sheet-cell {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    background: var(--color-bg);
+    transition: background 0.15s;
+  }
+  .sheet-cell:hover { background: var(--color-surface-2); }
+
+  .cell-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: var(--color-surface-2);
+  }
+  .cell-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: contrast(1.02) saturate(1.0);
+    transition: transform 0.3s ease;
+  }
+  .sheet-cell:hover .cell-img { transform: scale(1.04); }
+
+  .cell-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-2);
+  }
+  .cell-no-photo {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--color-dim);
+  }
+
+  .water-mark {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--color-water);
+    background: rgba(220,235,248,0.9);
+    padding: 1px 3px;
+    letter-spacing: 0.04em;
+    border: 1px solid #90C0E0;
+  }
+
+  .cell-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 4px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+  .cell-date {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--color-dim);
+    letter-spacing: 0.03em;
+  }
+  .sheet-cell:hover .cell-date { color: var(--color-green); }
+  .cell-year {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--color-dim);
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 1100px) {
+    .contact-sheet { grid-template-columns: repeat(5, 1fr); }
+  }
+  @media (max-width: 800px) {
+    .contact-sheet { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .contact-sheet { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>

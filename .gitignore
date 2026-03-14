@@ -165,8 +165,7 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
+# mkdocs documentation (removed - /site is now the Astro project)
 
 # mypy
 .mypy_cache/
@@ -237,3 +236,5 @@ static_site_generator/output/
 settings.local.json
 /docs/plans/
 .env.publish
+tmp/
+state/

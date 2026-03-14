@@ -67,6 +67,12 @@ sync_with_dates() {
     log "  ${count} examined → ${bucket}/${r2_dest}"
 }
 
+# Ratchet: record start time before any work begins. STATE_FILE is set to this
+# timestamp at the end rather than "now", so files written during the (slow)
+# rclone phase are caught by the next run's find -newer. Overlap is fine —
+# rclone copyto is idempotent.
+SYNC_START=$(mktemp)
+
 log "=== Gardener Sync Start ==="
 
 # 1. Sensor JSONL + notes.md
@@ -131,8 +137,9 @@ else
     log "No workspace changes to push"
 fi
 
-# Update state file — marks the high-water point for the next incremental sync.
-# Only reached if all sections above completed without error (set -e).
-touch "$STATE_FILE"
+# Update state file to start-of-this-run (not now) so files written during the
+# rclone phase aren't silently dropped. Only reached if set -e hasn't exited.
+touch -r "$SYNC_START" "$STATE_FILE"
+rm -f "$SYNC_START"
 
 log "=== Sync complete ==="

@@ -1,0 +1,292 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
+import conversationRaw from '../data/state/conversation.json';
+
+function renderMd(content: string): string {
+  return sanitizeHtml(marked.parse(content) as string, {
+    allowedTags: sanitizeHtml.defaults.allowedTags, // img intentionally excluded; agent messages are text-only
+    allowedAttributes: { ...sanitizeHtml.defaults.allowedAttributes },
+  });
+}
+
+type Message = {
+  message_id?: string;
+  timestamp: string;
+  direction: 'to_human' | 'from_human';
+  content: string;
+  in_reply_to?: string | null;
+};
+
+const messages = (conversationRaw as Message[]).sort(
+  (a, b) => b.timestamp.localeCompare(a.timestamp)
+);
+
+function fmtDate(ts: string) {
+  return new Date(ts).toLocaleDateString('en-GB', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+  });
+}
+function fmtTime(ts: string) {
+  return new Date(ts).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC'
+  });
+}
+
+// Group by date
+const byDate: Array<{ date: string; msgs: (Message & { seq: number })[] }> = [];
+let seq = 1;
+for (const msg of messages) {
+  const dateKey = msg.timestamp.slice(0, 10);
+  let group = byDate.find(g => g.date === dateKey);
+  if (!group) {
+    group = { date: dateKey, msgs: [] };
+    byDate.push(group);
+  }
+  group.msgs.push({ ...msg, seq: seq++ });
+}
+---
+
+<Layout title="Conversation">
+
+  <div class="page-header">
+    <div class="header-meta">TRANSMISSION LOG</div>
+    <h1 class="page-title">Conversation</h1>
+    <div class="header-count">{messages.length} messages</div>
+  </div>
+
+  {messages.length === 0 && (
+    <div class="empty-log">
+      <div class="empty-label">NO TRANSMISSIONS</div>
+      <div class="empty-sub">No messages on record</div>
+    </div>
+  )}
+
+  <div class="log">
+    {byDate.map(group => (
+      <div class="date-group">
+
+        <!-- Date separator -->
+        <div class="date-sep">
+          <div class="date-sep-line"></div>
+          <span class="date-sep-label">{fmtDate(group.msgs[0].timestamp)}</span>
+          <div class="date-sep-line"></div>
+        </div>
+
+        <!-- Messages -->
+        {group.msgs.map(msg => (
+          msg.direction === 'to_human' ? (
+            /* Agent transmission */
+            <div class="msg-agent">
+              <div class="msg-header">
+                <span class="msg-seq">[{String(msg.seq).padStart(3, '0')}]</span>
+                <span class="msg-from-agent">AGENT &rarr; HUMAN</span>
+                <span class="msg-time">{fmtTime(msg.timestamp)} UTC</span>
+              </div>
+              <div class="msg-body-agent" set:html={renderMd(msg.content)} />
+            </div>
+          ) : (
+            /* Human annotation */
+            <div class="msg-human">
+              <div class="msg-header msg-header-human">
+                <span class="msg-seq msg-seq-human">[{String(msg.seq).padStart(3, '0')}]</span>
+                <span class="msg-from-human">HUMAN &rarr; AGENT</span>
+                <span class="msg-time">{fmtTime(msg.timestamp)} UTC</span>
+              </div>
+              <div class="msg-body-human" set:html={renderMd(msg.content)} />
+            </div>
+          )
+        ))}
+      </div>
+    ))}
+  </div>
+
+</Layout>
+
+<style>
+  .page-header {
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2.5rem;
+    animation: fade-up 0.35s ease both;
+  }
+  .header-meta {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-dim);
+    margin-bottom: 0.4rem;
+  }
+  .page-title {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 2rem;
+    color: var(--color-text);
+    margin: 0 0 0.4rem;
+    line-height: 1;
+  }
+  .header-count {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .empty-log {
+    text-align: center;
+    padding: 4rem 2rem;
+    border: 1px solid var(--color-surface-2);
+  }
+  .empty-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--color-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .empty-sub {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 0.4rem;
+  }
+
+  .log {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 780px;
+    animation: fade-up 0.35s ease both;
+    animation-delay: 0.08s;
+  }
+
+  .date-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* Date separator */
+  .date-sep {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.5rem 0;
+  }
+  .date-sep-line {
+    flex: 1;
+    height: 1px;
+    background: var(--color-surface-2);
+  }
+  .date-sep-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-dim);
+    white-space: nowrap;
+  }
+
+  /* Shared message header */
+  .msg-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.875rem;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .msg-seq {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .msg-time {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--color-dim);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* Agent message */
+  .msg-agent {
+    border: 1px solid var(--color-border);
+    border-left: 2px solid var(--color-green);
+    background: var(--color-surface-alt);
+  }
+  .msg-from-agent {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
+  }
+  .msg-body-agent {
+    padding: 0.875rem;
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--color-text-prose);
+    line-height: 1.75;
+  }
+  .msg-body-agent :global(p) { margin: 0 0 0.5rem; }
+  .msg-body-agent :global(h1),
+  .msg-body-agent :global(h2),
+  .msg-body-agent :global(h3) {
+    font-family: 'Azeret Mono', monospace;
+    font-style: normal;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-green);
+    margin: 0.75rem 0 0.4rem;
+  }
+  .msg-body-agent :global(strong) { font-style: normal; color: var(--color-text); font-weight: 600; }
+  .msg-body-agent :global(ul),
+  .msg-body-agent :global(ol) { margin: 0.25rem 0 0.5rem 1rem; padding: 0; }
+  .msg-body-agent :global(li) { margin-bottom: 0.2rem; }
+
+  /* Human message — inset, annotative style */
+  .msg-human {
+    margin-left: 3rem;
+    border: 1px solid #D8E8E0;
+    border-left: 2px solid #60A878;
+    background: #F4F9F6;
+  }
+  .msg-header-human {
+    background: var(--color-surface);
+    border-bottom-color: #D8E8E0;
+  }
+  .msg-seq-human { color: var(--color-dim); }
+  .msg-from-human {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #3A9060;
+  }
+  .msg-body-human {
+    padding: 0.875rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.8rem;
+    color: #4A7060;
+    line-height: 1.75;
+  }
+  .msg-body-human :global(p) { margin: 0 0 0.4rem; }
+  .msg-body-human :global(strong) { color: #2A6848; font-weight: 500; }
+  .msg-body-human :global(ul),
+  .msg-body-human :global(ol) { margin: 0.2rem 0 0.4rem 1rem; padding: 0; }
+  .msg-body-human :global(li) { margin-bottom: 0.15rem; }
+
+  @media (max-width: 600px) {
+    .msg-human { margin-left: 1rem; }
+  }
+</style>

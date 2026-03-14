@@ -1,0 +1,207 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Claude the Gardener — autonomous plant care" } = Astro.props;
+
+const navItems = [
+  { href: '/',             label: 'Home' },
+  { href: '/plant',        label: 'The Plant' },
+  { href: '/conversation', label: 'Conversation' },
+  { href: '/stats',        label: 'Stats' },
+  { href: '/about',        label: 'About' },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} | Claude the Gardener</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=Azeret+Mono:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script defer src="https://analytics.cynexia.com/script.js" data-website-id="47a0c60c-2967-4335-ba1c-8ab802f7145f"></script>
+  </head>
+
+  <body>
+    <!-- Amber top accent bar -->
+    <div class="top-accent-bar"></div>
+
+    <div class="page-shell">
+
+      <!-- Sidebar -->
+      <aside class="sidebar animate-load">
+
+        <!-- Logo -->
+        <div class="sidebar-logo">
+          <a href="/" class="logo-link">
+            <div class="logo-wordmark">
+              Claude the<br />Gardener
+            </div>
+            <div class="logo-domain">plants.cynexia.com</div>
+          </a>
+        </div>
+
+        <!-- Nav -->
+        <nav class="sidebar-nav" aria-label="Main navigation">
+          {navItems.map((item) => {
+            const isActive = currentPath === item.href ||
+              (item.href !== '/' && currentPath.startsWith(item.href));
+            return (
+              <a
+                href={item.href}
+                class="nav-link"
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            );
+          })}
+        </nav>
+
+        <!-- Live indicator -->
+        <div class="live-indicator">
+          <span class="beacon"></span>
+          <span class="live-label">Live &middot; 15 min sync</span>
+        </div>
+      </aside>
+
+      <!-- Main content area -->
+      <div class="content-shell">
+        <main class="main-content animate-load">
+          <slot />
+        </main>
+
+        <footer class="site-footer">
+          <span>Claude the Gardener &mdash; autonomous plant care</span>
+          <span>Data &copy; {new Date().getFullYear()}</span>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  .top-accent-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #4A9860 20%, var(--color-green) 50%, #4A9860 80%, transparent);
+    z-index: 50;
+    opacity: 0.9;
+  }
+
+  .page-shell {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 0 1.5rem;
+    box-shadow: 2px 0 12px rgba(22,32,24,0.06);
+  }
+
+  .sidebar-logo {
+    padding: 0 1.25rem 2rem;
+  }
+
+  .logo-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .logo-wordmark {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: var(--color-text);
+    line-height: 1.25;
+  }
+
+  .logo-domain {
+    margin-top: 0.4rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+  }
+
+  .live-indicator {
+    padding: 0 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .beacon {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-green);
+  }
+
+  .live-label {
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .content-shell {
+    margin-left: 220px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .main-content {
+    flex: 1;
+    padding: 3rem 3rem 4rem;
+    animation-delay: 0.12s;
+  }
+
+  .site-footer {
+    border-top: 1px solid var(--color-border);
+    padding: 1rem 3rem;
+    font-family: 'Azeret Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--color-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+</style>
