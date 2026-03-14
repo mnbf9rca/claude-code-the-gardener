@@ -283,9 +283,8 @@ else
 fi
 
 # 11. Remove legacy git backup systems (data and photos are synced to R2 via sync-to-r2.sh)
-# 11b. Remove legacy photos git backup (photos are synced to R2 via sync-to-r2.sh)
 echo ""
-echo "Removing legacy MCP photos git backup (superseded by R2 sync)..."
+echo "Removing legacy MCP git backup systems (superseded by R2 sync)..."
 for UNIT in mcpserver-data-backup.timer mcpserver-data-backup.service mcpserver-photos-backup.timer mcpserver-photos-backup.service; do
     if systemctl list-unit-files "$UNIT" 2>/dev/null | grep -q "$UNIT"; then
         systemctl disable --now "$UNIT" 2>/dev/null || true
@@ -296,60 +295,6 @@ done
 # Remove leftover backup scripts from mcpserver home if present
 rm -f "$MCP_HOME/backup-mcp-data.sh" "$MCP_HOME/backup-mcp-photos.sh"
 systemctl daemon-reload
-
-# Copy backup scripts to mcpserver home
-BACKUP_SCRIPT_SRC="$REPO_ROOT/agent/deploy/backup-mcp-data.sh"
-BACKUP_SCRIPT_DEST="$MCP_HOME/backup-mcp-data.sh"
-
-if [ ! -f "$BACKUP_SCRIPT_SRC" ]; then
-    echo "⚠ Warning: Backup script not found at $BACKUP_SCRIPT_SRC"
-    echo "  Skipping backup system installation"
-else
-    install -m 755 -o "$MCP_USER" -g "$MCP_USER" \
-        "$BACKUP_SCRIPT_SRC" "$BACKUP_SCRIPT_DEST"
-    echo "✓ Copied backup-mcp-data.sh"
-
-    # Install systemd service and timer for backup
-    BACKUP_SERVICE_NAME="mcpserver-data-backup.service"
-    BACKUP_TIMER_NAME="mcpserver-data-backup.timer"
-    BACKUP_SERVICE_FILE="/etc/systemd/system/$BACKUP_SERVICE_NAME"
-    BACKUP_TIMER_FILE="/etc/systemd/system/$BACKUP_TIMER_NAME"
-
-    BACKUP_SERVICE_TEMPLATE="$REPO_ROOT/agent/deploy/mcpserver-data-backup.service.template"
-    BACKUP_TIMER_TEMPLATE="$REPO_ROOT/agent/deploy/mcpserver-data-backup.timer.template"
-
-    if [ -f "$BACKUP_SERVICE_TEMPLATE" ] && [ -f "$BACKUP_TIMER_TEMPLATE" ]; then
-        # Process service template
-        sed -e "s|__MCPSERVER_USER__|$MCP_USER|g" \
-            -e "s|__MCPSERVER_HOME__|$MCP_HOME|g" \
-            -e "s|__MCPSERVER_DATA_DIR__|$MCP_DATA_DIR|g" \
-            "$BACKUP_SERVICE_TEMPLATE" > "$BACKUP_SERVICE_FILE"
-        chmod 644 "$BACKUP_SERVICE_FILE"
-
-        # Process timer template
-        sed "s|__SERVICE_NAME__|$BACKUP_SERVICE_NAME|g" \
-            "$BACKUP_TIMER_TEMPLATE" > "$BACKUP_TIMER_FILE"
-        chmod 644 "$BACKUP_TIMER_FILE"
-
-        systemctl daemon-reload
-        echo "✓ Backup systemd units installed"
-
-        # Enable and start the timer
-        if systemctl is-active --quiet "$BACKUP_TIMER_NAME"; then
-            systemctl restart "$BACKUP_TIMER_NAME"
-            echo "✓ Backup timer restarted"
-        else
-            systemctl enable "$BACKUP_TIMER_NAME"
-            systemctl start "$BACKUP_TIMER_NAME"
-            echo "✓ Backup timer enabled and started"
-        fi
-    else
-        echo "⚠ Warning: Backup systemd templates not found"
-        echo "  Service template: $BACKUP_SERVICE_TEMPLATE"
-        echo "  Timer template: $BACKUP_TIMER_TEMPLATE"
-    fi
-fi
-
 
 # 12. Summary
 echo ""
