@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared installation helper functions
-# Source this file from installation scripts: source "$(dirname "$0")/../../scripts/install-helpers.sh"
+# Source this file from installation scripts: source "$REPO_ROOT/gha-processor/scripts/install-helpers.sh"
 
 # Add a user to a group (idempotent)
 # Silently skips if group doesn't exist or user already in group

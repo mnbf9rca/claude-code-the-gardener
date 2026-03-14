@@ -6,11 +6,14 @@
 #   - gardener-site-publisher.service/.timer  (old static site generator)
 #   - gardener-data-sync.service/.timer       (old git-based MCP data backup)
 #   - gardener-r2-sync.service/.timer         (old R2 sync, replaced by gardener-sync)
+#   - mcpserver-photos-backup.service/.timer  (photos git backup, photos in R2)
+#   - mcpserver-data-backup.service/.timer    (data git backup, data in R2)
 #
 # Cleans up artifacts:
-#   - /home/mcpserver/data/.git               (8.6G git history, data in R2)
-#   - /home/gardener/claude-backup/           (3.4G, sessions in R2 via gardener-sync)
-#   - /home/gardener-publisher/app/output/    (5G rendered output, service is dead)
+#   - /home/mcpserver/data/.git               (git history, data in R2)
+#   - /home/mcpserver/photos/.git             (unbounded binary git history, photos in R2)
+#   - /home/gardener/claude-backup/           (sessions in R2 via gardener-sync)
+#   - /home/gardener-publisher/app/output/    (rendered output, service is dead)
 #
 # Idempotent: safe to run multiple times. Skips anything already gone.
 
@@ -36,6 +39,10 @@ OLD_UNITS=(
     "gardener-data-sync.service"
     "gardener-r2-sync.timer"
     "gardener-r2-sync.service"
+    "mcpserver-photos-backup.timer"
+    "mcpserver-photos-backup.service"
+    "mcpserver-data-backup.timer"
+    "mcpserver-data-backup.service"
 )
 
 removed_any=false
@@ -116,6 +123,25 @@ echo "4. Removing /home/gardener-publisher/app/output/..."
 if [ -d "/home/gardener-publisher/app/output" ]; then
     size=$(du -sh /home/gardener-publisher/app/output 2>/dev/null | cut -f1)
     rm -rf /home/gardener-publisher/app/output
+    echo "   ✓ Removed (freed ~${size})"
+else
+    echo "   - Already gone, skipping"
+fi
+echo ""
+
+# ═══════════════════════════════════════════════════════
+# Step 5: Remove /home/mcpserver/photos/.git
+#   Git history of photos binary files from the legacy
+#   mcpserver-photos-backup timer. Photos are in R2 via
+#   gardener-sync; the .git dir served no purpose and
+#   grew unboundedly with each 15-minute commit.
+#   The photos themselves are retained.
+# ═══════════════════════════════════════════════════════
+echo "5. Removing /home/mcpserver/photos/.git..."
+
+if [ -d "/home/mcpserver/photos/.git" ]; then
+    size=$(du -sh /home/mcpserver/photos/.git 2>/dev/null | cut -f1)
+    rm -rf /home/mcpserver/photos/.git
     echo "   ✓ Removed (freed ~${size})"
 else
     echo "   - Already gone, skipping"
