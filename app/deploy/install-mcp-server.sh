@@ -282,57 +282,19 @@ else
     SERVICE_IS_RUNNING=false
 fi
 
-# 11. Install git backup system
-echo ""
-echo "Installing MCP data git backup system..."
-
-# Determine data directory path (resolve relative paths)
-DATA_DIR_RAW=$(grep "^DATA_DIR=" "$MCP_HOME/.env" | cut -d'=' -f2- | tr -d '[:space:]')
-if [[ "$DATA_DIR_RAW" = /* ]]; then
-    # Absolute path
-    MCP_DATA_DIR="$DATA_DIR_RAW"
-else
-    # Relative path - resolve from app directory using realpath
-    MCP_DATA_DIR="$(realpath -m "$MCP_APP_DIR/$DATA_DIR_RAW")"
-fi
-
-echo "  Data directory: $MCP_DATA_DIR"
-
-# Create data directory if it doesn't exist
-if [ ! -d "$MCP_DATA_DIR" ]; then
-    echo "  Creating data directory: $MCP_DATA_DIR"
-    sudo -u "$MCP_USER" mkdir -p "$MCP_DATA_DIR"
-fi
-
-# Initialize git repository in data directory
-GITIGNORE_DATA="# Exclude photos (too large for git)
-*.jpg
-*.jpeg
-*.png
-
-# Exclude temporary files
-*.tmp
-*.swp
-*.log"
-
-init_git_backup_repo "$MCP_USER" "$MCP_DATA_DIR" "MCP data" \
-    "MCP Server Backup" "backup@mcpserver.local" "$GITIGNORE_DATA"
-
-# Add to system gitconfig so all users (including group members) can access the repo
-add_safe_directory "$MCP_DATA_DIR"
-
+# 11. Remove legacy git backup systems (data and photos are synced to R2 via sync-to-r2.sh)
 # 11b. Remove legacy photos git backup (photos are synced to R2 via sync-to-r2.sh)
 echo ""
 echo "Removing legacy MCP photos git backup (superseded by R2 sync)..."
-for UNIT in mcpserver-photos-backup.timer mcpserver-photos-backup.service; do
+for UNIT in mcpserver-data-backup.timer mcpserver-data-backup.service mcpserver-photos-backup.timer mcpserver-photos-backup.service; do
     if systemctl list-unit-files "$UNIT" 2>/dev/null | grep -q "$UNIT"; then
         systemctl disable --now "$UNIT" 2>/dev/null || true
         rm -f "/etc/systemd/system/$UNIT"
         echo "✓ Removed $UNIT"
     fi
 done
-# Remove leftover backup script from mcpserver home if present
-rm -f "$MCP_HOME/backup-mcp-photos.sh"
+# Remove leftover backup scripts from mcpserver home if present
+rm -f "$MCP_HOME/backup-mcp-data.sh" "$MCP_HOME/backup-mcp-photos.sh"
 systemctl daemon-reload
 
 # Copy backup scripts to mcpserver home

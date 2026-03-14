@@ -7,12 +7,13 @@
 #   - gardener-data-sync.service/.timer       (old git-based MCP data backup)
 #   - gardener-r2-sync.service/.timer         (old R2 sync, replaced by gardener-sync)
 #   - mcpserver-photos-backup.service/.timer  (photos git backup, photos in R2)
+#   - mcpserver-data-backup.service/.timer    (data git backup, data in R2)
 #
 # Cleans up artifacts:
-#   - /home/mcpserver/data/.git               (8.6G git history, data in R2)
+#   - /home/mcpserver/data/.git               (git history, data in R2)
 #   - /home/mcpserver/photos/.git             (unbounded binary git history, photos in R2)
-#   - /home/gardener/claude-backup/           (3.4G, sessions in R2 via gardener-sync)
-#   - /home/gardener-publisher/app/output/    (5G rendered output, service is dead)
+#   - /home/gardener/claude-backup/           (sessions in R2 via gardener-sync)
+#   - /home/gardener-publisher/app/output/    (rendered output, service is dead)
 #
 # Idempotent: safe to run multiple times. Skips anything already gone.
 
@@ -40,6 +41,8 @@ OLD_UNITS=(
     "gardener-r2-sync.service"
     "mcpserver-photos-backup.timer"
     "mcpserver-photos-backup.service"
+    "mcpserver-data-backup.timer"
+    "mcpserver-data-backup.service"
 )
 
 removed_any=false
