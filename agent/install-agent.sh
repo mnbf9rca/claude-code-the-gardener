@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEPLOY_DIR="$SCRIPT_DIR/deploy"
 
 # Source shared installation helpers
-source "$REPO_ROOT/scripts/install-helpers.sh"
+source "$REPO_ROOT/gha-processor/scripts/install-helpers.sh"
 
 # Configuration
 GARDENER_USER="gardener"

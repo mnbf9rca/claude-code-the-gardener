@@ -18,7 +18,7 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$APP_DIR/.." && pwd)"
 
 # Source shared installation helpers
-source "$REPO_ROOT/scripts/install-helpers.sh"
+source "$REPO_ROOT/gha-processor/scripts/install-helpers.sh"
 
 # Configuration
 MCP_USER="mcpserver"

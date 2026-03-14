@@ -19,8 +19,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source shared helper functions
-# shellcheck source=../scripts/install-helpers.sh
-source "${SCRIPT_DIR}/../scripts/install-helpers.sh"
+# shellcheck source=../gha-processor/scripts/install-helpers.sh
+source "${SCRIPT_DIR}/../gha-processor/scripts/install-helpers.sh"
 
 echo "=== Gardener Sync Installation ==="
 echo ""
