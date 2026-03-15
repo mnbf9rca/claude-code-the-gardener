@@ -47,7 +47,7 @@ echo "Checking prerequisites..."
 # User exists
 if ! id "$SYNC_USER" &>/dev/null; then
     echo "✗ ERROR: User $SYNC_USER does not exist."
-    echo "  Run the publisher installer first: sudo ./static_site_generator/deploy/install-publisher.sh"
+    echo "  Create the user first: sudo useradd --system --create-home --home-dir /home/${SYNC_USER} ${SYNC_USER}"
     exit 1
 fi
 echo "✓ User $SYNC_USER exists"
