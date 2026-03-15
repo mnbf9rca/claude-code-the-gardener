@@ -1,6 +1,7 @@
 """Parse Claude session JSONL files and compute AI usage stats."""
 import json
-from datetime import timezone
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from processor.helpers import date_of, parse_ts
@@ -103,53 +104,91 @@ def parse_session_stats(lines: list[dict], pricing: dict) -> dict:
     }
 
 
+SESSION_PREFIX = "raw/sessions"
+
+_DATE_PATH_RE = re.compile(
+    rf"^{re.escape(SESSION_PREFIX)}/(\d{{4}})/(\d{{2}})/(\d{{2}})/"
+)
+
+
+def _date_from_key(key: str, fallback_mod: datetime) -> str:
+    """Extract session date from R2 key path raw/sessions/YYYY/MM/DD/filename.
+
+    Falls back to the object's LastModified date (must be timezone-aware) if
+    the path doesn't match the expected structure.
+    """
+    m = _DATE_PATH_RE.match(key)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return date_of(fallback_mod)
+
+
 def process_sessions(s3, bucket: str, watermark: str, pricing: dict) -> tuple[dict, str]:
-    """Process all session files newer than watermark.
+    """Process session files with new files since watermark.
+
+    For any date that has at least one file newer than the watermark, ALL files
+    for that date are recomputed from scratch.  This prevents partial incremental
+    batches from silently overwriting a day's previously accumulated stats.
 
     Returns:
         (ai_stats_by_date, new_watermark)
         ai_stats_by_date: {date_str: {sessions, input_tokens, ...}}
-        new_watermark: ISO 8601 LastModified of most recently processed file
+            Only dates that had at least one new file with parseable content
+            are included; dates with only empty/malformed files are omitted so
+            that any existing valid stats in ai_stats.json are preserved.
+        new_watermark: ISO 8601 LastModified of most recently seen new file
     """
-    all_objects = list_objects(s3, bucket, "raw/sessions/")
+    all_objects = list_objects(s3, bucket, f"{SESSION_PREFIX}/")
     wm_dt = parse_ts(watermark)
 
-    new_watermark = watermark
-    ai_stats: dict[str, dict] = {}
+    # Single pass: group objects by path-based date, find dirty dates, and
+    # track the new watermark as a datetime to avoid repeated string parses.
+    # Using the path date (raw/sessions/YYYY/MM/DD/…) rather than LastModified
+    # ensures sessions are attributed to the day they ran, not the day they were
+    # uploaded (late-night sessions can be uploaded after midnight).
+    objects_by_date: dict[str, list] = {}
+    dates_to_recompute: set[str] = set()
+    new_wm_dt = wm_dt
 
-    for obj in sorted(all_objects, key=lambda o: o["LastModified"]):
+    for obj in all_objects:
         last_mod = obj["LastModified"].replace(tzinfo=timezone.utc)
-        if last_mod <= wm_dt:
-            continue
+        date = _date_from_key(obj["Key"], last_mod)
+        objects_by_date.setdefault(date, []).append(obj)
+        if last_mod > wm_dt:
+            dates_to_recompute.add(date)
+            if last_mod > new_wm_dt:
+                new_wm_dt = last_mod
 
-        key = obj["Key"]
-        lines = get_jsonl_lines(s3, bucket, key)
-        if not lines:
-            continue
+    new_watermark = (
+        new_wm_dt.strftime("%Y-%m-%dT%H:%M:%SZ") if new_wm_dt > wm_dt else watermark
+    )
 
-        # Use the object's LastModified date as the session date
-        date = date_of(last_mod)
-
-        stats = parse_session_stats(lines, pricing)
-        day = ai_stats.setdefault(date, {
+    # Recompute complete stats for each affected date using ALL its files.
+    # A date is only written to ai_stats if at least one file had parseable
+    # content; fully-empty dates are skipped to protect existing valid stats.
+    ai_stats: dict[str, dict] = {}
+    for date in dates_to_recompute:
+        day: dict = {
             "sessions": 0, "input_tokens": 0, "output_tokens": 0,
             "cache_read_tokens": 0, "cache_write_tokens": 0,
             "estimated_cost_usd": 0.0, "tool_calls": {},
-        })
-        day["sessions"] += 1
-        day["input_tokens"]       += stats["input_tokens"]
-        day["output_tokens"]      += stats["output_tokens"]
-        day["cache_read_tokens"]  += stats["cache_read_tokens"]
-        day["cache_write_tokens"] += stats["cache_write_tokens"]
-        day["estimated_cost_usd"] = round(
-            day["estimated_cost_usd"] + stats["cost_usd"], 6
-        )
-        for tool, count in stats["tool_calls"].items():
-            day["tool_calls"][tool] = day["tool_calls"].get(tool, 0) + count
-
-        # Track the most recent LastModified seen (compare as datetimes, not strings)
-        obj_ts = last_mod.strftime("%Y-%m-%dT%H:%M:%SZ")
-        if last_mod > parse_ts(new_watermark):
-            new_watermark = obj_ts
+        }
+        for obj in objects_by_date.get(date, []):
+            lines = get_jsonl_lines(s3, bucket, obj["Key"])
+            if not lines:
+                continue
+            stats = parse_session_stats(lines, pricing)
+            day["sessions"] += 1
+            day["input_tokens"]       += stats["input_tokens"]
+            day["output_tokens"]      += stats["output_tokens"]
+            day["cache_read_tokens"]  += stats["cache_read_tokens"]
+            day["cache_write_tokens"] += stats["cache_write_tokens"]
+            day["estimated_cost_usd"]  = round(
+                day["estimated_cost_usd"] + stats["cost_usd"], 6
+            )
+            for tool, count in stats["tool_calls"].items():
+                day["tool_calls"][tool] = day["tool_calls"].get(tool, 0) + count
+        if day["sessions"] > 0:
+            ai_stats[date] = day
 
     return ai_stats, new_watermark
