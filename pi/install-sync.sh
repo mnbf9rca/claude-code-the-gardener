@@ -12,6 +12,10 @@
 #   - gardener-r2-sync.service/.timer  (replaced by this)
 #   - gardener-data-sync.service/.timer (retired)
 #   - gardener-site-publisher.service/.timer (retired)
+#
+# PRE-REQUISITE — create the system user once before running this script:
+#   sudo useradd --system --create-home --home-dir /home/gardener-publisher \
+#     --shell /usr/sbin/nologin --user-group gardener-publisher
 
 set -euo pipefail
 
@@ -47,7 +51,7 @@ echo "Checking prerequisites..."
 # User exists
 if ! id "$SYNC_USER" &>/dev/null; then
     echo "✗ ERROR: User $SYNC_USER does not exist."
-    echo "  Run the publisher installer first: sudo ./static_site_generator/deploy/install-publisher.sh"
+    echo "  See the PRE-REQUISITE comment at the top of this script."
     exit 1
 fi
 echo "✓ User $SYNC_USER exists"

@@ -225,7 +225,6 @@ photos/
 output/
 annotations.json
 data/
-static_site_generator/output/
 .playwright-mcp/
 
 # Backup files
@@ -235,6 +234,7 @@ static_site_generator/output/
 
 settings.local.json
 /docs/plans/
+/docs/blog/
 .env.publish
 tmp/
 state/

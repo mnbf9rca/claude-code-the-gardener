@@ -156,7 +156,7 @@ After completing all steps, verify:
 Once R2 is configured:
 
 1. Run `scripts/init-r2-bucket.sh` to create folder structure
-2. Deploy sync script to Pi using `static_site_generator/deploy/install-r2-sync.sh`
+2. Deploy sync script to Pi using `pi/install-sync.sh`
 
 ## Troubleshooting
 

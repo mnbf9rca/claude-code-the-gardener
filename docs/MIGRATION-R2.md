@@ -27,8 +27,7 @@ sudo apt update && sudo apt install rclone -y
 rclone version  # Verify installation
 
 # Install R2 sync
-cd static_site_generator/deploy
-sudo ./install-r2-sync.sh
+sudo ./pi/install-sync.sh
 ```
 
 ### Step 2: Validate Installation

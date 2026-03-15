@@ -49,7 +49,6 @@ Cross-cutting: healthchecks.io (host-monitor, agent, app)
 | `gha-processor/` | Incremental R2 data → structured JSON state | Python 3.13 / boto3 | `gha-processor/processor/main.py` |
 | `site/` | Public Astro dashboard | TypeScript / Astro 5.x / Tailwind v4 | `site/src/pages/index.astro` |
 | `host-monitor/` | Pi host liveness ping to healthchecks.io | Shell / systemd | `host-monitor/host-healthcheck.service` |
-| `static_site_generator/` | **DEAD CODE — do not modify** | Python / Jinja2 | *(not invoked by any CI workflow)* |
 | `gha-processor/scripts/` | Shared install helpers (shell functions) | Shell | `gha-processor/scripts/install-helpers.sh` |
 | `.github/workflows/` | CI/CD: `process.yml` + `build.yml` | GitHub Actions | — |
 
@@ -240,14 +239,6 @@ Three separate healthchecks.io monitors distinguish failure modes:
 | MCP server | `app/run_http.py` background loop | Configurable | Is the MCP server up? |
 
 URLs are never committed — substituted at install time by `install-agent.sh` / `install-sync.sh`.
-
----
-
-## Dead Code
-
-| Module | Status |
-|--------|--------|
-| `static_site_generator/` | Fully superseded by `gha-processor` + `site`. Not referenced by any CI workflow. Safe to ignore entirely. |
 
 ---
 
