@@ -12,7 +12,7 @@ concurrency:
 jobs:
   process:
     runs-on: ubuntu-latest
-    timeout-minutes: 25        # fail if run takes > 25 min (guards against hangs)
+    timeout-minutes: 100        # fail if run takes > 100 min (guards against hangs)
 
     steps:
       - uses: actions/checkout@v6
