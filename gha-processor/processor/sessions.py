@@ -104,7 +104,11 @@ def parse_session_stats(lines: list[dict], pricing: dict) -> dict:
     }
 
 
-_DATE_PATH_RE = re.compile(r"^raw/sessions/(\d{4})/(\d{2})/(\d{2})/")
+SESSION_PREFIX = "raw/sessions"
+
+_DATE_PATH_RE = re.compile(
+    rf"^{re.escape(SESSION_PREFIX)}/(\d{{4}})/(\d{{2}})/(\d{{2}})/"
+)
 
 
 def _date_from_key(key: str, fallback_mod: datetime) -> str:
@@ -134,7 +138,7 @@ def process_sessions(s3, bucket: str, watermark: str, pricing: dict) -> tuple[di
             that any existing valid stats in ai_stats.json are preserved.
         new_watermark: ISO 8601 LastModified of most recently seen new file
     """
-    all_objects = list_objects(s3, bucket, "raw/sessions/")
+    all_objects = list_objects(s3, bucket, f"{SESSION_PREFIX}/")
     wm_dt = parse_ts(watermark)
 
     # Single pass: group objects by path-based date, find dirty dates, and
