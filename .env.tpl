@@ -1,0 +1,1 @@
+export HOME_ASSISTANT_TOKEN="op://claude-code-the-gardener/app/HOME_ASSISTANT_TOKEN"
